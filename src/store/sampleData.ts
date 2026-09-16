@@ -1,0 +1,203 @@
+import { addMonths, format } from 'date-fns';
+import { suggestionBySlug } from '@/engine/taxonomy';
+import type { ExpenseItem, FinancialPlan, Frequency } from '@/engine/types';
+import { ONBOARDING_STEPS } from '@/engine/types';
+
+/**
+ * Demo data modelled on the "Alex" screens in the design folder.
+ * Totals: income 34,200 · lifestyle 25,500 · savings 5,700 · breathing room 3,000.
+ */
+export function samplePlan(now: Date = new Date()): FinancialPlan {
+  const iso = now.toISOString();
+  const inMonths = (n: number, day = 12) => format(new Date(addMonths(now, n).setDate(day)), 'yyyy-MM-dd');
+
+  let n = 0;
+  const id = (p: string) => `${p}_${(n += 1).toString().padStart(3, '0')}`;
+
+  const exp = (
+    slug: string,
+    amount: number,
+    extra: Partial<ExpenseItem> & { frequency?: Frequency } = {},
+  ): ExpenseItem => {
+    const s = suggestionBySlug(slug);
+    if (!s) throw new Error(`Unknown suggestion ${slug}`);
+    return {
+      id: id('exp'),
+      name: s.name,
+      category: s.category,
+      subcategory: s.slug,
+      amount,
+      frequency: s.frequency,
+      fixed: s.fixed,
+      essential: s.essential,
+      committed: s.committed,
+      tags: s.tags ?? [],
+      ...extra,
+    };
+  };
+
+  return {
+    version: 1,
+    currency: 'SEK',
+    userName: 'Alex',
+    income: [
+      {
+        id: id('inc'),
+        name: 'Salary',
+        note: 'Main job',
+        kind: 'salary',
+        amount: 28000,
+        frequency: 'monthly',
+        reliability: 'reliable',
+        includeInBaseline: true,
+      },
+      {
+        id: id('inc'),
+        name: 'Bonus',
+        note: 'Annual (divided monthly)',
+        kind: 'bonus',
+        amount: 36000,
+        frequency: 'yearly',
+        reliability: 'reliable',
+        includeInBaseline: true,
+      },
+      {
+        id: id('inc'),
+        name: 'Freelance work',
+        note: 'Design projects',
+        kind: 'freelance',
+        amount: 2700,
+        frequency: 'monthly',
+        reliability: 'variable',
+        includeInBaseline: true,
+      },
+      {
+        id: id('inc'),
+        name: 'Gifts',
+        note: 'Estimated average',
+        kind: 'other_irregular',
+        amount: 6000,
+        frequency: 'yearly',
+        reliability: 'variable',
+        includeInBaseline: true,
+      },
+    ],
+    expenses: [
+      // Home — 8,500
+      exp('rent', 7300),
+      exp('electricity', 500),
+      exp('internet', 350),
+      exp('home_insurance', 350),
+      exp('water', 0, { includedElsewhere: true, note: 'Included in rent' }),
+      // Living — 4,800
+      exp('groceries', 3200),
+      exp('restaurants', 900),
+      exp('haircuts', 300),
+      exp('clothes', 400),
+      // Transport — 4,200
+      exp('car_finance', 2200),
+      exp('fuel', 850),
+      exp('car_insurance', 450),
+      exp('vehicle_tax', 2300, { nextDate: inMonths(1, 12) }),
+      exp('car_parking', 300),
+      exp('car_service', 2500, { nextDate: inMonths(5, 12) }),
+      // Finance — 2,400
+      exp('student_loan', 1500),
+      exp('credit_card', 500),
+      exp('life_insurance', 250),
+      exp('income_insurance', 150),
+      // Leisure — 3,100
+      exp('streaming', 300),
+      exp('music', 120),
+      exp('gym', 450),
+      exp('mobile', 300),
+      exp('nights_out', 800),
+      exp('gaming', 200),
+      exp('other_hobbies', 500),
+      exp('cinema', 150),
+      exp('software', 280),
+      // Planned — 2,500
+      exp('holidays', 8000, { nextDate: inMonths(3, 15) }),
+      exp('christmas', 6000, { nextDate: christmasFrom(now) }),
+      exp('gifts', 3000, { nextDate: inMonths(2, 20) }),
+      exp('electronics', 6000, { nextDate: inMonths(7, 1) }),
+      exp('annual_insurance', 1800, { name: 'Annual home insurance', nextDate: inMonths(2, 3) }),
+      exp('annual_subscriptions', 3600, { nextDate: inMonths(4, 1) }),
+      exp('birthdays', 1600, { nextDate: inMonths(6, 10) }),
+    ],
+    accounts: [
+      { id: id('acc'), name: 'Everyday account', institution: 'Swedbank', kind: 'everyday', balance: 14500 },
+      { id: id('acc'), name: 'Salary account', institution: 'SEB', kind: 'salary', balance: 32000 },
+      { id: id('acc'), name: 'Savings account', institution: 'Avanza', kind: 'savings', balance: 86000 },
+      { id: id('acc'), name: 'Emergency fund', institution: 'Nordnet', kind: 'emergency', balance: 40000 },
+      { id: id('acc'), name: 'Joint account', institution: 'Swedbank', kind: 'joint', balance: 18000 },
+      { id: id('acc'), name: 'Investments', institution: 'Avanza', kind: 'investment', balance: 120000 },
+    ],
+    goals: [
+      {
+        id: id('goal'),
+        name: 'Emergency fund',
+        description: "Financial security for life's uncertainties.",
+        kind: 'emergency',
+        purpose: 'long_term',
+        currentAmount: 68000,
+        monthlyContribution: 1300,
+        targetAmount: 100000,
+        icon: 'shield',
+      },
+      {
+        id: id('goal'),
+        name: 'House deposit',
+        description: 'Our first home.',
+        kind: 'general',
+        purpose: 'long_term',
+        currentAmount: 120000,
+        monthlyContribution: 1800,
+        targetAmount: 500000,
+        icon: 'home',
+      },
+      {
+        id: id('goal'),
+        name: 'Holiday',
+        description: 'Explore more of the world.',
+        kind: 'purchase',
+        purpose: 'future_spending',
+        currentAmount: 12000,
+        monthlyContribution: 1000,
+        targetAmount: 25000,
+        icon: 'palmtree',
+      },
+      {
+        id: id('goal'),
+        name: 'Car fund',
+        description: 'For a more flexible tomorrow.',
+        kind: 'purchase',
+        purpose: 'future_spending',
+        currentAmount: 2300,
+        monthlyContribution: 1000,
+        targetAmount: 150000,
+        icon: 'car',
+      },
+      {
+        id: id('goal'),
+        name: 'New laptop',
+        description: 'Upgrade for work and creativity.',
+        kind: 'purchase',
+        purpose: 'future_spending',
+        currentAmount: 8500,
+        monthlyContribution: 600,
+        targetAmount: 20000,
+        icon: 'laptop',
+      },
+    ],
+    onboarding: { completedSteps: [...ONBOARDING_STEPS], completed: true },
+    isSample: true,
+    createdAt: iso,
+    updatedAt: iso,
+  };
+}
+
+function christmasFrom(now: Date): string {
+  const year = now.getMonth() === 11 && now.getDate() > 20 ? now.getFullYear() + 1 : now.getFullYear();
+  return `${year}-12-20`;
+}
