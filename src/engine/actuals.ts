@@ -53,12 +53,12 @@ const roundTo = (n: number, step: number) => Math.round(n / step) * step;
  * current estimate already sits within `tolerance` of what the bills say.
  */
 export function suggestFromActuals(
-  e: Pick<ExpenseItem, 'fixed' | 'frequency' | 'amount' | 'range' | 'actuals' | 'tariff'>,
+  e: Pick<ExpenseItem, 'fixed' | 'frequency' | 'occurrences' | 'amount' | 'range' | 'actuals' | 'tariff'>,
   opts: { minBills?: number; tolerance?: number; window?: number } = {},
 ): EstimateSuggestion | null {
   const { minBills = 3, tolerance = 0.05, window = 12 } = opts;
   // A calculated bill is corrected through its usage, not by overwriting the amount.
-  if (e.fixed || e.tariff || e.frequency !== 'monthly') return null;
+  if (e.fixed || e.tariff || e.occurrences || e.frequency !== 'monthly') return null;
   const history = actualsHistory(e);
   if (!history || history.count < minBills) return null;
 

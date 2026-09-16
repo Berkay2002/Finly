@@ -1,5 +1,6 @@
-import { addMonths, format } from 'date-fns';
-import { CSN_RATE_2026, nextCsnDueDate } from '@/engine/debts';
+import { addMonths, format, getDaysInMonth } from 'date-fns';
+import { nextCsnDueDate } from '@/engine/debts';
+import { BUNDLED_OUTLOOK, csnRateForYear } from '@/engine/rates';
 import { suggestionBySlug } from '@/engine/taxonomy';
 import type { ExpenseItem, FinancialPlan, Frequency } from '@/engine/types';
 import { ONBOARDING_STEPS } from '@/engine/types';
@@ -29,6 +30,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       subcategory: s.slug,
       amount,
       frequency: s.frequency,
+      occurrences: s.occurrences,
       fixed: s.fixed,
       essential: s.essential,
       committed: s.committed,
@@ -92,8 +94,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       exp('home_insurance', 350),
       exp('water', 0, { includedElsewhere: true, note: 'Included in rent' }),
       // Living — 4,800
-      exp('groceries', 3200, { range: { low: 2800, high: 3800 } }),
-      exp('restaurants', 900),
+      exp('groceries', 740, { range: { low: 650, high: 880 } }),
+      exp('restaurants', 450),
       exp('haircuts', 300),
       exp('clothes', 400),
       // Transport — 2,000 (the car loan is under loans)
@@ -141,7 +143,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
         kind: 'csn',
         csnType: 'annuity',
         balance: 212000,
-        rate: CSN_RATE_2026,
+        rate: csnRateForYear(BUNDLED_OUTLOOK, now.getFullYear()),
+        rateYear: now.getFullYear(),
         payment: 4500,
         frequency: 'quarterly',
         nextDate: nextCsnDueDate(now),
@@ -225,11 +228,26 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
         icon: 'laptop',
       },
     ],
+    household: { members: [{ id: 'hh_001', age: '25-50', lunchAway: false }] },
+    // Food runs a little above plan, so the demo shows the pace and the "your months say" hint.
+    foodSpend: {
+      [monthKey(addMonths(now, -3))]: { amount: 4480 },
+      [monthKey(addMonths(now, -2))]: { amount: 4150 },
+      [monthKey(addMonths(now, -1))]: { amount: 4520 },
+      [monthKey(now)]: {
+        amount: Math.round((4100 * 1.08 * now.getDate()) / getDaysInMonth(now) / 10) * 10,
+        asOf: format(now, 'yyyy-MM-dd'),
+      },
+    },
     onboarding: { completedSteps: [...ONBOARDING_STEPS], completed: true },
     isSample: true,
     createdAt: iso,
     updatedAt: iso,
   };
+}
+
+function monthKey(d: Date): string {
+  return format(d, 'yyyy-MM');
 }
 
 function christmasFrom(now: Date): string {

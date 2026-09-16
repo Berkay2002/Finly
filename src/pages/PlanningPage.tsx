@@ -301,6 +301,12 @@ function AllowanceCard() {
   const remainingBudget = Math.max(0, m.daily.flexibleBudget - spent);
   const perDay = spent > 0 ? remainingBudget / m.daily.daysRemaining : m.daily.perDay;
   const perWeek = perDay * 7;
+  // Flexible food is part of the flexible money; spread the part still to spend over the days left.
+  const foodLeft =
+    m.food.month.spent !== undefined && !m.food.month.complete
+      ? Math.max(0, m.food.flexible - m.food.month.spent)
+      : m.food.flexible * (m.daily.daysRemaining / m.daily.daysInMonth);
+  const foodPerDay = m.food.flexible > 0 ? foodLeft / m.daily.daysRemaining : 0;
 
   return (
     <Card>
@@ -333,6 +339,27 @@ function AllowanceCard() {
           <dd className="tabular font-semibold text-ink">{money(m.daily.flexibleBudget)}</dd>
         </div>
       </dl>
+      {foodPerDay > 0 && (
+        <div className="mt-3 rounded-xl bg-page p-3 text-[12.5px]">
+          <div className="flex justify-between gap-3">
+            <span className="text-ink-soft">Of which food</span>
+            <span className="tabular text-ink">
+              {money(foodPerDay)} a day · {money(foodPerDay * 7)} a week
+            </span>
+          </div>
+          <div className="mt-1 flex justify-between gap-3">
+            <span className="text-ink-soft">Everything else flexible</span>
+            <span className="tabular text-ink">
+              {money(Math.max(0, perDay - foodPerDay))} a day · {money(Math.max(0, perWeek - foodPerDay * 7))} a week
+            </span>
+          </div>
+          <p className="mt-1.5 text-muted">
+            {m.food.month.spent !== undefined && !m.food.month.complete
+              ? `Food so far this month: ${money(m.food.month.spent)} of ${money(m.food.monthly)}.`
+              : 'Log food spending on Living Costs to see how this month is going.'}
+          </p>
+        </div>
+      )}
       <MoneyField
         className="mt-3"
         label="Spent on flexible things so far this month"

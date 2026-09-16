@@ -69,6 +69,11 @@ export const CSN_RATES: Record<number, number> = {
   2026: 2.135,
 };
 
+/** Whether CSN has published the rate for `year`; otherwise `csnRateForYear` estimates it. */
+export function csnRateDecided(year: number): boolean {
+  return CSN_RATES[year] !== undefined;
+}
+
 /** Share of the state's borrowing cost borrowers pay: CSN's base rate is subsidised by 30 %. */
 export const CSN_BORROWER_SHARE = 0.7;
 
@@ -173,13 +178,14 @@ export function variableMortgageMargin(o: RateOutlook, debts: Debt[], now: Date)
  * A loan's expected yearly rate (percent) in the month of `date`.
  * - Rörlig bolån: today's rate moved with the policy rate forecast.
  * - Bunden bolån: today's rate until the villkorsändringsdag, then the policy rate plus the rörlig margin.
- * - CSN: the year's decided or projected rate, keeping any difference the user entered.
+ * - CSN: the year's decided or projected rate, keeping any difference the user entered. The entered rate
+ *   belongs to `rateYear`, so a rate typed in 2026 still moves correctly when looked at in 2027.
  * - Other loans: today's rate. Their pricing is set by each lender and follows the market loosely.
  */
 export function rateAt(d: Debt, date: Date, now: Date, o: RateOutlook, margin: number): number | undefined {
   if (d.rate === undefined || !Number.isFinite(d.rate)) return undefined;
   if (d.kind === 'csn') {
-    const shift = csnRateForYear(o, date.getFullYear()) - csnRateForYear(o, now.getFullYear());
+    const shift = csnRateForYear(o, date.getFullYear()) - csnRateForYear(o, d.rateYear ?? now.getFullYear());
     return Math.max(0, d.rate + shift);
   }
   if (d.kind !== 'mortgage') return d.rate;

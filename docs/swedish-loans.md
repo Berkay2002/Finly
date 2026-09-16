@@ -29,10 +29,16 @@ whatever the rates, because paying a bunden del early can cost ränteskillnadser
 
 ### CSN (`csn`)
 
-- **Rate** (*yearly*): 2.135 % in 2026 (`CSN_RATE_2026`, and `CSN_RATES` in `rates.ts`). Set each December for
+- **Rate** (*yearly*): 2.135 % in 2026 (`CSN_RATES` in `rates.ts`). Set each December for
   the next year: a base rate (the state's average borrowing cost on statsobligationer and statsskuldväxlar,
   except three-month bills, from November three years back to October that year; 1.736 % for 2026) plus a
   markup for credit losses (0.399 %), subsidised by 30 % for the borrower. No ränteavdrag on top of that.
+  The loan editor offers the current year's rate (an estimate from `csnRateForYear` when that year is not
+  in the table yet) and, when the next payment falls in a later year, the rate expected then. The entered
+  rate is saved with `rateYear`, so forecasts still move it correctly after the new year.
+- **Repayment not started**: a next payment due more than one period away (over three months for quarterly)
+  means repayment starts then (`repaymentStart`). The payoff simulation takes no payments before that
+  quarter and adds the interest to the balance; the editor shows about how much (`interestBeforeRepayment`).
 - **Annuitetslån** (loans from July 2001, `csnType: 'annuity'`): CSN sets an årsbelopp that rises about 2 %
   a year (`CSN_STEP_UP`); the payoff simulation steps the payment up every 12 months. Lowest årsbelopp 2026:
   8,880 kr (*yearly*). Loans from 2001–2021 must be repaid by 60 and are written off at 68; loans from 2022
@@ -143,7 +149,7 @@ the last forecast quarter the rate stays flat.
 | --- | --- |
 | Rörlig bolån | your rate + (policy rate then − policy rate now) |
 | Bunden bolån | your rate until the villkorsändringsdag, then policy rate then + rörlig margin |
-| CSN | your rate + (CSN rate that year − CSN rate this year) |
+| CSN | your rate + (CSN rate that year − CSN rate in `rateYear`, the year you entered it for) |
 | Car, personal, credit card, other | your rate (lenders price these only loosely against the market) |
 
 The **rörlig margin** is your own rörliga delar's rate over the policy rate, weighted by balance. Without a
@@ -177,7 +183,7 @@ data: 2027 about 1.81 %, 2028 1.37 %, 2029 1.32 %, 2030 1.41 %. The credit-loss 
 
 | What | When | Where |
 | --- | --- | --- |
-| `CSN_RATES` and `CSN_RATE_2026` | each December, when CSN publishes next year's rate | `rates.ts`, `debts.ts` |
+| `CSN_RATES` | each December, when CSN publishes next year's rate | `rates.ts` |
 | `MORTGAGE_VARIABLE_AVERAGE` | a few times a year (SCB publishes monthly) | `rates.ts` |
 | `BUNDLED_OUTLOOK` | after each monetary policy report (four a year) | `rates.ts` |
 

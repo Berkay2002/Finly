@@ -4,12 +4,15 @@ import {
   csnIncomeBasedYearly,
   debtFlow,
   debtPayoff,
+  debtSchedule,
   effectiveRate,
+  interestBeforeRepayment,
   interestTaxReduction,
   isDeductible,
   migrateLegacyDebts,
   nextCsnDueDate,
   repaymentOrder,
+  repaymentStart,
 } from '../debts';
 import { buildSnapshot } from '../history';
 import { computeMetrics } from '../metrics';
@@ -112,6 +115,39 @@ describe('debtPayoff', () => {
 
   it('is unknown without a rate', () => {
     expect(debtPayoff(debt({ kind: 'car', balance: 50_000, payment: 1000 }), NOW)).toBeNull();
+  });
+});
+
+describe('repayment not started yet', () => {
+  // 16 Sep 2026: the first payment in February 2027 is more than a quarter away.
+  const csn = (nextDate: string) =>
+    debt({ kind: 'csn', csnType: 'annuity', balance: 440_000, rate: 2.135, payment: 4500, frequency: 'quarterly', nextDate });
+
+  it('starts repayment at a due date more than one period away', () => {
+    expect(repaymentStart(csn('2027-02-28'), NOW)).toEqual(new Date(2027, 1, 28));
+    expect(repaymentStart(csn('2026-11-30'), NOW)).toBeNull();
+    expect(repaymentStart(debt({ kind: 'csn', balance: 1, rate: 2, payment: 100 }), NOW)).toBeNull();
+  });
+
+  it('pays nothing before the first payment quarter and adds the interest to the debt', () => {
+    const rows = debtSchedule(csn('2027-02-28'), NOW, 4);
+    expect(rows.map((r) => r.payment)).toEqual([0, 0, 1500, 1500]);
+    expect(rows[1].balance).toBeGreaterThan(440_000);
+    // A payment due in November covers September to November, so it is paid from the start.
+    expect(debtSchedule(csn('2026-11-30'), NOW, 1)[0].payment).toBe(1500);
+  });
+
+  it('finishes later and costs more interest than a loan already being repaid', () => {
+    const later = debtPayoff(csn('2027-02-28'), NOW)!;
+    const now = debtPayoff(csn('2026-11-30'), NOW)!;
+    expect(later.months).toBeGreaterThan(now.months);
+    expect(later.totalInterest!).toBeGreaterThan(now.totalInterest!);
+  });
+
+  it('adds up the interest until the first payment', () => {
+    const r = 0.02135 / 12;
+    expect(interestBeforeRepayment(csn('2027-02-28'), NOW)!.interest).toBeCloseTo(440_000 * ((1 + r) ** 5 - 1), 2);
+    expect(interestBeforeRepayment(csn('2026-11-30'), NOW)).toBeNull();
   });
 });
 

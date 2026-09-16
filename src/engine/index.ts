@@ -2,6 +2,7 @@ export * from './types';
 export * from './frequency';
 export * from './amounts';
 export * from './electricity';
+export * from './food';
 export * from './actuals';
 export * from './format';
 export * from './taxonomy';

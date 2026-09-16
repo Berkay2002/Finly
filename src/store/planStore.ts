@@ -12,9 +12,11 @@ import type {
   ExpenseItem,
   FinancialPlan,
   HomeLocation,
+  Household,
   IncomeSource,
   OnboardingStep,
   SavingsGoal,
+  SpendEntry,
 } from '@/engine/types';
 import { emptyPlan } from '@/engine/types';
 import { samplePlan } from './sampleData';
@@ -40,6 +42,8 @@ interface PlanState {
   setCurrency: (currency: string) => void;
   /** Where the household lives; salaries and electricity bills that followed the old home follow the new one. */
   setHome: (home: HomeLocation) => void;
+  /** Who the household feeds, for the groceries estimate. */
+  setHousehold: (household: Household) => void;
 
   addIncome: (draft: Draft<IncomeSource>) => string;
   updateIncome: (id: string, patch: Partial<IncomeSource>) => void;
@@ -50,6 +54,8 @@ interface PlanState {
   removeExpense: (id: string) => void;
   /** Record (or clear, with null) the real bill for a variable item in a month (YYYY-MM). */
   setExpenseActual: (id: string, month: string, amount: number | null) => void;
+  /** Record (or clear, with null) what was spent on food in a month (YYYY-MM). */
+  setFoodSpend: (month: string, entry: SpendEntry | null) => void;
 
   addAccount: (draft: Draft<Account>) => string;
   updateAccount: (id: string, patch: Partial<Account>) => void;
@@ -91,6 +97,23 @@ function touch(plan: FinancialPlan): FinancialPlan {
   return { ...plan, updatedAt: new Date().toISOString() };
 }
 
+/**
+ * Applies a change about one month's real figures to the live plan and, when that month is already
+ * closed, to its frozen copy too, rebuilding the snapshot so the closed month shows the figure.
+ */
+function withMonthApplied(
+  s: { plan: FinancialPlan; snapshots: SnapshotMap },
+  month: string,
+  apply: (plan: FinancialPlan) => FinancialPlan,
+): Partial<{ plan: FinancialPlan; snapshots: SnapshotMap }> {
+  const plan = touch({ ...apply(s.plan), isSample: undefined });
+  const frozen = s.snapshots[month];
+  if (!frozen?.plan) return { plan };
+  const frozenPlan = apply(frozen.plan);
+  const snap: MetricsSnapshot = { ...buildSnapshot(frozenPlan, month), savedAt: frozen.savedAt, plan: frozenPlan };
+  return { plan, snapshots: { ...s.snapshots, [month]: snap } };
+}
+
 export const usePlanStore = create<PlanState>()(
   persist(
     (set, get) => {
@@ -106,6 +129,7 @@ export const usePlanStore = create<PlanState>()(
         setAvatar: (avatar) => mutate((p) => ({ ...p, avatar })),
         setCurrency: (currency) => mutate((p) => ({ ...p, currency })),
         setHome: (home) => mutate((p) => applyHome(p, home)),
+        setHousehold: (household) => mutate((p) => ({ ...p, household })),
 
         addIncome: (draft) => {
           const id = draft.id ?? newId('inc');
@@ -131,8 +155,8 @@ export const usePlanStore = create<PlanState>()(
           })),
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
-          set((s) => {
-            const apply = (plan: FinancialPlan): FinancialPlan => ({
+          set((s) =>
+            withMonthApplied(s, month, (plan) => ({
               ...plan,
               expenses: plan.expenses.map((x) => {
                 if (x.id !== id) return x;
@@ -141,15 +165,17 @@ export const usePlanStore = create<PlanState>()(
                 else actuals[month] = Math.max(0, amount);
                 return { ...x, actuals: Object.keys(actuals).length > 0 ? actuals : undefined };
               }),
-            });
-            const plan = touch({ ...apply(s.plan), isSample: undefined });
-            // A closed month keeps its own copy of the plan; the bill belongs to both.
-            const frozen = s.snapshots[month];
-            if (!frozen?.plan) return { plan };
-            const frozenPlan = apply(frozen.plan);
-            const snap: MetricsSnapshot = { ...buildSnapshot(frozenPlan, month), savedAt: frozen.savedAt, plan: frozenPlan };
-            return { plan, snapshots: { ...s.snapshots, [month]: snap } };
-          }),
+            })),
+          ),
+        setFoodSpend: (month, entry) =>
+          set((s) =>
+            withMonthApplied(s, month, (plan) => {
+              const foodSpend = { ...(plan.foodSpend ?? {}) };
+              if (!entry || !Number.isFinite(entry.amount)) delete foodSpend[month];
+              else foodSpend[month] = { amount: Math.max(0, entry.amount), ...(entry.asOf ? { asOf: entry.asOf } : {}) };
+              return { ...plan, foodSpend: Object.keys(foodSpend).length > 0 ? foodSpend : undefined };
+            }),
+          ),
 
         addAccount: (draft) => {
           const id = draft.id ?? newId('acc');

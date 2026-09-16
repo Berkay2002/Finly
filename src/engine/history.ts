@@ -18,6 +18,9 @@ export interface MetricsSnapshot {
   actualVariance?: number;
   /** How many bills were confirmed when the snapshot was taken. */
   billsConfirmed?: number;
+  /** Food & drink: planned per month, and what was spent when the month was logged in full. */
+  foodPlanned?: number;
+  foodSpent?: number;
   savings: number;
   breathingRoom: number;
   safeToSpend: number;
@@ -85,6 +88,9 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
     void _drop;
     return typeof bill === 'number' ? { ...rest, actuals: { [month]: bill } } : rest;
   });
+  const food = copy.foodSpend?.[month];
+  if (food) copy.foodSpend = { [month]: food };
+  else delete copy.foodSpend;
   copy.accounts = copy.accounts.map(({ balances: _b, ...rest }) => {
     void _b;
     return rest;
@@ -112,6 +118,8 @@ export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = 
     lifestyleCostActual: m.actuals.lifestyleCost,
     actualVariance: m.actuals.variance,
     billsConfirmed: m.actuals.confirmed.length,
+    foodPlanned: m.food.monthly,
+    foodSpent: m.food.month.complete ? m.food.month.spent : undefined,
     savings: m.savings.total,
     breathingRoom: m.breathingRoom,
     safeToSpend: m.safeToSpend,

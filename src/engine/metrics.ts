@@ -1,8 +1,9 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
+import { foodSummary, isFoodItem, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured } from './debts';
-import { accountRole, type AccountRole } from './taxonomy';
+import { accountRole, isEverydaySpend, type AccountRole } from './taxonomy';
 import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan } from './types';
 import { EXPENSE_CATEGORIES } from './types';
 
@@ -57,7 +58,7 @@ export interface MonthActuals {
   confirmed: ActualLine[];
   /** Variable monthly items still waiting for the bill paid this month. */
   pending: PendingBill[];
-  /** Σ (actual − typical) over confirmed items. */
+  /** Σ (actual − typical) over confirmed items, plus the food total's variance once the month is logged in full. */
   variance: number;
   /** Normal lifestyle cost with confirmed bills substituted for their estimates. */
   lifestyleCost: number;
@@ -216,6 +217,8 @@ export interface PlanMetrics {
   /** PRD §18.21 */
   /** Car costs: tagged expenses plus car loan payments (`loans`). */
   car: { monthly: number; annual: number; lines: CostLine[]; loans: DebtLine[] };
+  /** Groceries and eating out: per month, week and day, and the month's logged spending. */
+  food: FoodSummary;
   /** PRD §18.15 — optional and flexible, largest first. */
   reducible: CostLine[];
   /** PRD §18.18 */
@@ -280,9 +283,12 @@ export function actualFor(e: ExpenseItem, month: string): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
 }
 
-/** Whether an item is the kind whose bill we ask the user to confirm each month. */
+/**
+ * Whether an item is the kind whose bill we ask the user to confirm each month. Everyday spending has
+ * no invoice: food is logged as one monthly total instead (`FinancialPlan.foodSpend`).
+ */
 export function awaitsActual(e: ExpenseItem): boolean {
-  return !e.fixed && e.frequency === 'monthly' && !e.includedElsewhere && typicalAmount(e) > 0;
+  return !e.fixed && e.frequency === 'monthly' && !e.includedElsewhere && !isEverydaySpend(e) && typicalAmount(e) > 0;
 }
 
 export function billingLagOf(e: { billingLag?: number; fixed?: boolean }): number {
@@ -391,12 +397,17 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
 
   /* Actuals — bills confirmed for the viewed month */
   const month = monthKeyOf(now);
+  const food = foodSummary(active, plan.foodSpend, month);
+  // A food total for the whole month replaces the estimates of every food item at once.
+  const foodLogged = food.month.complete;
+  const foodVariance = foodLogged ? (food.month.variance ?? 0) : 0;
   const byId = new Map(lines.map((l) => [l.id, l]));
   const confirmed: ActualLine[] = [];
   const pending: PendingBill[] = [];
   for (const e of active) {
     const line = byId.get(e.id);
     if (!line) continue;
+    if (foodLogged && isFoodItem(e)) continue;
     const actual = actualFor(e, month);
     const bill: PendingBill = { ...line, periodMonth: billPeriodFor(e, month), billingLag: billingLagOf(e) };
     if (actual !== undefined) {
@@ -405,8 +416,8 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       pending.push(bill);
     }
   }
-  const confirmedIds = new Set(confirmed.map((l) => l.id));
-  const actualVariance = sum(confirmed.map((l) => l.variance));
+  const confirmedIds = new Set([...confirmed.map((l) => l.id), ...(foodLogged ? food.itemIds : [])]);
+  const actualVariance = sum(confirmed.map((l) => l.variance)) + foodVariance;
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
   const monthLifestyleRange: Range = withDebt({
     low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
@@ -567,6 +578,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       lines: carLines.sort((a, b) => b.monthly - a.monthly),
       loans: carLoans,
     },
+    food,
     reducible,
     daily: {
       flexibleBudget,

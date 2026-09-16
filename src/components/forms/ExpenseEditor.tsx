@@ -15,9 +15,24 @@ import {
 } from '@/engine/electricity';
 import { homeKommunCode, homePriceArea } from '@/engine/home';
 import { findKommun } from '@/engine/tax/kommuner';
-import { FREQUENCIES, FREQUENCY_LABELS, isIrregular, toMonthly } from '@/engine/frequency';
+import {
+  FREQUENCIES,
+  FREQUENCY_LABELS,
+  frequencyForOccurrences,
+  isIrregular,
+  monthlyToDaily,
+  monthlyToWeekly,
+} from '@/engine/frequency';
+import { amountForMonthly } from '@/engine/food';
 import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
-import { CATEGORY_META, groupsFor, suggestionBySlug, suggestionsFor, type ExpenseSuggestion } from '@/engine/taxonomy';
+import {
+  CATEGORY_META,
+  groupsFor,
+  isEverydaySpend,
+  suggestionBySlug,
+  suggestionsFor,
+  type ExpenseSuggestion,
+} from '@/engine/taxonomy';
 import {
   EXPENSE_CATEGORIES,
   type ElectricityTariff,
@@ -25,19 +40,86 @@ import {
   type ExpenseItem,
   type ExpenseTag,
   type Frequency,
+  type Occurrences,
 } from '@/engine/types';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
 import { HomeFields } from './HomeFields';
+import { HouseholdFoodEstimator } from './HouseholdFood';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { CATEGORY_ICON } from '@/components/ui/icons';
-import { DateField, MoneyField, SelectField, Switch, TextField, TogglePill } from '@/components/ui/fields';
+import { CountField, DateField, MoneyField, SelectField, Switch, TextField, TogglePill } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
 import { ItemRow } from './ItemRow';
 
-const freqOptions = FREQUENCIES.map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
+/** How often an item is paid: a frequency, or `each` for an item priced per purchase. */
+type Cadence = Frequency | 'each';
+
+const CADENCE_LABELS: Record<Cadence, string> = { each: 'Each time', ...FREQUENCY_LABELS };
+
+const cadenceOf = (e: Pick<ExpenseItem, 'frequency' | 'occurrences'>): Cadence => (e.occurrences ? 'each' : e.frequency);
+
+/** Everyday purchases only get the cadences that make sense for them; the current one is always kept. */
+function cadenceOptions(e: Pick<ExpenseItem, 'subcategory' | 'frequency' | 'occurrences'>) {
+  const list: Cadence[] = isEverydaySpend(e) ? ['each', 'weekly', 'monthly'] : [...FREQUENCIES, 'each'];
+  const current = cadenceOf(e);
+  if (!list.includes(current)) list.push(current);
+  return list.map((c) => ({ value: c, label: CADENCE_LABELS[c] }));
+}
+
+/** Switching cadence keeps the amount as typed; it only changes what the amount means. */
+function cadencePatch(e: Pick<ExpenseItem, 'subcategory' | 'occurrences'>, next: Cadence): Partial<ExpenseItem> {
+  if (next !== 'each') return { frequency: next, occurrences: undefined };
+  const occurrences = e.occurrences ?? suggestionBySlug(e.subcategory)?.occurrences ?? { times: 1, per: 'week' };
+  return { occurrences, frequency: frequencyForOccurrences(occurrences), billingLag: undefined };
+}
+
+const occurrencesPatch = (occurrences: Occurrences): Partial<ExpenseItem> => ({
+  occurrences,
+  frequency: frequencyForOccurrences(occurrences),
+});
+
+const perOptions: { value: Occurrences['per']; label: string }[] = [
+  { value: 'week', label: 'a week' },
+  { value: 'month', label: 'a month' },
+];
+
+/** "× 5 a week" next to the price of one purchase. */
+function TimesFields({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Occurrences;
+  onChange: (o: Occurrences) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      <span className="text-[12.5px] text-muted" aria-hidden>
+        ×
+      </span>
+      <CountField
+        size="sm"
+        value={value.times}
+        onValueChange={(times) => onChange({ ...value, times })}
+        aria-label="Times"
+        className="w-14"
+        disabled={disabled}
+      />
+      <SelectField
+        size="sm"
+        value={value.per}
+        onValueChange={(per) => onChange({ ...value, per })}
+        options={perOptions}
+        className="w-[6.5rem]"
+        disabled={disabled}
+      />
+    </div>
+  );
+}
 
 const lagOptions: { value: '0' | '1' | '2'; label: string }[] = [
   { value: '0', label: 'The same month' },
@@ -57,13 +139,14 @@ const TAG_LABELS: Record<Exclude<ExpenseTag, 'debt'>, string> = {
 export type ExpenseDraft = Omit<ExpenseItem, 'id'> & { id?: string };
 type Draft = ExpenseDraft;
 
-function fromSuggestion(s: ExpenseSuggestion): Draft {
+export function fromSuggestion(s: ExpenseSuggestion): Draft {
   return {
     name: s.name,
     category: s.category,
     subcategory: s.slug,
     amount: 0,
     frequency: s.frequency,
+    occurrences: s.occurrences,
     fixed: s.fixed,
     essential: s.essential,
     committed: s.committed,
@@ -140,6 +223,7 @@ export function ExpenseEditor({
     const spread = monthlySpread(e);
     const monthly = spread.typical;
     const ranged = varies(e);
+    const notMonthly = !!e.occurrences || e.frequency !== 'monthly';
     const suggestion = suggestFromActuals(e);
     return (
       <ItemRow
@@ -153,13 +237,13 @@ export function ExpenseEditor({
           <>
             {e.note && <span>{e.note}</span>}
             {e.tariff && !e.includedElsewhere && <span className="tabular">{formatAmount(e.tariff.kwh)} kWh/month</span>}
-            {e.frequency !== 'monthly' && monthly > 0 && !e.includedElsewhere && (
+            {notMonthly && monthly > 0 && !e.includedElsewhere && (
               <span className="tabular">≈ {formatMoney(monthly, currency)}/month</span>
             )}
             {ranged && !e.includedElsewhere && (
               <span className="tabular">
                 varies {formatMoneyRange(spread.low, spread.high, currency)}
-                {e.frequency !== 'monthly' ? '/month' : ''}
+                {notMonthly ? '/month' : ''}
               </span>
             )}
             {isIrregular(e.frequency) && e.nextDate && <span>next {formatDate(e.nextDate)}</span>}
@@ -176,19 +260,35 @@ export function ExpenseEditor({
               currency={currency}
               value={e.amount}
               placeholder={ranged && e.amount === 0 ? String(Math.round(amountSpread(e).typical)) : undefined}
-              title={e.tariff ? 'Calculated from usage and prices' : ranged ? 'Typical amount' : undefined}
+              title={
+                e.tariff
+                  ? 'Calculated from usage and prices'
+                  : e.occurrences
+                    ? 'Price each time'
+                    : ranged
+                      ? 'Typical amount'
+                      : undefined
+              }
               onValueChange={(amount) => updateExpense(e.id, { amount })}
-              className="min-w-0 flex-1 sm:w-36 sm:flex-none"
+              className={clsx('min-w-0 flex-1 sm:flex-none', e.occurrences ? 'sm:w-28' : 'sm:w-36')}
               disabled={e.includedElsewhere || !!e.tariff}
             />
             <SelectField
               size="sm"
-              value={e.frequency}
-              onValueChange={(frequency: Frequency) => updateExpense(e.id, { frequency })}
-              options={freqOptions}
-              className="w-32 shrink-0"
+              value={cadenceOf(e)}
+              onValueChange={(c: Cadence) => updateExpense(e.id, cadencePatch(e, c))}
+              options={cadenceOptions(e)}
+              // On a phone a per-purchase row has no room for it; the edit sheet still switches cadence.
+              className={clsx('shrink-0', e.occurrences ? 'hidden w-28 sm:block' : 'w-32')}
               disabled={e.includedElsewhere || !!e.tariff}
             />
+            {e.occurrences && (
+              <TimesFields
+                value={e.occurrences}
+                onChange={(o) => updateExpense(e.id, occurrencesPatch(o))}
+                disabled={e.includedElsewhere}
+              />
+            )}
           </>
         }
         menu={[
@@ -345,6 +445,10 @@ function ExpenseDetailForm({
   const plan = usePlan();
   const spread = amountSpread(draft);
   const hasRange = !draft.fixed && spread.high > spread.low;
+  const everyday = isEverydaySpend(draft);
+  const perPurchaseHint = suggestionBySlug(draft.subcategory)?.hint;
+  const monthly = monthlySpread(draft).typical;
+  const [estimating, setEstimating] = useState(false);
   const tariffPart = tariffPartFor(draft.subcategory);
   const setTariff = (tariff: ElectricityTariff | undefined) => onChange(withTariffAmounts({ ...draft, tariff }));
   const startTariff = () => {
@@ -375,8 +479,26 @@ function ExpenseDetailForm({
       />
       <div className="grid grid-cols-2 gap-3">
         <MoneyField
-          label={draft.tariff ? 'Calculated amount' : draft.fixed ? 'Amount' : 'Typical amount'}
-          hint={draft.tariff ? '(average month)' : !draft.fixed && hasRange ? '(what you budget for)' : undefined}
+          label={
+            draft.tariff
+              ? 'Calculated amount'
+              : draft.occurrences
+                ? draft.fixed
+                  ? 'Price each time'
+                  : 'Typical price'
+                : draft.fixed
+                  ? 'Amount'
+                  : 'Typical amount'
+          }
+          hint={
+            draft.tariff
+              ? '(average month)'
+              : draft.occurrences && perPurchaseHint
+                ? `(${perPurchaseHint.toLowerCase()})`
+                : !draft.fixed && hasRange
+                  ? '(what you budget for)'
+                  : undefined
+          }
           currency={currency}
           value={draft.tariff ? spread.typical : draft.amount}
           placeholder={hasRange && draft.amount === 0 ? String(Math.round(spread.typical)) : undefined}
@@ -384,13 +506,53 @@ function ExpenseDetailForm({
           disabled={!!draft.tariff}
         />
         <SelectField
-          label="Frequency"
-          value={draft.frequency}
-          onValueChange={(frequency: Frequency) => set({ frequency })}
-          options={freqOptions}
+          label="How often"
+          value={cadenceOf(draft)}
+          onValueChange={(c: Cadence) => set(cadencePatch(draft, c))}
+          options={cadenceOptions(draft)}
           disabled={!!draft.tariff}
         />
       </div>
+      {draft.occurrences && (
+        <div className="grid grid-cols-2 gap-3">
+          <CountField
+            label="Times"
+            value={draft.occurrences.times}
+            onValueChange={(times) => set(occurrencesPatch({ ...draft.occurrences!, times }))}
+          />
+          <SelectField
+            label="Per"
+            value={draft.occurrences.per}
+            onValueChange={(per) => set(occurrencesPatch({ ...draft.occurrences!, per }))}
+            options={[
+              { value: 'week', label: 'Week' },
+              { value: 'month', label: 'Month' },
+            ]}
+          />
+        </div>
+      )}
+      {draft.subcategory === 'groceries' && (
+        <div className="rounded-xl border border-line bg-page/40 p-3">
+          {estimating ? (
+            <HouseholdFoodEstimator
+              currency={currency}
+              applyLabel={(m) => `Use ${formatMoney(amountForMonthly(draft, m), currency)} ${cadenceNoun(draft)}`}
+              onApply={(m) => {
+                set({ amount: amountForMonthly(draft, m) });
+                setEstimating(false);
+              }}
+              onCancel={() => setEstimating(false)}
+            />
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="min-w-0 flex-1 text-[12.5px] text-muted">Not sure? Start from what a household like yours needs.</p>
+              <Button size="sm" variant="soft" onClick={() => setEstimating(true)}>
+                Estimate from household
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
       {!draft.fixed && (
         <div className="rounded-xl border border-dashed border-line bg-page/40 p-3">
           {tariffPart && (
@@ -411,7 +573,9 @@ function ExpenseDetailForm({
             <>
               <div className={clsx('mb-2 text-[12.5px] font-medium text-ink-soft', tariffPart && 'mt-3')}>
                 Usual range
-                <span className="ml-1 font-normal text-faint">(per {periodNoun(draft.frequency)}, optional)</span>
+                <span className="ml-1 font-normal text-faint">
+                  ({draft.occurrences ? 'each time' : `per ${periodNoun(draft.frequency)}`}, optional)
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <MoneyField
@@ -429,8 +593,14 @@ function ExpenseDetailForm({
               </div>
               <p className="mt-2 text-[12px] text-muted">
                 {hasRange
-                  ? `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
-                  : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
+                  ? draft.occurrences
+                    ? `Budgets for ${formatMoney(spread.typical, currency)} each time; usually between ${formatMoneyRange(spread.low, spread.high, currency)}.`
+                    : `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
+                  : everyday
+                    ? draft.occurrences
+                      ? 'For a price that differs from one time to the next. Leave the typical price empty to budget for the midpoint.'
+                      : `For costs that move from ${periodNoun(draft.frequency)} to ${periodNoun(draft.frequency)}, like the grocery shop. Leave the typical amount empty to budget for the midpoint.`
+                    : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
               </p>
             </>
           )}
@@ -440,7 +610,7 @@ function ExpenseDetailForm({
             onApply={(s) => set({ amount: s.typical, range: { low: s.low, high: s.high } })}
             onUseKwh={(kwh) => draft.tariff && setTariff({ ...draft.tariff, kwh })}
           />
-          {draft.frequency === 'monthly' && (
+          {draft.frequency === 'monthly' && !everyday && (
             <SelectField
               label="The bill covers"
               hint="(so we ask for the right month)"
@@ -460,9 +630,10 @@ function ExpenseDetailForm({
           onChange={(e) => set({ nextDate: e.target.value || undefined })}
         />
       )}
-      {draft.frequency !== 'monthly' && draft.amount > 0 && (
+      {(draft.frequency !== 'monthly' || draft.occurrences || everyday) && monthly > 0 && !draft.tariff && (
         <p className="tabular -mt-2 text-[12px] text-muted">
-          ≈ {formatMoney(toMonthly(draft.amount, draft.frequency), currency)} per month
+          ≈ {formatMoney(monthly, currency)} a month
+          {everyday && ` · ${formatMoney(monthlyToWeekly(monthly), currency)} a week · ${formatMoney(monthlyToDaily(monthly), currency)} a day`}
         </p>
       )}
 
@@ -790,6 +961,12 @@ function TariffBreakdown({ tariff, currency }: { tariff: ElectricityTariff; curr
       {s.high > s.low && <>, {formatMoneyRange(s.low, s.high, currency)} from light to heavy months</>}.
     </p>
   );
+}
+
+/** "a week", "each time"… for the amount an item is entered in. */
+function cadenceNoun(e: Pick<ExpenseItem, 'frequency' | 'occurrences'>): string {
+  if (e.occurrences) return 'each time';
+  return e.frequency === 'once' ? 'once' : `a ${periodNoun(e.frequency)}`;
 }
 
 function periodNoun(f: Frequency): string {

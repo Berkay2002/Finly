@@ -3,6 +3,7 @@ import { CATEGORY_META } from '@/engine/taxonomy';
 import type { ExpenseCategory } from '@/engine/types';
 import { useAutoAdd } from '@/lib/useAutoAdd';
 import { useCurrency, useMetrics, useUpcoming } from '@/store/selectors';
+import { FoodCard, FoodMonthCard } from '@/components/food/FoodCards';
 import { ExpenseEditor } from '@/components/forms/ExpenseEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -71,6 +72,12 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
         </Card>
 
         <div className="space-y-4 self-start">
+          {category === 'living' && (
+            <>
+              <FoodCard />
+              <FoodMonthCard />
+            </>
+          )}
           {category === 'finance' && (
             <Card>
               <CardHeader

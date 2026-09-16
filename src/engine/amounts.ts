@@ -1,6 +1,6 @@
-import { toMonthly } from './frequency';
+import { periodsPerMonth } from './frequency';
 import { tariffSpread } from './electricity';
-import type { AmountRange, ElectricityTariff, Frequency } from './types';
+import type { AmountRange, ElectricityTariff, Frequency, Occurrences } from './types';
 
 /**
  * Low / typical / high reading of one amount. For a fixed item all three are the same number;
@@ -15,6 +15,7 @@ export interface AmountSpread {
 export interface Rangeable {
   amount: number;
   frequency: Frequency;
+  occurrences?: Occurrences;
   fixed?: boolean;
   range?: AmountRange;
   tariff?: ElectricityTariff;
@@ -48,14 +49,11 @@ export function amountSpread(item: Rangeable): AmountSpread {
   };
 }
 
-/** Same as {@link amountSpread} but converted to monthly equivalents. */
+/** Same as {@link amountSpread} but converted to monthly equivalents (per purchase × purchases for `occurrences`). */
 export function monthlySpread(item: Rangeable): AmountSpread {
   const s = amountSpread(item);
-  return {
-    low: toMonthly(s.low, item.frequency),
-    typical: toMonthly(s.typical, item.frequency),
-    high: toMonthly(s.high, item.frequency),
-  };
+  const n = item.tariff ? 1 : periodsPerMonth(item);
+  return { low: s.low * n, typical: s.typical * n, high: s.high * n };
 }
 
 /** True when the item's cost genuinely moves between periods. */

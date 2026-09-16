@@ -1,4 +1,4 @@
-import { addMonths, format, lastDayOfMonth } from 'date-fns';
+import { addMonths, differenceInCalendarMonths, format, lastDayOfMonth } from 'date-fns';
 import { toMonthly } from './frequency';
 import type { Debt, DebtFrequency, DebtKind, ExpenseItem, FinancialPlan, MortgageRateType } from './types';
 
@@ -7,8 +7,6 @@ import type { Debt, DebtFrequency, DebtKind, ExpenseItem, FinancialPlan, Mortgag
  * docs/swedish-loans.md for the reasoning and what to update each year.
  */
 
-/** CSN interest on annuitetslån and studielån, 2026 (CSN, decided 2 Dec 2025). */
-export const CSN_RATE_2026 = 2.135;
 /** CSN raises an annuity loan's årsbelopp by about 2 % a year (uppräkning). */
 export const CSN_STEP_UP = 0.02;
 /** Studielån paid out 1989 to June 2001: 4 % of the income from two years earlier. */
@@ -33,6 +31,11 @@ export const AMORTIZATION_TIERS = [
 ] as const;
 
 const pos = (n: number | undefined) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0);
+
+const parseIso = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, (m ?? 1) - 1, d ?? 1);
+};
 
 /* ------------------------------------------------------------------ */
 /* Security and ränteavdrag                                            */
@@ -160,9 +163,49 @@ export interface ScheduleRow {
 
 const MAX_MONTHS = 100 * 12;
 
+/** Monthly rate for the month starting at `date`: from `rateAt` when it has one, otherwise the loan's own. */
+function monthlyRateAt(own: number, date: Date, rateAt?: RateAt): number {
+  const pct = rateAt?.(date);
+  return pct === undefined || !Number.isFinite(pct) ? own : Math.max(0, pct) / 100 / 12;
+}
+
+/**
+ * First month (next month is 1) the simulation takes a payment in. A quarterly or yearly payment is spread
+ * over the months it covers, ending with the month it is due, so a due date more than one period away
+ * means repayment has not started: the months before carry interest but no payment.
+ */
+function firstPaidMonth(d: Debt, now: Date): number {
+  if (!d.nextDate || d.frequency === 'monthly') return 1;
+  return differenceInCalendarMonths(parseIso(d.nextDate), now) - 12 / paymentsPerYear(d.frequency) + 1;
+}
+
+/** The first payment's due date when repayment has not started yet (the next payment is more than one period away). */
+export function repaymentStart(d: Debt, now: Date): Date | null {
+  return firstPaidMonth(d, now) > 1 ? parseIso(d.nextDate!) : null;
+}
+
+/**
+ * Interest that builds up between now and the first payment, at today's rate or along `rateAt`. Null when
+ * repayment has already started or balance or rate is missing.
+ */
+export function interestBeforeRepayment(d: Debt, now: Date, rateAt?: RateAt): { start: Date; interest: number } | null {
+  const start = repaymentStart(d, now);
+  const own = monthlyRateOf(d);
+  let balance = pos(d.balance);
+  if (!start || own === undefined || balance <= 0) return null;
+  let interest = 0;
+  for (let m = 1; m <= differenceInCalendarMonths(start, now); m += 1) {
+    const due = balance * monthlyRateAt(own, addMonths(now, m), rateAt);
+    interest += due;
+    balance += due;
+  }
+  return { start, interest };
+}
+
 /**
  * Month-by-month run of a loan. CSN annuity payments step up by about 2 % a year the way CSN
  * recalculates them. With `rateAt` the rate can change over time; without it today's rate holds.
+ * Before the first payment (see `firstPaidMonth`) interest is added to the balance.
  * Null when balance, rate or payment is missing.
  */
 function simulate(
@@ -180,12 +223,12 @@ function simulate(
   let payment = amort === undefined ? toMonthly(pos(d.payment), d.frequency) : 0;
   if (amort === undefined && payment <= 0) return null;
   const stepUp = d.kind === 'csn' && d.csnType !== 'income_based' ? CSN_STEP_UP : 0;
+  const firstPaid = amort === undefined ? firstPaidMonth(d, now) : 1;
 
   let interest = 0;
   for (let m = 1; m <= maxMonths; m += 1) {
     const date = addMonths(now, m);
-    const pct = rateAt?.(date);
-    const r = pct === undefined || !Number.isFinite(pct) ? own : Math.max(0, pct) / 100 / 12;
+    const r = monthlyRateAt(own, date, rateAt);
     const due = balance * r;
     if (amort !== undefined) {
       // An interest-only mortgage never clears; a schedule still wants its rows.
@@ -194,6 +237,10 @@ function simulate(
       interest += due;
       balance -= principal;
       onRow?.({ date, rate: r * 1200, payment: due + principal, interest: due, principal, balance });
+    } else if (m < firstPaid) {
+      interest += due;
+      balance += due;
+      onRow?.({ date, rate: r * 1200, payment: 0, interest: due, principal: -due, balance });
     } else {
       // With a fixed rate a payment that does not cover the interest never will; a changing rate might.
       if (payment <= due && stepUp === 0 && !rateAt && !onRow) break;
@@ -201,7 +248,7 @@ function simulate(
       interest += due;
       balance = balance + due - paid;
       onRow?.({ date, rate: r * 1200, payment: paid, interest: due, principal: paid - due, balance: Math.max(0, balance) });
-      if (m % 12 === 0) payment *= 1 + stepUp;
+      if ((m - firstPaid + 1) % 12 === 0) payment *= 1 + stepUp;
     }
     if (balance <= 0.5) return { months: m, interest, cleared: true };
   }

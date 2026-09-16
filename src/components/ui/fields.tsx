@@ -97,6 +97,50 @@ export function MoneyField({
   );
 }
 
+/** A small count, e.g. how many times a week something is bought. Accepts halves (1.5 a week). */
+export function CountField({
+  label,
+  hint,
+  value,
+  onValueChange,
+  className,
+  size = 'md',
+  ...rest
+}: {
+  label?: ReactNode;
+  hint?: ReactNode;
+  value: number;
+  onValueChange: (v: number) => void;
+  size?: 'sm' | 'md';
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'size'>) {
+  const id = useId();
+  return (
+    <div className={className}>
+      {label && (
+        <Label htmlFor={id} hint={hint}>
+          {label}
+        </Label>
+      )}
+      <input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        value={Number.isFinite(value) && value !== 0 ? value : ''}
+        placeholder="0"
+        onChange={(e) => {
+          const n = e.target.value === '' ? 0 : Number(e.target.value);
+          onValueChange(Number.isFinite(n) ? Math.max(0, n) : 0);
+        }}
+        onFocus={(e) => e.target.select()}
+        className={clsx(fieldBase, 'tabular px-2 text-center', size === 'sm' ? 'h-9' : 'h-10')}
+        {...rest}
+      />
+    </div>
+  );
+}
+
 export function SelectField<T extends string>({
   label,
   hint,

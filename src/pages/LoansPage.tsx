@@ -4,7 +4,6 @@ import { useMemo } from 'react';
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import {
   amortizationRequirement,
-  CSN_RATE_2026,
   debtPayoff,
   debtSchedule,
   isDeductible,
@@ -22,7 +21,7 @@ import {
   formatShortMonthYear,
 } from '@/engine/format';
 import type { DebtLine } from '@/engine/metrics';
-import { csnRateForYear, fixedRateResets, forecastRates, policyRateAt, rateShock, type RateOutlook } from '@/engine/rates';
+import { csnRateDecided, csnRateForYear, fixedRateResets, forecastRates, policyRateAt, rateShock, type RateOutlook } from '@/engine/rates';
 import { debtKindMeta } from '@/engine/taxonomy';
 import type { Debt } from '@/engine/types';
 import { useRateOutlook } from '@/lib/rateOutlook';
@@ -266,7 +265,8 @@ export function LoansPage() {
 
           {csn.length > 0 && (
             <Callout tone="info" icon="goal-graduation" title="CSN is in a league of its own">
-              {pct(CSN_RATE_2026)} in 2026 and no ränteavdrag, but payments can be lowered if your income drops (nedsättning)
+              {csnRateDecided(now.getFullYear()) ? '' : 'About '}
+              {pct(csnRateForYear(outlook, now.getFullYear()))} in {now.getFullYear()} and no ränteavdrag, but payments can be lowered if your income drops (nedsättning)
               and what is left is written off at death, so extra money usually does more elsewhere.
               {m.resilience.availableForRunway > 0 &&
                 m.essentialCost > m.debt.csnMonthly &&

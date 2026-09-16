@@ -109,6 +109,16 @@ export interface ElectricityTariff {
   priceMonth?: string;
 }
 
+/**
+ * A cost priced per purchase rather than per period: one lunch, one coffee, one takeaway. People know
+ * what a lunch costs and how many they buy a week far better than what lunches add up to in a month.
+ */
+export interface Occurrences {
+  /** Purchases per `per`. May be fractional (1.5 a week). */
+  times: number;
+  per: 'week' | 'month';
+}
+
 export interface ExpenseItem {
   id: string;
   name: string;
@@ -122,6 +132,11 @@ export interface ExpenseItem {
    */
   amount: number;
   frequency: Frequency;
+  /**
+   * Priced per purchase. While set, `amount` and `range` are what one purchase costs and `frequency`
+   * mirrors `per` (weekly or monthly). See engine/frequency.ts.
+   */
+  occurrences?: Occurrences;
   /** ISO date (YYYY-MM-DD) of the next occurrence. Used for non-monthly items. */
   nextDate?: string;
   /** Fixed amount each period vs variable amount. Only variable items honour `range`. */
@@ -183,6 +198,11 @@ export interface Debt {
   balances?: Record<string, number>;
   /** Nominal yearly interest rate in percent (3.85 means 3.85 %). Undefined while not entered. */
   rate?: number;
+  /**
+   * CSN: the year `rate` applies to. CSN's rate changes every January, so forecasts move `rate` by CSN's
+   * change from this year on. Missing on loans saved before it existed: taken as the current year.
+   */
+  rateYear?: number;
   /** Car and other loans: secured against what was bought. Mortgages always are; CSN, personal loans and credit cards never. */
   secured?: boolean;
   /**
@@ -191,7 +211,10 @@ export interface Debt {
    */
   payment: number;
   frequency: DebtFrequency;
-  /** ISO date (YYYY-MM-DD) of the next payment, for quarterly and yearly schedules. */
+  /**
+   * ISO date (YYYY-MM-DD) of the next payment, for quarterly and yearly schedules. More than one period
+   * away means repayment has not started yet: nothing is paid before then and interest builds up.
+   */
   nextDate?: string;
   /** Mortgage: amortering per month. */
   amortization?: number;
@@ -274,6 +297,34 @@ export interface HomeLocation {
   priceArea?: PriceArea;
 }
 
+/** Konsumentverket's age bands for food costs. See engine/food.ts. */
+export type AgeGroup = '0' | '1-3' | '4-6' | '7-10' | '11-14' | '15-17' | '18-24' | '25-50' | '51-70' | '71+';
+
+export interface HouseholdMember {
+  id: string;
+  age: AgeGroup;
+  /** Eats weekday lunch away from home: school lunch, or lunch bought at work. */
+  lunchAway: boolean;
+}
+
+/** Who the household feeds. Used to estimate groceries. */
+export interface Household {
+  members: HouseholdMember[];
+}
+
+/**
+ * What was really spent on food in a month, as read off the bank app. Everyday spending has no
+ * invoice to confirm, so the month gets one total instead of a bill per item.
+ */
+export interface SpendEntry {
+  amount: number;
+  /**
+   * YYYY-MM-DD the total runs to while the month is still going. Absent once it covers the whole
+   * month, which is also what a figure entered after the month ended means.
+   */
+  asOf?: string;
+}
+
 export interface FinancialPlan {
   version: 1;
   currency: string;
@@ -281,6 +332,9 @@ export interface FinancialPlan {
   /** Profile picture as a small JPEG data URL (see `lib/image.ts`). Syncs with the plan; not kept in frozen months. */
   avatar?: string;
   home?: HomeLocation;
+  household?: Household;
+  /** Food & drink spending per month (YYYY-MM). */
+  foodSpend?: Record<string, SpendEntry>;
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];

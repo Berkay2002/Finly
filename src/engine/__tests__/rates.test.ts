@@ -3,6 +3,7 @@ import { buildOutlook, GET } from '../../../api/rates';
 import { debtPayoff, debtSchedule, repaymentOrder } from '../debts';
 import {
   BUNDLED_OUTLOOK,
+  csnRateDecided,
   csnRateForYear,
   fixedRateResets,
   forecastRates,
@@ -64,6 +65,11 @@ describe('csnRateForYear', () => {
     expect(csnRateForYear(rising, 2030)).toBeCloseTo(2.135 + 0.7, 3);
   });
 
+  it('knows which years CSN has decided', () => {
+    expect(csnRateDecided(2026)).toBe(true);
+    expect(csnRateDecided(2027)).toBe(false);
+  });
+
   it('projects a lower rate for 2027 as the high rates of 2023 leave the window', () => {
     const next = csnRateForYear(BUNDLED_OUTLOOK, 2027);
     expect(next).toBeLessThan(2.135);
@@ -96,6 +102,15 @@ describe('rateAt', () => {
     expect(rateAt(csn, new Date(2030, 5, 1), now, rising, 1)).toBeCloseTo(2.135 + 0.7, 3);
     expect(rateAt(loan({ kind: 'car', rate: 7 }), later, now, rising, 1)).toBe(7);
     expect(rateAt(loan({ kind: 'car' }), later, now, rising, 1)).toBeUndefined();
+  });
+
+  it('moves a CSN rate from the year it was entered for, not from today', () => {
+    const csn = loan({ kind: 'csn', rate: 2.135, rateYear: 2026 });
+    const nextYear = new Date(2027, 5, 1);
+    const in2030 = new Date(2030, 5, 1);
+    // Looked at in 2027, a rate entered in 2026 still lands on the projected 2030 rate.
+    expect(rateAt(csn, in2030, nextYear, rising, 1)).toBeCloseTo(csnRateForYear(rising, 2030), 3);
+    expect(rateAt(csn, nextYear, nextYear, rising, 1)).toBeCloseTo(csnRateForYear(rising, 2027), 3);
   });
 });
 

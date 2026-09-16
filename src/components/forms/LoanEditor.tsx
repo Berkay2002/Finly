@@ -2,18 +2,27 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   amortizationRequirement,
-  CSN_RATE_2026,
   csnIncomeBasedYearly,
   debtFlow,
   debtPayoff,
+  interestBeforeRepayment,
   interestTaxReduction,
   isDeductible,
   mortgageRateType,
   nextCsnDueDate,
   paymentsPerYear,
+  repaymentStart,
 } from '@/engine/debts';
 import { formatDate, formatDuration, formatMoney, formatMonthYear } from '@/engine/format';
-import { fixedRateResets, forecastRates } from '@/engine/rates';
+import {
+  BUNDLED_OUTLOOK,
+  csnRateDecided,
+  csnRateForYear,
+  fixedRateResets,
+  forecastRates,
+  rateAt,
+  type RateOutlook,
+} from '@/engine/rates';
 import { DEBT_KINDS, debtKindMeta } from '@/engine/taxonomy';
 import type { CsnLoanType, Debt, DebtFrequency, DebtKind, MortgageRateType } from '@/engine/types';
 import { useRateOutlook } from '@/lib/rateOutlook';
@@ -50,8 +59,9 @@ export const DEBT_ACCENT: Record<DebtKind, Accent> = {
   other: 'neutral',
 };
 
-export function blankLoan(kind: DebtKind = 'csn', now: Date = new Date()): Draft {
+export function blankLoan(kind: DebtKind = 'csn', now: Date = new Date(), outlook: RateOutlook = BUNDLED_OUTLOOK): Draft {
   const meta = debtKindMeta(kind);
+  const year = now.getFullYear();
   return {
     name: meta.name,
     lender: kind === 'csn' ? 'CSN' : '',
@@ -61,13 +71,17 @@ export function blankLoan(kind: DebtKind = 'csn', now: Date = new Date()): Draft
     frequency: meta.frequency,
     secured: kind === 'car' ? true : undefined,
     rateType: kind === 'mortgage' ? 'variable' : undefined,
-    ...(kind === 'csn' ? { rate: CSN_RATE_2026, csnType: 'annuity' as const, nextDate: nextCsnDueDate(now) } : {}),
+    ...(kind === 'csn'
+      ? { rate: csnRateForYear(outlook, year), rateYear: year, csnType: 'annuity' as const, nextDate: nextCsnDueDate(now) }
+      : {}),
   };
 }
 
 /** Keeps a draft consistent before saving: a mortgage's payment follows from amortering and interest. */
-function finalize(d: Draft): Draft {
+function finalize(d: Draft, now: Date): Draft {
   const out = { ...d, name: d.name.trim() };
+  // A CSN rate saved before rateYear existed was entered for this year's rate.
+  out.rateYear = out.kind === 'csn' && out.rate !== undefined ? (out.rateYear ?? now.getFullYear()) : undefined;
   if (out.kind === 'mortgage') {
     out.rateType = mortgageRateType(out);
     if (out.rateType === 'variable') out.rateFixedUntil = undefined;
@@ -202,14 +216,14 @@ export function LoanSheet({
 
   const setKind = (kind: DebtKind) => {
     if (!draft) return;
-    const fresh = blankLoan(kind, now);
+    const fresh = blankLoan(kind, now, outlook);
     onChange({
       ...fresh,
       id: draft.id,
       name: draft.id || draft.name !== debtKindMeta(draft.kind).name ? draft.name : fresh.name,
       balance: draft.balance,
       lender: draft.lender && draft.lender !== 'CSN' ? draft.lender : fresh.lender,
-      rate: kind === 'csn' ? CSN_RATE_2026 : draft.kind === 'csn' ? undefined : draft.rate,
+      rate: kind === 'csn' ? fresh.rate : draft.kind === 'csn' ? undefined : draft.rate,
       payment: kind === 'mortgage' ? 0 : draft.payment,
       frequency: fresh.frequency,
     });
@@ -225,6 +239,7 @@ export function LoanSheet({
       ? debtPayoff(d, now, forecastRates(d, now, outlook, household))
       : null;
   const reset = d && d.kind === 'mortgage' ? fixedRateResets(household, now, outlook, 12).find((r) => r.debt.id === d.id) : undefined;
+  const before = d ? interestBeforeRepayment(d, now, d.kind === 'csn' ? forecastRates(d, now, outlook, household) : undefined) : null;
 
   return (
     <Sheet
@@ -284,17 +299,11 @@ export function LoanSheet({
                 label="Interest rate"
                 currency="%"
                 value={draft.rate ?? 0}
-                onValueChange={(v) => onChange({ ...draft, rate: v > 0 ? v : undefined })}
+                onValueChange={(v) =>
+                  onChange({ ...draft, rate: v > 0 ? v : undefined, rateYear: draft.kind === 'csn' ? now.getFullYear() : undefined })
+                }
               />
-              {draft.kind === 'csn' && draft.rate !== CSN_RATE_2026 && (
-                <button
-                  type="button"
-                  className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
-                  onClick={() => onChange({ ...draft, rate: CSN_RATE_2026 })}
-                >
-                  Use CSN's 2026 rate, {pct(CSN_RATE_2026)}
-                </button>
-              )}
+              {draft.kind === 'csn' && <CsnRateHint draft={draft} onChange={onChange} />}
             </div>
           </div>
 
@@ -337,6 +346,12 @@ export function LoanSheet({
               </p>
             ) : (
               <p>Enter the payment to see where it goes.</p>
+            )}
+            {before && (
+              <p className="mt-1">
+                Repayment starts {formatDate(before.start)}. Until then about {money(before.interest)} in interest is added to what
+                you owe.
+              </p>
             )}
             {isDeductible(d) && flow.interest !== null && flow.interest > 0 && (
               <p className="mt-1">
@@ -385,6 +400,49 @@ export function LoanSheet({
         </div>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * CSN's rate for this year as a one-click fill (its rate changes every January), and the rate expected
+ * when the next payment falls in a later year.
+ */
+function CsnRateHint({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const now = useViewDate();
+  const outlook = useRateOutlook();
+  const loan = { ...draft, id: draft.id ?? 'draft' } as Debt;
+  const year = now.getFullYear();
+  const current = csnRateForYear(outlook, year);
+  const due = draft.frequency !== 'monthly' && draft.nextDate ? new Date(`${draft.nextDate}T00:00:00`) : null;
+  const dueYear = due && due.getFullYear() > year ? due.getFullYear() : null;
+  // The loan's own rate carried into that year, keeping any difference from CSN's.
+  const then =
+    due && dueYear !== null
+      ? draft.rate === undefined
+        ? csnRateForYear(outlook, dueYear)
+        : rateAt(loan, due, now, outlook, 0)
+      : undefined;
+  const differs = draft.rate === undefined || Math.abs(draft.rate - current) >= 0.0005;
+  const about = (y: number, n: number) => (csnRateDecided(y) ? pct(n) : `about ${pct(Math.round(n * 100) / 100)}`);
+
+  return (
+    <>
+      {differs && (
+        <button
+          type="button"
+          className="mt-1 text-left text-[12px] font-medium text-brand-700 hover:underline"
+          onClick={() => onChange({ ...draft, rate: current, rateYear: year })}
+        >
+          Use {year}'s {csnRateDecided(year) ? 'rate' : 'estimate'}, {about(year, current)}
+        </button>
+      )}
+      {then !== undefined && dueYear !== null && (
+        <p className="mt-1 text-[12px] text-muted">
+          {csnRateDecided(dueYear) ? 'CSN has set' : 'Expect'} {about(dueYear, then)} in {dueYear},{' '}
+          {repaymentStart(loan, now) ? 'when payments start' : 'when the next payment is due'}.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -578,17 +636,18 @@ function MortgageRequirement({ draft }: { draft: Debt }) {
 export function useLoanSheet() {
   const plan = usePlan();
   const now = useViewDate();
+  const outlook = useRateOutlook();
   const { addDebt, updateDebt, removeDebt } = usePlanStore();
   const [draft, setDraft] = useState<Draft | null>(null);
   const openEdit = (id: string) => {
     const d = (plan.debts ?? []).find((x) => x.id === id);
     if (d) setDraft({ ...d });
   };
-  const openNew = (kind?: DebtKind) => setDraft(blankLoan(kind, now));
+  const openNew = (kind?: DebtKind) => setDraft(blankLoan(kind, now, outlook));
   const close = () => setDraft(null);
   const save = () => {
     if (!draft) return;
-    const next = finalize(draft);
+    const next = finalize(draft, now);
     if (next.id) {
       const { id, ...patch } = next;
       updateDebt(id, patch);

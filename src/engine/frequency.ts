@@ -1,4 +1,4 @@
-import type { Frequency } from './types';
+import type { Frequency, Occurrences } from './types';
 
 /** Months per occurrence, for interval frequencies. */
 const MONTHS_PER_PERIOD: Record<Exclude<Frequency, 'once' | 'weekly'>, number> = {
@@ -28,6 +28,30 @@ export function toMonthly(amount: number, frequency: Frequency): number {
     case 'once':
       return amount / 12;
   }
+}
+
+/** Purchases per month. Invalid or negative counts give 0. */
+export function occurrencesPerMonth(o: Occurrences): number {
+  const times = Number.isFinite(o.times) && o.times > 0 ? o.times : 0;
+  return o.per === 'week' ? times * WEEKS_PER_MONTH : times;
+}
+
+/** How many times `amount` is paid in a month: per purchase when priced that way, else by frequency. */
+export function periodsPerMonth(item: { frequency: Frequency; occurrences?: Occurrences }): number {
+  return item.occurrences ? occurrencesPerMonth(item.occurrences) : toMonthly(1, item.frequency);
+}
+
+/** The frequency stored alongside `occurrences`, so code that only reads `frequency` still sees a regular cost. */
+export function frequencyForOccurrences(o: Occurrences): Frequency {
+  return o.per === 'week' ? 'weekly' : 'monthly';
+}
+
+export function monthlyToWeekly(monthly: number): number {
+  return monthly / WEEKS_PER_MONTH;
+}
+
+export function monthlyToDaily(monthly: number): number {
+  return (monthly * 12) / 365;
 }
 
 export function toAnnual(amount: number, frequency: Frequency): number {
