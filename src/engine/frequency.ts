@@ -33,7 +33,7 @@ export function toMonthly(amount: number, frequency: Frequency): number {
 /** Purchases per month. Invalid or negative counts give 0. */
 export function occurrencesPerMonth(o: Occurrences): number {
   const times = Number.isFinite(o.times) && o.times > 0 ? o.times : 0;
-  return o.per === 'week' ? times * WEEKS_PER_MONTH : times;
+  return o.per === 'week' ? times * WEEKS_PER_MONTH : o.per === 'year' ? times / 12 : times;
 }
 
 /** How many times `amount` is paid in a month: per purchase when priced that way, else by frequency. */
@@ -43,7 +43,7 @@ export function periodsPerMonth(item: { frequency: Frequency; occurrences?: Occu
 
 /** The frequency stored alongside `occurrences`, so code that only reads `frequency` still sees a regular cost. */
 export function frequencyForOccurrences(o: Occurrences): Frequency {
-  return o.per === 'week' ? 'weekly' : 'monthly';
+  return o.per === 'week' ? 'weekly' : o.per === 'year' ? 'yearly' : 'monthly';
 }
 
 export function monthlyToWeekly(monthly: number): number {
@@ -63,8 +63,12 @@ export function monthsPerPeriod(frequency: Frequency): number | null {
   return MONTHS_PER_PERIOD[frequency];
 }
 
-/** Whether an item at this frequency is "irregular" and should appear in the upcoming calendar. */
-export function isIrregular(frequency: Frequency): boolean {
+/**
+ * Whether an item is "irregular" and should appear in the upcoming calendar. An item priced per
+ * purchase (a few flights a year) has no due date and is spread over the months instead.
+ */
+export function isIrregular(frequency: Frequency, occurrences?: Occurrences): boolean {
+  if (occurrences) return false;
   return frequency === 'quarterly' || frequency === 'yearly' || frequency === 'once';
 }
 

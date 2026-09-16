@@ -2,6 +2,7 @@ import { ArrowRight, Plus, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import clsx from 'clsx';
+import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { FREQUENCIES, FREQUENCY_LABELS } from '@/engine/frequency';
 import { formatCompact, formatDuration, formatMoney, formatMoneyRange, formatMonths, formatPercent, formatShortMonth, formatShortMonthYear } from '@/engine/format';
 import { runScenario, type IncomeChangeScenario, type RecurringExpenseScenario, type ScenarioResult } from '@/engine/scenarios';
@@ -301,12 +302,14 @@ function AllowanceCard() {
   const remainingBudget = Math.max(0, m.daily.flexibleBudget - spent);
   const perDay = spent > 0 ? remainingBudget / m.daily.daysRemaining : m.daily.perDay;
   const perWeek = perDay * 7;
-  // Flexible food is part of the flexible money; spread the part still to spend over the days left.
-  const foodLeft =
-    m.food.month.spent !== undefined && !m.food.month.complete
-      ? Math.max(0, m.food.flexible - m.food.month.spent)
-      : m.food.flexible * (m.daily.daysRemaining / m.daily.daysInMonth);
-  const foodPerDay = m.food.flexible > 0 ? foodLeft / m.daily.daysRemaining : 0;
+  // Flexible everyday spending is part of the flexible money; spread what is still to spend in each group over the days left.
+  const groups = SPEND_GROUPS.map((g) => {
+    const s = m.everyday[g];
+    const logged = s.month.spent !== undefined && !s.month.complete;
+    const left = logged ? Math.max(0, s.flexible - (s.month.spent ?? 0)) : s.flexible * (m.daily.daysRemaining / m.daily.daysInMonth);
+    return { id: g, label: SPEND_GROUP_META[g].label, perDay: s.flexible > 0 ? left / m.daily.daysRemaining : 0, summary: s, logged };
+  }).filter((g) => g.perDay > 0);
+  const groupsPerDay = groups.reduce((a, g) => a + g.perDay, 0);
 
   return (
     <Card>
@@ -339,24 +342,30 @@ function AllowanceCard() {
           <dd className="tabular font-semibold text-ink">{money(m.daily.flexibleBudget)}</dd>
         </div>
       </dl>
-      {foodPerDay > 0 && (
+      {groups.length > 0 && (
         <div className="mt-3 rounded-xl bg-page p-3 text-[12.5px]">
-          <div className="flex justify-between gap-3">
-            <span className="text-ink-soft">Of which food</span>
-            <span className="tabular text-ink">
-              {money(foodPerDay)} a day · {money(foodPerDay * 7)} a week
-            </span>
-          </div>
+          <div className="mb-1 text-[11.5px] font-medium text-muted">Of which</div>
+          {groups.map((g) => (
+            <div key={g.id} className="mt-1 flex justify-between gap-3">
+              <span className="text-ink-soft">{g.label}</span>
+              <span className="tabular whitespace-nowrap text-ink">
+                {money(g.perDay)} a day · {money(g.perDay * 7)} a week
+              </span>
+            </div>
+          ))}
           <div className="mt-1 flex justify-between gap-3">
-            <span className="text-ink-soft">Everything else flexible</span>
-            <span className="tabular text-ink">
-              {money(Math.max(0, perDay - foodPerDay))} a day · {money(Math.max(0, perWeek - foodPerDay * 7))} a week
+            <span className="text-ink-soft">Everything else</span>
+            <span className="tabular whitespace-nowrap text-ink">
+              {money(Math.max(0, perDay - groupsPerDay))} a day · {money(Math.max(0, perWeek - groupsPerDay * 7))} a week
             </span>
           </div>
           <p className="mt-1.5 text-muted">
-            {m.food.month.spent !== undefined && !m.food.month.complete
-              ? `Food so far this month: ${money(m.food.month.spent)} of ${money(m.food.monthly)}.`
-              : 'Log food spending on Living Costs to see how this month is going.'}
+            {groups.some((g) => g.logged)
+              ? groups
+                  .filter((g) => g.logged)
+                  .map((g) => `${g.label} so far: ${money(g.summary.month.spent ?? 0)} of ${money(g.summary.monthly)}.`)
+                  .join(' ')
+              : 'Log what you have spent on the Living Costs, Transport and Leisure pages to see how the month is going.'}
           </p>
         </div>
       )}

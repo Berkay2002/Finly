@@ -99,22 +99,33 @@ describe('snapshots', () => {
     plan.expenses.push(expense({ name: 'Groceries', subcategory: 'groceries', amount: 1000, frequency: 'weekly', fixed: false }));
     usePlanStore.setState({ plan });
     usePlanStore.getState().saveSnapshot('2026-08', NOW);
-    const planned = usePlanStore.getState().snapshots['2026-08'].foodPlanned!;
-    usePlanStore.getState().setFoodSpend('2026-08', { amount: planned + 250 });
+    const planned = usePlanStore.getState().snapshots['2026-08'].everydayPlanned!.food!;
+    usePlanStore.getState().setEverydaySpend('food', '2026-08', { amount: planned + 250 });
     const { plan: live, snapshots } = usePlanStore.getState();
-    expect(live.foodSpend).toEqual({ '2026-08': { amount: planned + 250 } });
-    expect(snapshots['2026-08'].foodSpent).toBe(planned + 250);
+    expect(live.everydaySpend).toEqual({ food: { '2026-08': { amount: planned + 250 } } });
+    expect(snapshots['2026-08'].everydaySpent).toEqual({ food: planned + 250 });
     expect(snapshots['2026-08'].actualVariance).toBeCloseTo(250, 6);
 
-    usePlanStore.getState().setFoodSpend('2026-08', null);
-    expect(usePlanStore.getState().plan.foodSpend).toBeUndefined();
-    expect(usePlanStore.getState().snapshots['2026-08'].foodSpent).toBeUndefined();
+    usePlanStore.getState().setEverydaySpend('food', '2026-08', null);
+    expect(usePlanStore.getState().plan.everydaySpend).toBeUndefined();
+    expect(usePlanStore.getState().snapshots['2026-08'].everydaySpent).toEqual({});
   });
 
   it('keeps the date on a running total', () => {
     usePlanStore.setState({ plan: prdExamplePlan() });
-    usePlanStore.getState().setFoodSpend('2026-09', { amount: 1800, asOf: '2026-09-16' });
-    expect(usePlanStore.getState().plan.foodSpend).toEqual({ '2026-09': { amount: 1800, asOf: '2026-09-16' } });
+    usePlanStore.getState().setEverydaySpend('transport', '2026-09', { amount: 1800, asOf: '2026-09-16' });
+    expect(usePlanStore.getState().plan.everydaySpend).toEqual({ transport: { '2026-09': { amount: 1800, asOf: '2026-09-16' } } });
+  });
+
+  it('saves a commute and sets the items from it', () => {
+    usePlanStore.setState({ plan: prdExamplePlan() });
+    const prices = { lunch: 120, ticket: 0, card: 0, parking: 0, passage: 0 };
+    usePlanStore.getState().setCommute({ people: [{ id: 'c1', name: 'You', days: 4, mode: 'active', buysLunch: true }] }, prices);
+    const { plan } = usePlanStore.getState();
+    expect(plan.commute?.people).toHaveLength(1);
+    const lunches = plan.expenses.find((e) => e.subcategory === 'work_lunches')!;
+    expect(lunches).toMatchObject({ amount: 120, occurrences: { times: 4, per: 'week' }, frequency: 'weekly' });
+    expect(lunches.id).toMatch(/^exp/);
   });
 
   it('loading the demo clears history', () => {

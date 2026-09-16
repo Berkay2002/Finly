@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { newId } from '@/lib/id';
+import { applyCommute } from '@/engine/commute';
 import { migrateLegacyDebts } from '@/engine/debts';
 import { shareUsage, withTariffAmounts } from '@/engine/electricity';
 import { applyHome } from '@/engine/home';
@@ -8,6 +9,8 @@ import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, typ
 import { monthKeyOf } from '@/engine/metrics';
 import type {
   Account,
+  Commute,
+  CommutePrice,
   Debt,
   ExpenseItem,
   FinancialPlan,
@@ -17,6 +20,7 @@ import type {
   OnboardingStep,
   SavingsGoal,
   SpendEntry,
+  SpendGroup,
 } from '@/engine/types';
 import { emptyPlan } from '@/engine/types';
 import { samplePlan } from './sampleData';
@@ -39,11 +43,18 @@ interface PlanState {
   setUserName: (name: string) => void;
   /** A small data URL from `fileToAvatar`, or undefined to remove the picture. */
   setAvatar: (avatar: string | undefined) => void;
+  /** Four-digit year, or undefined to clear it. */
+  setBirthYear: (year: number | undefined) => void;
   setCurrency: (currency: string) => void;
   /** Where the household lives; salaries and electricity bills that followed the old home follow the new one. */
   setHome: (home: HomeLocation) => void;
   /** Who the household feeds, for the groceries estimate. */
   setHousehold: (household: Household) => void;
+  /**
+   * Save how the household commutes and write the counts and prices to lunches, tickets, cards,
+   * parking and congestion charges. `skip` leaves those lines' items untouched.
+   */
+  setCommute: (commute: Commute, prices: Record<CommutePrice, number>, skip?: ReadonlySet<CommutePrice>) => void;
 
   addIncome: (draft: Draft<IncomeSource>) => string;
   updateIncome: (id: string, patch: Partial<IncomeSource>) => void;
@@ -54,8 +65,8 @@ interface PlanState {
   removeExpense: (id: string) => void;
   /** Record (or clear, with null) the real bill for a variable item in a month (YYYY-MM). */
   setExpenseActual: (id: string, month: string, amount: number | null) => void;
-  /** Record (or clear, with null) what was spent on food in a month (YYYY-MM). */
-  setFoodSpend: (month: string, entry: SpendEntry | null) => void;
+  /** Record (or clear, with null) what was spent on a group of everyday spending in a month (YYYY-MM). */
+  setEverydaySpend: (group: SpendGroup, month: string, entry: SpendEntry | null) => void;
 
   addAccount: (draft: Draft<Account>) => string;
   updateAccount: (id: string, patch: Partial<Account>) => void;
@@ -127,9 +138,11 @@ export const usePlanStore = create<PlanState>()(
 
         setUserName: (userName) => mutate((p) => ({ ...p, userName })),
         setAvatar: (avatar) => mutate((p) => ({ ...p, avatar })),
+        setBirthYear: (birthYear) => mutate((p) => ({ ...p, birthYear })),
         setCurrency: (currency) => mutate((p) => ({ ...p, currency })),
         setHome: (home) => mutate((p) => applyHome(p, home)),
         setHousehold: (household) => mutate((p) => ({ ...p, household })),
+        setCommute: (commute, prices, skip) => mutate((p) => applyCommute(p, commute, prices, () => newId('exp'), skip)),
 
         addIncome: (draft) => {
           const id = draft.id ?? newId('inc');
@@ -167,13 +180,16 @@ export const usePlanStore = create<PlanState>()(
               }),
             })),
           ),
-        setFoodSpend: (month, entry) =>
+        setEverydaySpend: (group, month, entry) =>
           set((s) =>
             withMonthApplied(s, month, (plan) => {
-              const foodSpend = { ...(plan.foodSpend ?? {}) };
-              if (!entry || !Number.isFinite(entry.amount)) delete foodSpend[month];
-              else foodSpend[month] = { amount: Math.max(0, entry.amount), ...(entry.asOf ? { asOf: entry.asOf } : {}) };
-              return { ...plan, foodSpend: Object.keys(foodSpend).length > 0 ? foodSpend : undefined };
+              const byMonth = { ...(plan.everydaySpend?.[group] ?? {}) };
+              if (!entry || !Number.isFinite(entry.amount)) delete byMonth[month];
+              else byMonth[month] = { amount: Math.max(0, entry.amount), ...(entry.asOf ? { asOf: entry.asOf } : {}) };
+              const everydaySpend = { ...(plan.everydaySpend ?? {}) };
+              if (Object.keys(byMonth).length > 0) everydaySpend[group] = byMonth;
+              else delete everydaySpend[group];
+              return { ...plan, everydaySpend: Object.keys(everydaySpend).length > 0 ? everydaySpend : undefined };
             }),
           ),
 

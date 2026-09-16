@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { monthlySpread } from '../amounts';
-import {
-  amountForMonthly,
-  foodCostYear,
-  foodHistory,
-  foodMonth,
-  foodSummary,
-  householdFoodCost,
-  isCompleteEntry,
-} from '../food';
+import { amountForMonthly, isCompleteEntry, spendHistory, spendMonth, spendSummary } from '../everyday';
+import { foodCostYear, foodSummary, householdFoodCost } from '../food';
 import { occurrencesPerMonth, periodsPerMonth } from '../frequency';
 import { freezePlan } from '../history';
 import { awaitsActual, computeMetrics } from '../metrics';
@@ -86,7 +79,7 @@ describe('Konsumentverket household food cost', () => {
   });
 });
 
-describe('food spending logged for a month', () => {
+describe('everyday spending logged for a month', () => {
   it('treats a total without a date, or dated the last day, as the whole month', () => {
     expect(isCompleteEntry({ amount: 4000 }, '2026-09')).toBe(true);
     expect(isCompleteEntry({ amount: 4000, asOf: '2026-09-30' }, '2026-09')).toBe(true);
@@ -94,13 +87,13 @@ describe('food spending logged for a month', () => {
   });
 
   it('works out the pace part-way through the month', () => {
-    const fm = foodMonth(3000, { amount: 2000, asOf: '2026-09-15' }, '2026-09');
+    const fm = spendMonth(3000, { amount: 2000, asOf: '2026-09-15' }, '2026-09');
     expect(fm).toMatchObject({ day: 15, daysInMonth: 30, complete: false, expectedByNow: 1500, projected: 4000, variance: 1000, left: 1000 });
     expect(fm.leftPerDay).toBeCloseTo(1000 / 15, 6);
   });
 
   it('compares a whole month with the plan', () => {
-    const fm = foodMonth(3000, { amount: 3400 }, '2026-08');
+    const fm = spendMonth(3000, { amount: 3400 }, '2026-08');
     expect(fm).toMatchObject({ complete: true, day: 31, projected: 3400, variance: 400, leftPerDay: undefined });
   });
 
@@ -112,16 +105,16 @@ describe('food spending logged for a month', () => {
       '2026-09': { amount: 1000, asOf: '2026-09-10' },
       '2026-05': { amount: 3000, asOf: '2026-05-20' },
     };
-    const h = foodHistory(spend, '2026-09', 4000);
+    const h = spendHistory(spend, '2026-09', 4000);
     expect(h.months.map((x) => x.month)).toEqual(['2026-08', '2026-07', '2026-06']);
     expect(h.average).toBe(4500);
     expect(h.gap).toBe(500);
-    expect(foodHistory(spend, '2026-09', 4450).gap).toBeNull();
-    expect(foodHistory({ '2026-08': { amount: 9000 } }, '2026-09', 4000).gap).toBeNull();
+    expect(spendHistory(spend, '2026-09', 4450).gap).toBeNull();
+    expect(spendHistory({ '2026-08': { amount: 9000 } }, '2026-09', 4000).gap).toBeNull();
   });
 });
 
-describe('foodSummary', () => {
+describe('food summary', () => {
   it('splits at home from eating out and ignores non-food items', () => {
     const items = [
       groceries(),
@@ -129,7 +122,7 @@ describe('foodSummary', () => {
       expense({ name: 'Restaurants', subcategory: 'restaurants', amount: 400, occurrences: { times: 2, per: 'month' }, essential: false, committed: false }),
       expense({ name: 'Rent', subcategory: 'rent', category: 'home', amount: 9000 }),
     ];
-    const f = foodSummary(items, undefined, '2026-09');
+    const f = foodSummary(spendSummary('food', items, undefined, '2026-09'), items);
     const atHome = (900 * 52) / 12;
     const out = 120 * ((4 * 52) / 12) + 800;
     expect(f.atHome).toBeCloseTo(atHome, 6);
@@ -146,7 +139,7 @@ describe('foodSummary', () => {
       lunches(),
       expense({ id: 'rest', name: 'Restaurants', subcategory: 'restaurants', amount: 400, occurrences: { times: 2, per: 'month' }, essential: false, committed: false }),
     ];
-    const f = foodSummary(items, undefined, '2026-09');
+    const f = foodSummary(spendSummary('food', items, undefined, '2026-09'), items);
     expect(f.nudges.map((n) => n.id)).toEqual(['exp_work_lunches', 'rest']);
     expect(f.nudges[0].monthly).toBeCloseTo((120 * 52) / 12, 6);
     expect(f.nudges[1].monthly).toBe(400);
@@ -174,7 +167,7 @@ describe('food in the month metrics', () => {
 
   it('keeps the estimates while the month is only logged part-way', () => {
     const p = plan();
-    p.foodSpend = { '2026-09': { amount: 5000, asOf: '2026-09-16' } };
+    p.everydaySpend = { food: { '2026-09': { amount: 5000, asOf: '2026-09-16' } } };
     const m = computeMetrics(p, NOW);
     expect(m.actuals.variance).toBe(0);
     expect(m.food.month.complete).toBe(false);
@@ -183,7 +176,7 @@ describe('food in the month metrics', () => {
   it('runs a fully logged month on the food total', () => {
     const p = plan();
     const planned = computeMetrics(p, NOW).food.monthly;
-    p.foodSpend = { '2026-09': { amount: Math.round(planned) + 700 } };
+    p.everydaySpend = { food: { '2026-09': { amount: Math.round(planned) + 700 } } };
     const m = computeMetrics(p, NOW);
     expect(m.actuals.variance).toBeCloseTo(Math.round(planned) + 700 - planned, 6);
     expect(m.safeToSpend).toBeCloseTo(m.breathingRoom - m.actuals.variance, 6);
@@ -193,8 +186,11 @@ describe('food in the month metrics', () => {
 
   it('keeps only the closed month in a frozen plan', () => {
     const p = plan();
-    p.foodSpend = { '2026-08': { amount: 4000 }, '2026-09': { amount: 100, asOf: '2026-09-02' } };
-    expect(freezePlan(p, '2026-08').foodSpend).toEqual({ '2026-08': { amount: 4000 } });
-    expect(freezePlan(p, '2026-07').foodSpend).toBeUndefined();
+    p.everydaySpend = {
+      food: { '2026-08': { amount: 4000 }, '2026-09': { amount: 100, asOf: '2026-09-02' } },
+      leisure: { '2026-09': { amount: 300 } },
+    };
+    expect(freezePlan(p, '2026-08').everydaySpend).toEqual({ food: { '2026-08': { amount: 4000 } } });
+    expect(freezePlan(p, '2026-07').everydaySpend).toBeUndefined();
   });
 });

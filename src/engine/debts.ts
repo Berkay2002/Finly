@@ -1,5 +1,6 @@
 import { addMonths, differenceInCalendarMonths, format, lastDayOfMonth } from 'date-fns';
 import { toMonthly } from './frequency';
+import { SWEDISH_TAX_YEARS } from './tax/years';
 import type { Debt, DebtFrequency, DebtKind, ExpenseItem, FinancialPlan, MortgageRateType } from './types';
 
 /*
@@ -14,8 +15,13 @@ export const CSN_INCOME_SHARE = 0.04;
 /** Nedsättning on income for loans from July 2001: pay 5 % of income, 7 % from age 50. */
 export const CSN_REDUCED_SHARE = 0.05;
 export const CSN_REDUCED_SHARE_50_PLUS = 0.07;
-/** Lowest årsbelopp CSN sets in 2026. */
-export const CSN_MIN_YEARLY_2026 = 8880;
+/** Lowest årsbelopp: 15 % of the year's prisbasbelopp (studiestödslagen 4 kap. 9–10 §§). 8 880 kr in 2026. */
+export const CSN_MIN_YEARLY_PBB_SHARE = 0.15;
+/** Annuitetslån are repaid within 25 years (studiestödslagen 4 kap. 4 §)... */
+export const CSN_MAX_REPAYMENT_YEARS = 25;
+/** ...and by the end of the year the borrower turns 64, or 60 for loans paid out July 2001 to 2021. */
+export const CSN_REPAID_BY_AGE = 64;
+export const CSN_REPAID_BY_AGE_BEFORE_2022 = 60;
 /** CSN bills quarterly by default, due the last banking day of February, May, August and November. */
 export const CSN_DUE_MONTHS = [1, 4, 7, 10];
 
@@ -336,6 +342,67 @@ export function csnIncomeBasedYearly(yearlyIncome: number): number {
 /** Årsbelopp after nedsättning on income for a loan from July 2001. */
 export function csnReducedYearly(yearlyIncome: number, age50plus = false): number {
   return pos(yearlyIncome) * (age50plus ? CSN_REDUCED_SHARE_50_PLUS : CSN_REDUCED_SHARE);
+}
+
+/** Years CSN gives to repay from the start of `year`: 25, or fewer when the age limit comes first. */
+export function csnRepaymentYears(year: number, birthYear?: number, before2022 = false): number {
+  const valid = birthYear !== undefined && Number.isInteger(birthYear) && birthYear >= 1900 && birthYear <= year;
+  const byAge = valid ? birthYear + (before2022 ? CSN_REPAID_BY_AGE_BEFORE_2022 : CSN_REPAID_BY_AGE) - year + 1 : Infinity;
+  return Math.max(1, Math.min(CSN_MAX_REPAYMENT_YEARS, byAge));
+}
+
+/**
+ * Årsbelopp that repays `debt` over `years` at `ratePct` with payments rising 2 % a year (studiestödslagen
+ * 4 kap. 8 §), paid at the end of each year: debt × (r − g) / (1 − ((1 + g) / (1 + r))^n). CSN does not
+ * publish its exact formula; this reproduces its example for 2026 (about 207 000 kr, 14 years left,
+ * 2.135 %: 15 266 kr a year) to within 0.2 %.
+ */
+export function csnAnnuityYearly(debt: number, ratePct: number, years: number): number {
+  const r = ratePct / 100;
+  const g = CSN_STEP_UP;
+  if (Math.abs(r - g) < 1e-9) return (pos(debt) * (1 + r)) / years;
+  return (pos(debt) * (r - g)) / (1 - ((1 + g) / (1 + r)) ** years);
+}
+
+export interface CsnFirstYearly {
+  /** First repayment year. */
+  year: number;
+  /** Debt at the start of that year, with interest until then added. */
+  debt: number;
+  /** CSN rate that year, percent. */
+  rate: number;
+  years: number;
+  yearly: number;
+  /** Raised to CSN's lowest årsbelopp, which shortens the repayment time. */
+  minimum: boolean;
+}
+
+/**
+ * Likely first årsbelopp of an annuitetslån whose repayment has not started. Repayment starts in January
+ * (at least six months after the last studiemedel), from the debt then: interest not paid during a year is
+ * added to the debt at its end (4 kap. 1 och 3 §§). `rateAt` gives the rate in coming years; `birthYear`
+ * (the plan's) applies the age limit.
+ */
+export function csnFirstYearly(d: Debt, now: Date, rateAt?: RateAt, birthYear?: number): CsnFirstYearly | null {
+  if (d.kind !== 'csn' || d.csnType === 'income_based') return null;
+  const start = repaymentStart(d, now);
+  const own = monthlyRateOf(d);
+  let debt = pos(d.balance);
+  if (!start || own === undefined || debt <= 0) return null;
+  const year = start.getFullYear();
+  const january = new Date(year, 0, 1);
+  for (let m = 1; m <= differenceInCalendarMonths(january, now); m += 1) {
+    debt += debt * monthlyRateAt(own, addMonths(now, m), rateAt);
+  }
+  const rate = monthlyRateAt(own, january, rateAt) * 1200;
+  const years = csnRepaymentYears(year, birthYear, d.csnBefore2022);
+  const known = Object.keys(SWEDISH_TAX_YEARS).map(Number);
+  const pbb = (SWEDISH_TAX_YEARS[year] ?? SWEDISH_TAX_YEARS[Math.max(...known)]).pbb;
+  const minimum = CSN_MIN_YEARLY_PBB_SHARE * pbb;
+  // A debt under the minimum is repaid in the first year.
+  if (debt < minimum) return { year, debt, rate, years: 1, yearly: debt * (1 + rate / 100), minimum: true };
+  const yearly = csnAnnuityYearly(debt, rate, years);
+  return yearly < minimum ? { year, debt, rate, years, yearly: minimum, minimum: true } : { year, debt, rate, years, yearly, minimum: false };
 }
 
 /** Next quarterly CSN due date (last day of February, May, August or November) on or after `now`. */

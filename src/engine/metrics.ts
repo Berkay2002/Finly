@@ -1,10 +1,11 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
-import { foodSummary, isFoodItem, type FoodSummary } from './food';
+import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
+import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured } from './debts';
 import { accountRole, isEverydaySpend, type AccountRole } from './taxonomy';
-import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan } from './types';
+import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan, SpendGroup } from './types';
 import { EXPENSE_CATEGORIES } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -58,7 +59,7 @@ export interface MonthActuals {
   confirmed: ActualLine[];
   /** Variable monthly items still waiting for the bill paid this month. */
   pending: PendingBill[];
-  /** Σ (actual − typical) over confirmed items, plus the food total's variance once the month is logged in full. */
+  /** Σ (actual − typical) over confirmed items, plus each everyday group's variance once its month is logged in full. */
   variance: number;
   /** Normal lifestyle cost with confirmed bills substituted for their estimates. */
   lifestyleCost: number;
@@ -217,7 +218,9 @@ export interface PlanMetrics {
   /** PRD §18.21 */
   /** Car costs: tagged expenses plus car loan payments (`loans`). */
   car: { monthly: number; annual: number; lines: CostLine[]; loans: DebtLine[] };
-  /** Groceries and eating out: per month, week and day, and the month's logged spending. */
+  /** Food, getting around, and fun and leisure: per month, week and day, and the month's logged spending. */
+  everyday: Record<SpendGroup, SpendSummary>;
+  /** `everyday.food` with the split between food at home and eating out. */
   food: FoodSummary;
   /** PRD §18.15 — optional and flexible, largest first. */
   reducible: CostLine[];
@@ -285,7 +288,7 @@ export function actualFor(e: ExpenseItem, month: string): number | undefined {
 
 /**
  * Whether an item is the kind whose bill we ask the user to confirm each month. Everyday spending has
- * no invoice: food is logged as one monthly total instead (`FinancialPlan.foodSpend`).
+ * no invoice: it is logged as one monthly total per group instead (`FinancialPlan.everydaySpend`).
  */
 export function awaitsActual(e: ExpenseItem): boolean {
   return !e.fixed && e.frequency === 'monthly' && !e.includedElsewhere && !isEverydaySpend(e) && typicalAmount(e) > 0;
@@ -397,17 +400,24 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
 
   /* Actuals — bills confirmed for the viewed month */
   const month = monthKeyOf(now);
-  const food = foodSummary(active, plan.foodSpend, month);
-  // A food total for the whole month replaces the estimates of every food item at once.
-  const foodLogged = food.month.complete;
-  const foodVariance = foodLogged ? (food.month.variance ?? 0) : 0;
+  const everyday = everydaySummaries(active, plan.everydaySpend, month);
+  const food = foodSummary(everyday.food, active);
+  // A group's total for the whole month replaces the estimates of every item in it at once.
+  const loggedIds = new Set<string>();
+  let everydayVariance = 0;
+  for (const g of SPEND_GROUPS) {
+    const g_ = everyday[g];
+    if (!g_.month.complete) continue;
+    for (const id of g_.itemIds) loggedIds.add(id);
+    everydayVariance += g_.month.variance ?? 0;
+  }
   const byId = new Map(lines.map((l) => [l.id, l]));
   const confirmed: ActualLine[] = [];
   const pending: PendingBill[] = [];
   for (const e of active) {
     const line = byId.get(e.id);
     if (!line) continue;
-    if (foodLogged && isFoodItem(e)) continue;
+    if (loggedIds.has(e.id)) continue;
     const actual = actualFor(e, month);
     const bill: PendingBill = { ...line, periodMonth: billPeriodFor(e, month), billingLag: billingLagOf(e) };
     if (actual !== undefined) {
@@ -416,8 +426,8 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       pending.push(bill);
     }
   }
-  const confirmedIds = new Set([...confirmed.map((l) => l.id), ...(foodLogged ? food.itemIds : [])]);
-  const actualVariance = sum(confirmed.map((l) => l.variance)) + foodVariance;
+  const confirmedIds = new Set([...confirmed.map((l) => l.id), ...loggedIds]);
+  const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance;
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
   const monthLifestyleRange: Range = withDebt({
     low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
@@ -578,6 +588,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       lines: carLines.sort((a, b) => b.monthly - a.monthly),
       loans: carLoans,
     },
+    everyday,
     food,
     reducible,
     daily: {

@@ -8,6 +8,7 @@ import { AccountEditor } from '@/components/forms/AccountEditor';
 import { ExpenseEditor } from '@/components/forms/ExpenseEditor';
 import { LoanEditor } from '@/components/forms/LoanEditor';
 import { GoalEditor } from '@/components/forms/GoalEditor';
+import { BirthYearField } from '@/components/forms/BirthYearField';
 import { HomeFields } from '@/components/forms/HomeFields';
 import { IncomeEditor } from '@/components/forms/IncomeEditor';
 import { MonthSelector, Avatar, NotificationsButton } from '@/components/layout/PageHeader';
@@ -57,10 +58,11 @@ export function OnboardingPage() {
       return (
         <div className="space-y-6">
           <div className="rounded-xl border border-line bg-page/60 p-3 sm:p-4">
-            <h3 className="text-[15px] font-semibold text-ink">Where do you live?</h3>
+            <h3 className="text-[15px] font-semibold text-ink">About you</h3>
             <p className="mb-3 mt-0.5 text-[12.5px] text-muted">
-              Needed for things like your net salary and electricity costs.
+              Where you live sets your net salary and electricity costs. Your birth year sets how long you pay CSN.
             </p>
+            <BirthYearField className="mb-3 sm:max-w-[240px]" />
             <HomeFields />
           </div>
           <IncomeEditor />

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   amortizationRequirement,
+  csnAnnuityYearly,
+  csnFirstYearly,
   csnIncomeBasedYearly,
+  csnRepaymentYears,
   debtFlow,
   debtPayoff,
   debtSchedule,
@@ -148,6 +151,48 @@ describe('repayment not started yet', () => {
     const r = 0.02135 / 12;
     expect(interestBeforeRepayment(csn('2027-02-28'), NOW)!.interest).toBeCloseTo(440_000 * ((1 + r) ** 5 - 1), 2);
     expect(interestBeforeRepayment(csn('2026-11-30'), NOW)).toBeNull();
+  });
+});
+
+describe('first CSN årsbelopp', () => {
+  const csn = (partial: Partial<Debt> = {}) =>
+    debt({ kind: 'csn', csnType: 'annuity', balance: 440_000, rate: 2.135, frequency: 'quarterly', nextDate: '2027-02-28', ...partial });
+
+  it("matches CSN's example for 2026 (217 000 kr at the start of 2025, 14 148 kr paid, 14 years left)", () => {
+    const debtStart2026 = 217_000 * 1.01981 - 14_148;
+    expect(csnAnnuityYearly(debtStart2026, 2.135, 14)).toBeCloseTo(15_266, -2);
+  });
+
+  it('gives 25 years, fewer when the age limit comes first', () => {
+    expect(csnRepaymentYears(2027)).toBe(25);
+    expect(csnRepaymentYears(2027, 1998)).toBe(25);
+    // Turns 64 in 2034: 2027 to 2034 is eight years; loans before 2022 end at 60, in 2030.
+    expect(csnRepaymentYears(2027, 1970)).toBe(8);
+    expect(csnRepaymentYears(2027, 1970, true)).toBe(4);
+    // A half-typed year is ignored.
+    expect(csnRepaymentYears(2027, 19)).toBe(25);
+  });
+
+  it('spreads the debt at the start of the first year over the repayment time', () => {
+    const first = csnFirstYearly(csn(), NOW)!;
+    expect(first.year).toBe(2027);
+    expect(first.debt).toBeGreaterThan(440_000);
+    // Interest for October to December, plus the rest of September, compounded monthly.
+    expect(first.debt).toBeCloseTo(440_000 * (1 + 0.02135 / 12) ** 4, 0);
+    expect(first.years).toBe(25);
+    expect(first.yearly).toBeCloseTo(csnAnnuityYearly(first.debt, 2.135, 25), 5);
+    expect(first.minimum).toBe(false);
+  });
+
+  it("raises a small årsbelopp to CSN's lowest, 15 % of prisbasbelopp", () => {
+    const first = csnFirstYearly(csn({ balance: 50_000 }), NOW)!;
+    expect(first.minimum).toBe(true);
+    expect(first.yearly).toBe(8880);
+  });
+
+  it('is only for annuitetslån not yet being repaid', () => {
+    expect(csnFirstYearly(csn({ nextDate: '2026-11-30' }), NOW)).toBeNull();
+    expect(csnFirstYearly(csn({ csnType: 'income_based' }), NOW)).toBeNull();
   });
 });
 

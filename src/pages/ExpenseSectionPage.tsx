@@ -3,7 +3,9 @@ import { CATEGORY_META } from '@/engine/taxonomy';
 import type { ExpenseCategory } from '@/engine/types';
 import { useAutoAdd } from '@/lib/useAutoAdd';
 import { useCurrency, useMetrics, useUpcoming } from '@/store/selectors';
-import { FoodCard, FoodMonthCard } from '@/components/food/FoodCards';
+import { CommuteCard } from '@/components/everyday/CommuteCard';
+import { EverydayCard, SpendMonthCard } from '@/components/everyday/EverydayCards';
+import { FoodCard } from '@/components/food/FoodCards';
 import { ExpenseEditor } from '@/components/forms/ExpenseEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -75,7 +77,20 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           {category === 'living' && (
             <>
               <FoodCard />
-              <FoodMonthCard />
+              <SpendMonthCard group="food" />
+            </>
+          )}
+          {category === 'transport' && (
+            <>
+              <CommuteCard />
+              <EverydayCard group="transport" subtitle="Fuel, parking, tickets and taxis, in the units you actually pay in." />
+              <SpendMonthCard group="transport" />
+            </>
+          )}
+          {category === 'leisure' && (
+            <>
+              <EverydayCard group="leisure" subtitle="Nights out, cinema, classes and other things you pay for as you go." />
+              <SpendMonthCard group="leisure" />
             </>
           )}
           {category === 'finance' && (

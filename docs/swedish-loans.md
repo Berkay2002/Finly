@@ -35,10 +35,17 @@ whatever the rates, because paying a bunden del early can cost ränteskillnadser
   markup for credit losses (0.399 %), subsidised by 30 % for the borrower. No ränteavdrag on top of that.
   The loan editor offers the current year's rate (an estimate from `csnRateForYear` when that year is not
   in the table yet) and, when the next payment falls in a later year, the rate expected then. The entered
-  rate is saved with `rateYear`, so forecasts still move it correctly after the new year.
+  rate is saved with `rateYear` and only used for that year.
 - **Repayment not started**: a next payment due more than one period away (over three months for quarterly)
   means repayment starts then (`repaymentStart`). The payoff simulation takes no payments before that
   quarter and adds the interest to the balance; the editor shows about how much (`interestBeforeRepayment`).
+- **First årsbelopp** (`csnFirstYearly`, studiestödslagen 4 kap. 1, 3–4, 8–10 §§): repayment starts in January,
+  at least six months after the last studiemedel. The debt then (the year's unpaid interest is added at year
+  end) is spread over 25 years, or to the end of the year you turn 64 (60 if every loan is from July 2001 to
+  2021), as payments rising 2 % a year: `debt × (r − g) / (1 − ((1 + g) / (1 + r))^n)`, g = 2 %. Below 15 % of
+  prisbasbelopp it is raised to that and the time shortens. CSN does not publish its formula; this gives
+  15 240 kr for its 2026 example (15 266 kr). The birth year is the plan's `birthYear`, asked (optionally)
+  in onboarding and Settings, and in the CSN loan sheet when missing.
 - **Annuitetslån** (loans from July 2001, `csnType: 'annuity'`): CSN sets an årsbelopp that rises about 2 %
   a year (`CSN_STEP_UP`); the payoff simulation steps the payment up every 12 months. Lowest årsbelopp 2026:
   8,880 kr (*yearly*). Loans from 2001–2021 must be repaid by 60 and are written off at 68; loans from 2022
@@ -149,7 +156,7 @@ the last forecast quarter the rate stays flat.
 | --- | --- |
 | Rörlig bolån | your rate + (policy rate then − policy rate now) |
 | Bunden bolån | your rate until the villkorsändringsdag, then policy rate then + rörlig margin |
-| CSN | your rate + (CSN rate that year − CSN rate in `rateYear`, the year you entered it for) |
+| CSN | your rate in `rateYear` (the year you entered it for), CSN's decided or projected rate in other years: CSN charges everyone the same |
 | Car, personal, credit card, other | your rate (lenders price these only loosely against the market) |
 
 The **rörlig margin** is your own rörliga delar's rate over the policy rate, weighted by balance. Without a

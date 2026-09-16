@@ -96,13 +96,13 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       // Living — 4,800
       exp('groceries', 740, { range: { low: 650, high: 880 } }),
       exp('restaurants', 450),
-      exp('haircuts', 300),
+      exp('haircuts', 600),
       exp('clothes', 400),
       // Transport — 2,000 (the car loan is under loans)
       exp('fuel', 850, { range: { low: 600, high: 1200 } }),
       exp('car_insurance', 450),
       exp('vehicle_tax', 2300, { nextDate: inMonths(1, 12) }),
-      exp('car_parking', 300),
+      exp('car_parking', 25, { occurrences: { times: 3, per: 'week' }, frequency: 'weekly' }),
       exp('car_service', 2500, { nextDate: inMonths(5, 12) }),
       // Finance — 400 (CSN and the credit card are under loans)
       exp('life_insurance', 250),
@@ -112,7 +112,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       exp('music', 120),
       exp('gym', 450),
       exp('mobile', 300),
-      exp('nights_out', 800),
+      exp('nights_out', 400),
       exp('gaming', 200),
       exp('other_hobbies', 500),
       exp('cinema', 150),
@@ -124,7 +124,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       exp('electronics', 6000, { nextDate: inMonths(7, 1) }),
       exp('annual_insurance', 1800, { name: 'Annual home insurance', nextDate: inMonths(2, 3) }),
       exp('annual_subscriptions', 3600, { nextDate: inMonths(4, 1) }),
-      exp('birthdays', 1600, { nextDate: inMonths(6, 10) }),
+      exp('birthdays', 400),
     ],
     accounts: [
       { id: id('acc'), name: 'Everyday account', institution: 'Swedbank', kind: 'everyday', balance: 14500 },
@@ -229,15 +229,16 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
     ],
     household: { members: [{ id: 'hh_001', age: '25-50', lunchAway: false }] },
+    // Drives in three days a week and packs lunch.
+    commute: {
+      people: [{ id: 'cm_001', name: 'You', days: 3, mode: 'car', parking: true, passages: 0, buysLunch: false }],
+      prices: { parking: 25 },
+    },
     // Food runs a little above plan, so the demo shows the pace and the "your months say" hint.
-    foodSpend: {
-      [monthKey(addMonths(now, -3))]: { amount: 4480 },
-      [monthKey(addMonths(now, -2))]: { amount: 4150 },
-      [monthKey(addMonths(now, -1))]: { amount: 4520 },
-      [monthKey(now)]: {
-        amount: Math.round((4100 * 1.08 * now.getDate()) / getDaysInMonth(now) / 10) * 10,
-        asOf: format(now, 'yyyy-MM-dd'),
-      },
+    everydaySpend: {
+      food: loggedMonths(now, [4480, 4150, 4520], 4100 * 1.08),
+      transport: loggedMonths(now, [1240, 1090, 1310], 1150),
+      leisure: loggedMonths(now, [1020, 840, 990], 900),
     },
     onboarding: { completedSteps: [...ONBOARDING_STEPS], completed: true },
     isSample: true,
@@ -248,6 +249,17 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
 
 function monthKey(d: Date): string {
   return format(d, 'yyyy-MM');
+}
+
+/** Three closed months, oldest first, and the running month logged up to today at `pace` a month. */
+function loggedMonths(now: Date, closed: number[], pace: number) {
+  const out: Record<string, { amount: number; asOf?: string }> = {};
+  closed.forEach((amount, i) => (out[monthKey(addMonths(now, i - closed.length))] = { amount }));
+  out[monthKey(now)] = {
+    amount: Math.round((pace * now.getDate()) / getDaysInMonth(now) / 10) * 10,
+    asOf: format(now, 'yyyy-MM-dd'),
+  };
+  return out;
 }
 
 function christmasFrom(now: Date): string {

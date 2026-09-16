@@ -178,15 +178,15 @@ export function variableMortgageMargin(o: RateOutlook, debts: Debt[], now: Date)
  * A loan's expected yearly rate (percent) in the month of `date`.
  * - Rörlig bolån: today's rate moved with the policy rate forecast.
  * - Bunden bolån: today's rate until the villkorsändringsdag, then the policy rate plus the rörlig margin.
- * - CSN: the year's decided or projected rate, keeping any difference the user entered. The entered rate
- *   belongs to `rateYear`, so a rate typed in 2026 still moves correctly when looked at in 2027.
+ * - CSN: the entered rate in its `rateYear`, CSN's decided or projected rate in every other year. CSN
+ *   charges every borrower the same rate, so a rate typed for one year says nothing about the next.
  * - Other loans: today's rate. Their pricing is set by each lender and follows the market loosely.
  */
 export function rateAt(d: Debt, date: Date, now: Date, o: RateOutlook, margin: number): number | undefined {
   if (d.rate === undefined || !Number.isFinite(d.rate)) return undefined;
   if (d.kind === 'csn') {
-    const shift = csnRateForYear(o, date.getFullYear()) - csnRateForYear(o, d.rateYear ?? now.getFullYear());
-    return Math.max(0, d.rate + shift);
+    const year = date.getFullYear();
+    return year === (d.rateYear ?? now.getFullYear()) ? d.rate : csnRateForYear(o, year);
   }
   if (d.kind !== 'mortgage') return d.rate;
   if (mortgageRateType(d) === 'variable') return Math.max(0, d.rate + policyRateAt(o, date) - policyRateAt(o, now));

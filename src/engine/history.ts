@@ -1,6 +1,7 @@
 import { endOfMonth, subMonths } from 'date-fns';
 import { computeMetrics, monthKeyOf } from './metrics';
-import type { FinancialPlan } from './types';
+import { SPEND_GROUPS } from './everyday';
+import type { FinancialPlan, SpendGroup } from './types';
 
 /**
  * Tracking Mode: a month's numbers frozen at its close so later months can show what changed and
@@ -18,9 +19,9 @@ export interface MetricsSnapshot {
   actualVariance?: number;
   /** How many bills were confirmed when the snapshot was taken. */
   billsConfirmed?: number;
-  /** Food & drink: planned per month, and what was spent when the month was logged in full. */
-  foodPlanned?: number;
-  foodSpent?: number;
+  /** Everyday spending by group: planned per month, and what was spent when the month was logged in full. */
+  everydayPlanned?: Partial<Record<SpendGroup, number>>;
+  everydaySpent?: Partial<Record<SpendGroup, number>>;
   savings: number;
   breathingRoom: number;
   safeToSpend: number;
@@ -88,9 +89,13 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
     void _drop;
     return typeof bill === 'number' ? { ...rest, actuals: { [month]: bill } } : rest;
   });
-  const food = copy.foodSpend?.[month];
-  if (food) copy.foodSpend = { [month]: food };
-  else delete copy.foodSpend;
+  const spend: NonNullable<FinancialPlan['everydaySpend']> = {};
+  for (const g of SPEND_GROUPS) {
+    const entry = copy.everydaySpend?.[g]?.[month];
+    if (entry) spend[g] = { [month]: entry };
+  }
+  if (Object.keys(spend).length > 0) copy.everydaySpend = spend;
+  else delete copy.everydaySpend;
   copy.accounts = copy.accounts.map(({ balances: _b, ...rest }) => {
     void _b;
     return rest;
@@ -118,8 +123,10 @@ export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = 
     lifestyleCostActual: m.actuals.lifestyleCost,
     actualVariance: m.actuals.variance,
     billsConfirmed: m.actuals.confirmed.length,
-    foodPlanned: m.food.monthly,
-    foodSpent: m.food.month.complete ? m.food.month.spent : undefined,
+    everydayPlanned: Object.fromEntries(SPEND_GROUPS.map((g) => [g, m.everyday[g].monthly])),
+    everydaySpent: Object.fromEntries(
+      SPEND_GROUPS.flatMap((g) => (m.everyday[g].month.complete ? [[g, m.everyday[g].month.spent ?? 0]] : [])),
+    ),
     savings: m.savings.total,
     breathingRoom: m.breathingRoom,
     safeToSpend: m.safeToSpend,

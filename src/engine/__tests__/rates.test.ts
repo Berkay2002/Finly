@@ -104,13 +104,14 @@ describe('rateAt', () => {
     expect(rateAt(loan({ kind: 'car' }), later, now, rising, 1)).toBeUndefined();
   });
 
-  it('moves a CSN rate from the year it was entered for, not from today', () => {
-    const csn = loan({ kind: 'csn', rate: 2.135, rateYear: 2026 });
+  it("uses a typed CSN rate only in the year it was entered for, CSN's rate in the others", () => {
+    const typed = loan({ kind: 'csn', rate: 1.81, rateYear: 2026 });
+    expect(rateAt(typed, new Date(2026, 11, 1), now, BUNDLED_OUTLOOK, 1)).toBe(1.81);
+    // Typing 1.81 for 2026 does not pull 2027 down by CSN's expected drop from 2.135.
+    expect(rateAt(typed, later, now, BUNDLED_OUTLOOK, 1)).toBe(csnRateForYear(BUNDLED_OUTLOOK, 2027));
+    // Looked at in 2027, a rate entered in 2026 is out of date: 2027 follows CSN.
     const nextYear = new Date(2027, 5, 1);
-    const in2030 = new Date(2030, 5, 1);
-    // Looked at in 2027, a rate entered in 2026 still lands on the projected 2030 rate.
-    expect(rateAt(csn, in2030, nextYear, rising, 1)).toBeCloseTo(csnRateForYear(rising, 2030), 3);
-    expect(rateAt(csn, nextYear, nextYear, rising, 1)).toBeCloseTo(csnRateForYear(rising, 2027), 3);
+    expect(rateAt(typed, nextYear, nextYear, rising, 1)).toBe(csnRateForYear(rising, 2027));
   });
 });
 

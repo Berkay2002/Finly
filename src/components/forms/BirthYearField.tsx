@@ -1,0 +1,41 @@
+import { useEffect, useState } from 'react';
+import { usePlanStore } from '@/store/planStore';
+import { usePlan } from '@/store/selectors';
+import { TextField } from '@/components/ui/fields';
+
+/**
+ * The plan's birth year, asked once (onboarding, Settings, or the CSN loan sheet when missing) and reused
+ * wherever age matters. Saved only once it is a whole year, so a half-typed "19" never reaches the plan.
+ */
+export function BirthYearField({ hint = '(optional)', className }: { hint?: string; className?: string }) {
+  const plan = usePlan();
+  const setBirthYear = usePlanStore((s) => s.setBirthYear);
+  const [text, setText] = useState(plan.birthYear ? String(plan.birthYear) : '');
+
+  useEffect(() => {
+    setText(plan.birthYear ? String(plan.birthYear) : '');
+  }, [plan.birthYear]);
+
+  const thisYear = new Date().getFullYear();
+
+  return (
+    <TextField
+      label="Year you were born"
+      hint={hint}
+      className={className}
+      type="number"
+      inputMode="numeric"
+      min={1900}
+      max={thisYear}
+      placeholder="e.g. 1998"
+      value={text}
+      onChange={(e) => {
+        const value = e.target.value;
+        setText(value);
+        const year = Number(value);
+        if (value === '') setBirthYear(undefined);
+        else if (/^\d{4}$/.test(value) && year >= 1900 && year <= thisYear) setBirthYear(year);
+      }}
+    />
+  );
+}

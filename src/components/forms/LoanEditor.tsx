@@ -2,6 +2,7 @@ import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   amortizationRequirement,
+  csnFirstYearly,
   csnIncomeBasedYearly,
   debtFlow,
   debtPayoff,
@@ -20,7 +21,6 @@ import {
   csnRateForYear,
   fixedRateResets,
   forecastRates,
-  rateAt,
   type RateOutlook,
 } from '@/engine/rates';
 import { DEBT_KINDS, debtKindMeta } from '@/engine/taxonomy';
@@ -36,6 +36,7 @@ import { Delta } from '@/components/ui/Delta';
 import type { IconSource } from '@/components/ui/Icon';
 import { DateField, MoneyField, SegmentedControl, SelectField, Switch, TextField } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
+import { BirthYearField } from './BirthYearField';
 import { ItemRow } from './ItemRow';
 
 export type LoanDraft = Omit<Debt, 'id'> & { id?: string };
@@ -82,6 +83,7 @@ function finalize(d: Draft, now: Date): Draft {
   const out = { ...d, name: d.name.trim() };
   // A CSN rate saved before rateYear existed was entered for this year's rate.
   out.rateYear = out.kind === 'csn' && out.rate !== undefined ? (out.rateYear ?? now.getFullYear()) : undefined;
+  if (out.kind !== 'csn') out.csnBefore2022 = undefined;
   if (out.kind === 'mortgage') {
     out.rateType = mortgageRateType(out);
     if (out.rateType === 'variable') out.rateFixedUntil = undefined;
@@ -415,13 +417,8 @@ function CsnRateHint({ draft, onChange }: { draft: Draft; onChange: (d: Draft) =
   const current = csnRateForYear(outlook, year);
   const due = draft.frequency !== 'monthly' && draft.nextDate ? new Date(`${draft.nextDate}T00:00:00`) : null;
   const dueYear = due && due.getFullYear() > year ? due.getFullYear() : null;
-  // The loan's own rate carried into that year, keeping any difference from CSN's.
-  const then =
-    due && dueYear !== null
-      ? draft.rate === undefined
-        ? csnRateForYear(outlook, dueYear)
-        : rateAt(loan, due, now, outlook, 0)
-      : undefined;
+  // CSN charges everyone the same rate, so what is typed for this year does not change the next.
+  const then = dueYear !== null ? csnRateForYear(outlook, dueYear) : undefined;
   const differs = draft.rate === undefined || Math.abs(draft.rate - current) >= 0.0005;
   const about = (y: number, n: number) => (csnRateDecided(y) ? pct(n) : `about ${pct(Math.round(n * 100) / 100)}`);
 
@@ -446,6 +443,71 @@ function CsnRateHint({ draft, onChange }: { draft: Draft; onChange: (d: Draft) =
   );
 }
 
+/**
+ * CSN's likely first årsbelopp for a loan whose repayment has not started. Asks for the birth year (saved to
+ * the plan) when the plan does not have it yet, since it can shorten the repayment time. See `csnFirstYearly`.
+ */
+function CsnFirstYearly({
+  draft,
+  onChange,
+  first,
+  yearly,
+  setYearly,
+}: {
+  draft: Draft;
+  onChange: (d: Draft) => void;
+  first: NonNullable<ReturnType<typeof csnFirstYearly>>;
+  yearly: number;
+  setYearly: (y: number) => void;
+}) {
+  const currency = useCurrency();
+  const plan = usePlan();
+  // Decided when the sheet opens, so the field stays put while the year is typed into the plan.
+  const [askBirthYear] = useState(() => !plan.birthYear);
+  const money = (n: number) => formatMoney(n, currency);
+  const estimate = Math.round(first.yearly);
+  const age = plan.birthYear ? first.year - plan.birthYear : 0;
+  const rate = pct(Math.round(first.rate * 100) / 100);
+
+  return (
+    <div className="space-y-3 rounded-xl border border-line px-3.5 py-3">
+      <div className="text-[12.5px] text-ink-soft">
+        <div className="font-medium text-ink">
+          First årsbelopp in {first.year}: about {money(estimate)}
+        </div>
+        <p className="mt-0.5 text-muted">
+          {first.minimum
+            ? `That is CSN's lowest årsbelopp, so your ${money(first.debt)} is repaid sooner than ${first.years} years.`
+            : `About ${money(first.debt)} owed by then, spread over ${first.years} years at about ${rate}, rising 2 % a year.`}{' '}
+          CSN sets the real amount; it shows on Mina sidor at csn.se.
+        </p>
+        {Math.abs(yearly - estimate) >= 1 && (
+          <button
+            type="button"
+            className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
+            onClick={() => setYearly(estimate)}
+          >
+            Use {money(estimate)} a year
+          </button>
+        )}
+      </div>
+      {askBirthYear ? (
+        <BirthYearField hint="(optional: from 40, CSN gives fewer than 25 years; saved to your profile)" />
+      ) : (
+        <p className="text-[12px] text-muted">Born {plan.birthYear}, from your profile in Settings.</p>
+      )}
+      {age > 36 && (
+        <Switch
+          checked={!!draft.csnBefore2022}
+          onChange={(csnBefore2022) => onChange({ ...draft, csnBefore2022 })}
+          label="All my CSN loans were paid out before 2022"
+          description="Loans from July 2001 to 2021 must be repaid by 60 instead of 64."
+        />
+      )}
+    </div>
+  );
+}
+
 function CsnFields({
   draft,
   onChange,
@@ -464,6 +526,10 @@ function CsnFields({
   const setYearly = (y: number, frequency: DebtFrequency = draft.frequency) =>
     onChange({ ...draft, payment: y / paymentsPerYear(frequency), frequency });
   const suggested = csnIncomeBasedYearly(grossIncome);
+  const outlook = useRateOutlook();
+  const loan = { ...draft, id: draft.id ?? 'draft' } as Debt;
+  const birthYear = usePlan().birthYear;
+  const first = csnFirstYearly(loan, now, forecastRates(loan, now, outlook, [loan]), birthYear);
 
   return (
     <>
@@ -509,6 +575,7 @@ function CsnFields({
           onChange={(e) => onChange({ ...draft, nextDate: e.target.value || undefined })}
         />
       )}
+      {first && <CsnFirstYearly draft={draft} onChange={onChange} first={first} yearly={yearly} setYearly={setYearly} />}
       {draft.csnType === 'income_based' && (
         <div>
           <MoneyField

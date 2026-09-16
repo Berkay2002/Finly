@@ -2,6 +2,8 @@ export * from './types';
 export * from './frequency';
 export * from './amounts';
 export * from './electricity';
+export * from './everyday';
+export * from './commute';
 export * from './food';
 export * from './actuals';
 export * from './format';

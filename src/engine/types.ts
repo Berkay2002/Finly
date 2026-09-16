@@ -116,7 +116,7 @@ export interface ElectricityTariff {
 export interface Occurrences {
   /** Purchases per `per`. May be fractional (1.5 a week). */
   times: number;
-  per: 'week' | 'month';
+  per: 'week' | 'month' | 'year';
 }
 
 export interface ExpenseItem {
@@ -134,7 +134,8 @@ export interface ExpenseItem {
   frequency: Frequency;
   /**
    * Priced per purchase. While set, `amount` and `range` are what one purchase costs and `frequency`
-   * mirrors `per` (weekly or monthly). See engine/frequency.ts.
+   * mirrors `per` (weekly, monthly or yearly). Such an item has no due date: a yearly one is spread
+   * over the months like any other regular cost. See engine/frequency.ts.
    */
   occurrences?: Occurrences;
   /** ISO date (YYYY-MM-DD) of the next occurrence. Used for non-monthly items. */
@@ -229,6 +230,8 @@ export interface Debt {
   rateFixedUntil?: string;
   /** CSN only. */
   csnType?: CsnLoanType;
+  /** CSN annuitetslån: every loan paid out before 2022, so repaid by 60 instead of 64. */
+  csnBefore2022?: boolean;
 }
 
 export type AccountKind =
@@ -313,8 +316,8 @@ export interface Household {
 }
 
 /**
- * What was really spent on food in a month, as read off the bank app. Everyday spending has no
- * invoice to confirm, so the month gets one total instead of a bill per item.
+ * What was really spent on a kind of everyday spending in a month, as read off the bank app. Everyday
+ * spending has no invoice to confirm, so the month gets one total instead of a bill per item.
  */
 export interface SpendEntry {
   amount: number;
@@ -325,16 +328,54 @@ export interface SpendEntry {
   asOf?: string;
 }
 
+/** Everyday spending logged as one total per month. See engine/everyday.ts. */
+export type SpendGroup = 'food' | 'transport' | 'leisure';
+
+export type CommuteMode = 'public' | 'car' | 'active';
+
+/** One person's trips to work or school. */
+export interface Commuter {
+  id: string;
+  name: string;
+  /** Days a week travelling in. May be fractional (2.5 for every other Friday). */
+  days: number;
+  /** `active` is walking or cycling. */
+  mode: CommuteMode;
+  /** Public transport: a period card, or a single ticket each way. */
+  ticket?: 'card' | 'single';
+  /** Car: pays for parking on days in. */
+  parking?: boolean;
+  /** Car: trängselskatt passages on a day in (Stockholm and Göteborg). */
+  passages?: number;
+  /** Buys lunch on days in. */
+  buysLunch: boolean;
+}
+
+/**
+ * How the household gets to work or school. One answer sets the counts of several items: lunches,
+ * tickets or cards, parking and congestion charges. See engine/commute.ts.
+ */
+export interface Commute {
+  people: Commuter[];
+  /** Price of one of each, kept so a switch (single tickets to a card) still knows the other price. */
+  prices?: Partial<Record<CommutePrice, number>>;
+}
+
+export type CommutePrice = 'lunch' | 'ticket' | 'card' | 'parking' | 'passage';
+
 export interface FinancialPlan {
   version: 1;
   currency: string;
   userName: string;
   /** Profile picture as a small JPEG data URL (see `lib/image.ts`). Syncs with the plan; not kept in frozen months. */
   avatar?: string;
+  /** Year the user was born. Optional; sets how long CSN gives to repay (the age limit). */
+  birthYear?: number;
   home?: HomeLocation;
   household?: Household;
-  /** Food & drink spending per month (YYYY-MM). */
-  foodSpend?: Record<string, SpendEntry>;
+  commute?: Commute;
+  /** Everyday spending logged per month (YYYY-MM), by kind. */
+  everydaySpend?: Partial<Record<SpendGroup, Record<string, SpendEntry>>>;
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];

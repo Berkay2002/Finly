@@ -46,7 +46,7 @@ export function upcomingExpenses(
   const out: UpcomingExpense[] = [];
 
   for (const e of activeExpenses(plan)) {
-    if (!isIrregular(e.frequency)) continue;
+    if (!isIrregular(e.frequency, e.occurrences)) continue;
     let date = e.nextDate ? parseIso(e.nextDate) : null;
     const step = monthsPerPeriod(e.frequency);
 
@@ -139,7 +139,7 @@ export function monthOutlook(
   const upcoming = upcomingExpenses(plan, now, horizonMonths);
   const irregularIds = new Set(
     activeExpenses(plan)
-      .filter((e) => isIrregular(e.frequency))
+      .filter((e) => isIrregular(e.frequency, e.occurrences))
       .map((e) => e.id),
   );
   const regularLines = metrics.expenses.lines.filter((l) => !irregularIds.has(l.id));

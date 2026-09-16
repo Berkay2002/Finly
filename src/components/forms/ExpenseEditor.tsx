@@ -23,7 +23,7 @@ import {
   monthlyToDaily,
   monthlyToWeekly,
 } from '@/engine/frequency';
-import { amountForMonthly } from '@/engine/food';
+import { amountForMonthly } from '@/engine/everyday';
 import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
 import {
   CATEGORY_META,
@@ -73,7 +73,7 @@ function cadenceOptions(e: Pick<ExpenseItem, 'subcategory' | 'frequency' | 'occu
 function cadencePatch(e: Pick<ExpenseItem, 'subcategory' | 'occurrences'>, next: Cadence): Partial<ExpenseItem> {
   if (next !== 'each') return { frequency: next, occurrences: undefined };
   const occurrences = e.occurrences ?? suggestionBySlug(e.subcategory)?.occurrences ?? { times: 1, per: 'week' };
-  return { occurrences, frequency: frequencyForOccurrences(occurrences), billingLag: undefined };
+  return { occurrences, frequency: frequencyForOccurrences(occurrences), billingLag: undefined, nextDate: undefined };
 }
 
 const occurrencesPatch = (occurrences: Occurrences): Partial<ExpenseItem> => ({
@@ -84,6 +84,7 @@ const occurrencesPatch = (occurrences: Occurrences): Partial<ExpenseItem> => ({
 const perOptions: { value: Occurrences['per']; label: string }[] = [
   { value: 'week', label: 'a week' },
   { value: 'month', label: 'a month' },
+  { value: 'year', label: 'a year' },
 ];
 
 /** "× 5 a week" next to the price of one purchase. */
@@ -246,7 +247,7 @@ export function ExpenseEditor({
                 {notMonthly ? '/month' : ''}
               </span>
             )}
-            {isIrregular(e.frequency) && e.nextDate && <span>next {formatDate(e.nextDate)}</span>}
+            {isIrregular(e.frequency, e.occurrences) && e.nextDate && <span>next {formatDate(e.nextDate)}</span>}
             {e.includedElsewhere && <Chip tone="neutral">Included elsewhere</Chip>}
             {suggestion && <Chip tone="orange">Estimate outdated</Chip>}
             {!e.essential && <Chip tone="purple">Optional</Chip>}
@@ -527,6 +528,7 @@ function ExpenseDetailForm({
             options={[
               { value: 'week', label: 'Week' },
               { value: 'month', label: 'Month' },
+              { value: 'year', label: 'Year' },
             ]}
           />
         </div>
@@ -596,11 +598,11 @@ function ExpenseDetailForm({
                   ? draft.occurrences
                     ? `Budgets for ${formatMoney(spread.typical, currency)} each time; usually between ${formatMoneyRange(spread.low, spread.high, currency)}.`
                     : `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
-                  : everyday
-                    ? draft.occurrences
-                      ? 'For a price that differs from one time to the next. Leave the typical price empty to budget for the midpoint.'
-                      : `For costs that move from ${periodNoun(draft.frequency)} to ${periodNoun(draft.frequency)}, like the grocery shop. Leave the typical amount empty to budget for the midpoint.`
-                    : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
+                  : draft.occurrences
+                    ? 'For a price that differs from one time to the next. Leave the typical price empty to budget for the midpoint.'
+                    : everyday
+                      ? `For costs that move from ${periodNoun(draft.frequency)} to ${periodNoun(draft.frequency)}, like the grocery shop. Leave the typical amount empty to budget for the midpoint.`
+                      : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
               </p>
             </>
           )}
@@ -622,7 +624,7 @@ function ExpenseDetailForm({
           )}
         </div>
       )}
-      {draft.frequency !== 'monthly' && draft.frequency !== 'weekly' && (
+      {draft.frequency !== 'monthly' && draft.frequency !== 'weekly' && !draft.occurrences && (
         <DateField
           label={draft.frequency === 'once' ? 'Expected date' : 'Next due date'}
           hint="(used for upcoming expenses)"

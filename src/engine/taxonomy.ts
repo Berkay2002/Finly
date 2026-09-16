@@ -1,3 +1,4 @@
+import { frequencyForOccurrences } from './frequency';
 import type {
   AccountKind,
   DebtFrequency,
@@ -92,7 +93,8 @@ export interface ExpenseSuggestion {
   occurrences?: Occurrences;
   /**
    * Bought often, in small amounts, with no invoice: groceries, coffee, fuel. Offered per purchase,
-   * weekly or monthly, and never asked for as a bill to confirm.
+   * weekly or monthly, and never asked for as a bill to confirm. Items priced per purchase a few times
+   * a year (flights, haircuts) are not everyday.
    */
   everyday?: boolean;
 }
@@ -112,7 +114,7 @@ const s = (
     lag?: number;
     /** Everyday purchase; see `ExpenseSuggestion.everyday`. */
     ev?: boolean;
-    /** Priced per purchase: [times, per]. Implies `ev`. */
+    /** Priced per purchase: [times, per]. Implies `ev` unless per year. */
     occ?: [number, Occurrences['per']];
   } = {},
 ): ExpenseSuggestion => ({
@@ -120,7 +122,7 @@ const s = (
   name,
   category,
   group,
-  frequency: flags.occ ? (flags.occ[1] === 'week' ? 'weekly' : 'monthly') : (flags.freq ?? 'monthly'),
+  frequency: flags.occ ? frequencyForOccurrences({ times: flags.occ[0], per: flags.occ[1] }) : (flags.freq ?? 'monthly'),
   fixed: flags.f ?? true,
   essential: flags.e ?? true,
   committed: flags.c ?? flags.f ?? true,
@@ -128,7 +130,7 @@ const s = (
   hint: flags.hint,
   billingLag: flags.lag,
   occurrences: flags.occ ? { times: flags.occ[0], per: flags.occ[1] } : undefined,
-  everyday: flags.ev || !!flags.occ || undefined,
+  everyday: flags.ev || (!!flags.occ && flags.occ[1] !== 'year') || undefined,
 });
 
 export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
@@ -173,8 +175,8 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('living', 'Clothing', 'clothes', 'Clothes', { f: false, e: false, c: false }),
   s('living', 'Clothing', 'shoes', 'Shoes', { f: false, e: false, c: false }),
   s('living', 'Clothing', 'accessories', 'Accessories', { f: false, e: false, c: false }),
-  s('living', 'Health & personal care', 'haircuts', 'Haircuts', { f: false, e: false, c: false }),
-  s('living', 'Health & personal care', 'dental', 'Dental care', { f: false, c: false }),
+  s('living', 'Health & personal care', 'haircuts', 'Haircuts', { f: false, e: false, c: false, occ: [6, 'year'], hint: 'One haircut' }),
+  s('living', 'Health & personal care', 'dental', 'Dental care', { f: false, c: false, occ: [1, 'year'], hint: 'One visit' }),
   s('living', 'Health & personal care', 'medicine', 'Medicine', { f: false, c: false }),
   s('living', 'Health & personal care', 'personal_care', 'Personal care & beauty', { f: false, e: false, c: false }),
   s('living', 'Work-related', 'union_fees', 'Union fees'),
@@ -192,15 +194,15 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('transport', 'Car', 'car_repairs', 'Repairs', { f: false, c: false, tags: ['car'] }),
   s('transport', 'Car', 'tyres', 'Tyres', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
   s('transport', 'Car', 'car_parking', 'Parking', { f: false, c: false, tags: ['car'], ev: true }),
-  s('transport', 'Car', 'congestion', 'Congestion charges', { f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'tolls', 'Tolls & road charges', { f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'car_wash', 'Car washing', { f: false, e: false, c: false, tags: ['car'], ev: true }),
+  s('transport', 'Car', 'congestion', 'Congestion charges', { f: false, c: false, tags: ['car'], occ: [10, 'week'], hint: 'One passage' }),
+  s('transport', 'Car', 'tolls', 'Tolls & road charges', { f: false, c: false, tags: ['car'], occ: [2, 'month'], hint: 'One passage' }),
+  s('transport', 'Car', 'car_wash', 'Car washing', { f: false, e: false, c: false, tags: ['car'], occ: [1, 'month'], hint: 'One wash' }),
   s('transport', 'Public transport', 'travel_card', 'Monthly travel card', { tags: ['public_transport'] }),
   s('transport', 'Public transport', 'public_transport', 'Bus, tram, metro, train', { f: false, c: false, tags: ['public_transport'], occ: [4, 'week'], hint: 'One ticket' }),
   s('transport', 'Public transport', 'taxi', 'Taxi & ride sharing', { f: false, e: false, c: false, occ: [2, 'month'], hint: 'One ride' }),
-  s('transport', 'Other travel', 'flights', 'Flights', { freq: 'yearly', f: false, e: false, c: false }),
-  s('transport', 'Other travel', 'long_distance', 'Long-distance rail & ferry', { freq: 'yearly', f: false, e: false, c: false }),
-  s('transport', 'Other travel', 'rental_cars', 'Rental cars', { freq: 'yearly', f: false, e: false, c: false }),
+  s('transport', 'Other travel', 'flights', 'Flights', { f: false, e: false, c: false, occ: [2, 'year'], hint: 'One trip, everyone travelling' }),
+  s('transport', 'Other travel', 'long_distance', 'Long-distance rail & ferry', { f: false, e: false, c: false, occ: [2, 'year'], hint: 'One trip, everyone travelling' }),
+  s('transport', 'Other travel', 'rental_cars', 'Rental cars', { f: false, e: false, c: false, occ: [1, 'year'], hint: 'One rental' }),
 
   // Finance
   s('finance', 'Banking', 'bank_fees', 'Banking fees'),
@@ -213,7 +215,7 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
 
   // Leisure
   s('leisure', 'Entertainment', 'cinema', 'Cinema', { f: false, e: false, c: false, occ: [1, 'month'], hint: 'One visit' }),
-  s('leisure', 'Entertainment', 'events', 'Events & concerts', { f: false, e: false, c: false }),
+  s('leisure', 'Entertainment', 'events', 'Events & concerts', { f: false, e: false, c: false, occ: [4, 'year'], hint: 'One ticket' }),
   s('leisure', 'Entertainment', 'nights_out', 'Nights out', { f: false, e: false, c: false, occ: [2, 'month'], hint: 'One night out' }),
   s('leisure', 'Media & subscriptions', 'streaming', 'Streaming services', { e: false, c: false, tags: ['subscription'] }),
   s('leisure', 'Media & subscriptions', 'music', 'Music subscription', { e: false, c: false, tags: ['subscription'] }),
@@ -222,21 +224,21 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('leisure', 'Media & subscriptions', 'news', 'News subscription', { e: false, c: false, tags: ['subscription'] }),
   s('leisure', 'Media & subscriptions', 'mobile', 'Mobile phone plan', { tags: ['subscription'] }),
   s('leisure', 'Hobbies', 'gaming', 'Gaming', { f: false, e: false, c: false }),
-  s('leisure', 'Hobbies', 'books', 'Books', { f: false, e: false, c: false }),
+  s('leisure', 'Hobbies', 'books', 'Books', { f: false, e: false, c: false, occ: [1, 'month'], hint: 'One book' }),
   s('leisure', 'Hobbies', 'sports', 'Sports', { f: false, e: false, c: false }),
   s('leisure', 'Hobbies', 'creative', 'Creative hobbies', { f: false, e: false, c: false }),
   s('leisure', 'Hobbies', 'other_hobbies', 'Other hobbies', { f: false, e: false, c: false }),
   s('leisure', 'Health & fitness', 'gym', 'Gym membership', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Health & fitness', 'fitness_classes', 'Fitness classes', { f: false, e: false, c: false }),
+  s('leisure', 'Health & fitness', 'fitness_classes', 'Fitness classes', { f: false, e: false, c: false, occ: [1, 'week'], hint: 'One class' }),
   s('leisure', 'Health & fitness', 'sports_equipment', 'Training equipment', { f: false, e: false, c: false }),
-  s('leisure', 'Other leisure', 'lottery', 'Lottery & games', { f: false, e: false, c: false }),
+  s('leisure', 'Other leisure', 'lottery', 'Lottery & games', { f: false, e: false, c: false, occ: [1, 'week'], hint: 'One ticket or bet' }),
   s('leisure', 'Other leisure', 'social', 'Social spending', { f: false, e: false, c: false, ev: true }),
   s('leisure', 'Other leisure', 'misc_leisure', 'Miscellaneous leisure', { f: false, e: false, c: false }),
 
   // Planned / irregular
   s('planned', 'Holidays & events', 'holidays', 'Holidays', { freq: 'yearly', f: false, e: false, c: false, hint: 'Expected annual total' }),
   s('planned', 'Holidays & events', 'christmas', 'Christmas', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Holidays & events', 'birthdays', 'Birthdays', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Holidays & events', 'birthdays', 'Birthdays', { f: false, e: false, c: false, occ: [4, 'year'], hint: 'One birthday' }),
   s('planned', 'Holidays & events', 'gifts', 'Gifts', { freq: 'yearly', f: false, e: false, c: false }),
   s('planned', 'Holidays & events', 'planned_events', 'Events', { freq: 'yearly', f: false, e: false, c: false }),
   s('planned', 'Purchases', 'electronics', 'Electronics', { freq: 'yearly', f: false, e: false, c: false }),
@@ -257,9 +259,10 @@ export function suggestionBySlug(slug: string): ExpenseSuggestion | undefined {
   return EXPENSE_SUGGESTIONS.find((x) => x.slug === slug);
 }
 
-/** Everyday spending: priced per purchase, or a taxonomy item bought often with no invoice. */
+/** Everyday spending: priced per purchase weekly or monthly, or a taxonomy item bought often with no invoice. */
 export function isEverydaySpend(e: { subcategory: string; occurrences?: Occurrences }): boolean {
-  return !!e.occurrences || !!suggestionBySlug(e.subcategory)?.everyday;
+  if (e.occurrences) return e.occurrences.per !== 'year';
+  return !!suggestionBySlug(e.subcategory)?.everyday;
 }
 
 /** Groups in display order for a category. */

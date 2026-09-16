@@ -14,6 +14,7 @@ import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { SyncCard } from '@/components/sync/SyncCard';
 import { AvatarPicker } from '@/components/forms/AvatarPicker';
+import { BirthYearField } from '@/components/forms/BirthYearField';
 import { HomeFields } from '@/components/forms/HomeFields';
 import { useSyncActions } from '@/sync/useSync';
 import { SelectField, TextField } from '@/components/ui/fields';
@@ -78,6 +79,7 @@ export function SettingsPage() {
               onError={(text) => setMessage({ tone: 'warning', text })}
             />
             <TextField label="Your name" placeholder="Used in the greeting" value={plan.userName} onChange={(e) => setUserName(e.target.value)} />
+            <BirthYearField hint="(optional, for how long you pay CSN)" />
             <HomeFields />
             <SelectField
               label="Currency"
