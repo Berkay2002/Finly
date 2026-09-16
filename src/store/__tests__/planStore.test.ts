@@ -166,3 +166,15 @@ describe('persist migration', () => {
     expect(s.hydrated).toBe(true);
   });
 });
+
+describe('profile picture', () => {
+  it('stores a picture on the plan, bumps updatedAt, and removes it again', () => {
+    const before = usePlanStore.getState().plan.updatedAt;
+    usePlanStore.getState().setAvatar('data:image/jpeg;base64,AAAA');
+    const plan = usePlanStore.getState().plan;
+    expect(plan.avatar).toBe('data:image/jpeg;base64,AAAA');
+    expect(plan.updatedAt >= before).toBe(true);
+    usePlanStore.getState().setAvatar(undefined);
+    expect(usePlanStore.getState().plan.avatar).toBeUndefined();
+  });
+});

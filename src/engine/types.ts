@@ -180,6 +180,8 @@ export interface FinancialPlan {
   version: 1;
   currency: string;
   userName: string;
+  /** Profile picture as a small JPEG data URL (see `lib/image.ts`). Syncs with the plan; not kept in frozen months. */
+  avatar?: string;
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];

@@ -144,7 +144,9 @@ is the whole identity.
   HKDF-SHA256 over the secret gives two independent values: a 64-hex **sync id** the server stores the data
   under, and an AES-GCM-256 **key** the server never sees. Knowing the id does not give the key.
 - **Payload.** `{ payloadVersion, plan, snapshots }` → JSON → gzip (`CompressionStream`) → AES-GCM with a
-  fresh 12-byte IV → base64. Gzip keeps decades of months far below the 1 MiB document limit.
+  fresh 12-byte IV → base64. Gzip keeps decades of months far below the 1 MiB document limit. The profile
+  picture is part of the plan as a 192 px JPEG data URL (10–25 KB), so it syncs encrypted like everything
+  else and never touches Convex file storage; frozen months drop it.
 - **Backend.** Convex, used as a blob store with no auth: one table `blobs { syncId, ciphertext, iv,
   version, updatedAt, size }`, one document per sync id, and three functions `get`, `put`, `remove`
   (`convex/blobs.ts`). `put` does an optimistic version check, rejects ciphertext over 900 000 characters and

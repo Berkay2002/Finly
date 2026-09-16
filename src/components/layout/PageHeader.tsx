@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { addDays } from 'date-fns';
 import clsx from 'clsx';
 import { formatDate, formatMoney, formatMonthYear } from '@/engine/format';
+import { initialsOf } from '@/lib/image';
 import { useCurrency, usePlan, useUpcoming } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 import { IconButton } from '@/components/ui/Button';
@@ -79,23 +80,17 @@ export function NotificationsButton() {
 }
 
 export function Avatar({ className }: { className?: string }) {
-  const name = usePlan().userName;
-  const initials = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join('');
+  const { userName, avatar } = usePlan();
   return (
     <Link
       to="/settings"
       aria-label="Settings"
       className={clsx(
-        'inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-[13px] font-semibold text-white ring-2 ring-card',
+        'inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-brand-600 text-[13px] font-semibold text-white ring-2 ring-card',
         className,
       )}
     >
-      {initials || '•'}
+      {avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : initialsOf(userName) || '•'}
     </Link>
   );
 }

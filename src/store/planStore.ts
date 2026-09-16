@@ -30,6 +30,8 @@ interface PlanState {
   hydrated: boolean;
 
   setUserName: (name: string) => void;
+  /** A small data URL from `fileToAvatar`, or undefined to remove the picture. */
+  setAvatar: (avatar: string | undefined) => void;
   setCurrency: (currency: string) => void;
 
   addIncome: (draft: Draft<IncomeSource>) => string;
@@ -84,6 +86,7 @@ export const usePlanStore = create<PlanState>()(
         hydrated: false,
 
         setUserName: (userName) => mutate((p) => ({ ...p, userName })),
+        setAvatar: (avatar) => mutate((p) => ({ ...p, avatar })),
         setCurrency: (currency) => mutate((p) => ({ ...p, currency })),
 
         addIncome: (draft) => {

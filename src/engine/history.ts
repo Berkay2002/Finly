@@ -71,6 +71,7 @@ export function withMonthValue(map: Record<string, number> | undefined, month: s
 export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
   const copy = structuredClone(plan);
   copy.isSample = undefined;
+  delete copy.avatar; // every closed month would otherwise carry its own copy of the picture
   copy.expenses = copy.expenses.map((e) => {
     const bill = e.actuals?.[month];
     const { actuals: _drop, ...rest } = e;

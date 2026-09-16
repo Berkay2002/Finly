@@ -67,6 +67,12 @@ describe('freezePlan', () => {
     // the live plan is untouched
     expect(plan.expenses[0].actuals).toEqual({ '2026-07': 400, '2026-08': 500, '2026-09': 600 });
   });
+
+  it('drops the profile picture so history does not carry copies of it', () => {
+    const plan = { ...prdExamplePlan(), avatar: 'data:image/jpeg;base64,AAAA' };
+    expect(freezePlan(plan, '2026-08').avatar).toBeUndefined();
+    expect(plan.avatar).toBeDefined();
+  });
 });
 
 describe('monthsToClose', () => {

@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { SyncCard } from '@/components/sync/SyncCard';
+import { AvatarPicker } from '@/components/forms/AvatarPicker';
 import { useSyncActions } from '@/sync/useSync';
 import { SelectField, TextField } from '@/components/ui/fields';
 
@@ -21,7 +22,7 @@ const CURRENCIES = ['SEK', 'NOK', 'DKK', 'EUR', 'GBP', 'USD', 'CHF', 'PLN'];
 export function SettingsPage() {
   const plan = usePlan();
   const snapshots = usePlanStore((s) => s.snapshots);
-  const { setUserName, setCurrency, loadSample, reset, importPlan, reopenOnboarding, saveSnapshot } = usePlanStore();
+  const { setUserName, setAvatar, setCurrency, loadSample, reset, importPlan, reopenOnboarding, saveSnapshot } = usePlanStore();
   const viewMonth = useUiStore((s) => s.viewMonth);
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -69,6 +70,12 @@ export function SettingsPage() {
         <Card>
           <CardHeader title="Profile" />
           <div className="space-y-4">
+            <AvatarPicker
+              avatar={plan.avatar}
+              name={plan.userName}
+              onChange={setAvatar}
+              onError={(text) => setMessage({ tone: 'warning', text })}
+            />
             <TextField label="Your name" placeholder="Used in the greeting" value={plan.userName} onChange={(e) => setUserName(e.target.value)} />
             <SelectField
               label="Currency"
