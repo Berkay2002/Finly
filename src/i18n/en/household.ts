@@ -26,13 +26,13 @@ export default {
     lunchOut: 'Lunch out',
     removePerson: 'Remove person',
     addPerson: 'Add a person',
-    lunchOutNote: '"Lunch out" means weekday lunch at school, or bought at work. A packed lunch from home counts as home.',
+    lunchOutInfo: 'What counts as lunch out?',
+    lunchOutNote: '"Lunch out" is school lunch or bought at work. A packed lunch counts as home.',
     source: (year: number) => `Konsumentverket ${year}`,
     aMonth: 'a month',
     aWeek: (amount: string) => `≈ ${amount} a week`,
-    disclaimer:
-      'A reasonable level when cooking at home from their menu, not what households actually spend. Treat it as a starting point and adjust once you see your real months.',
-    workLunches: ' Lunches bought at work are not included: add them as Work lunches.',
+    disclaimer: 'Based on cooking at home. Use it as a starting point.',
+    workLunches: ' Work lunches are not included.',
     cancel: 'Cancel',
   },
   spot: {

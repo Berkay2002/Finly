@@ -37,6 +37,9 @@ export default {
     title: 'Vart pengarna tar vägen',
     perMonth: '/ mån',
     viewAll: 'Se alla utgifter',
+    setAsideFor: (name, amount, date) => `${name}: avsatt till ${amount} som betalas ${date}`,
+    paidOn: (name, amount, date) => `${name}: ${amount} betalas ${date}`,
+    partOf: (part, of) => `${part} av ${of}`,
     empty: 'Lägg till utgifter för att se fördelningen.',
   },
   position: {

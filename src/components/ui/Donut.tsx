@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { useT } from '@/i18n';
@@ -9,6 +9,25 @@ export interface DonutSlice {
   label: string;
   value: number;
   accent: Accent;
+  /** Part of `value` that is set aside for a bill due in a later month; drawn striped at the end of the slice. */
+  held?: number;
+  /** One line per held item, shown in the tooltip. */
+  notes?: string[];
+}
+
+/** The striped fill for the held part of a slice, one pattern per accent so it keeps the slice's colour. */
+function StripePatterns({ id, accents }: { id: string; accents: Accent[] }) {
+  if (accents.length === 0) return null;
+  return (
+    <defs>
+      {accents.map((a) => (
+        <pattern key={a} id={`${id}-${a}`} patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill={ACCENT[a].color} fillOpacity="0.3" />
+          <rect width="2.5" height="6" fill={ACCENT[a].color} />
+        </pattern>
+      ))}
+    </defs>
+  );
 }
 
 /** Gap between slices, in degrees. */
@@ -76,8 +95,13 @@ export function Donut({
     const span = (s.value / sum) * available;
     const start = cursor;
     cursor += span + gap;
-    return { ...s, start, end: start + span };
+    const held = Math.min(s.held ?? 0, s.value);
+    // The held part sits at the end of the slice, so the solid part runs from `start` to `split`.
+    const split = start + span * (1 - held / s.value);
+    return { ...s, start, end: start + span, split, held };
   });
+  const patternId = useId();
+  const stripedAccents = [...new Set(sectors.filter((s) => s.held > 0).map((s) => s.accent))];
 
   // Hover state is tracked by hand so the tooltip follows the pointer with no position
   // animation, survives the pointer crossing a gap between slices, and always clears.
@@ -135,9 +159,10 @@ export function Donut({
       onMouseLeave={interactive ? leaveChart : undefined}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+        <StripePatterns id={patternId} accents={stripedAccents} />
         {empty ? (
           <circle cx={c} cy={c} r={(outer + inner) / 2} fill="none" stroke="var(--color-line)" strokeWidth={thickness} />
-        ) : sectors.length === 1 ? (
+        ) : sectors.length === 1 && sectors[0].held === 0 ? (
           <circle
             cx={c}
             cy={c}
@@ -153,11 +178,17 @@ export function Donut({
           sectors.map((s) => {
             const dimmed = !!activeKey && activeKey !== s.key;
             const popped = hoverKey === s.key;
+            const color = ACCENT[s.accent].color;
+            const parts =
+              s.held > 0
+                ? [
+                    { d: sectorPath(c, outer, inner, s.start, s.split), fill: color },
+                    { d: sectorPath(c, outer, inner, s.split, s.end), fill: `url(#${patternId}-${s.accent})` },
+                  ]
+                : [{ d: sectorPath(c, outer, inner, s.start, s.end), fill: color }];
             return (
-              <path
+              <g
                 key={s.key}
-                d={sectorPath(c, outer, inner, s.start, s.end)}
-                fill={ACCENT[s.accent].color}
                 fillOpacity={dimmed ? 0.3 : 1}
                 onMouseEnter={interactive ? () => enter(s.key) : undefined}
                 onMouseLeave={interactive ? leaveSlice : undefined}
@@ -167,7 +198,11 @@ export function Donut({
                   transformOrigin: `${c}px ${c}px`,
                   transition: 'transform 150ms ease, fill-opacity 150ms ease',
                 }}
-              />
+              >
+                {parts.map((p, i) => (
+                  <path key={i} d={p.d} fill={p.fill} />
+                ))}
+              </g>
             );
           })
         )}
@@ -189,6 +224,13 @@ export function Donut({
           </div>
           <div className="tabular font-semibold text-ink">{formatMoney(hovered.value, currency)}</div>
           <div className="tabular text-muted">{t.ui.donut.ofTotal(formatPercent(hovered.value / sum))}</div>
+          {hovered.notes && hovered.notes.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-[11px] text-muted">
+              {hovered.notes.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {center && (
@@ -228,6 +270,7 @@ export function DonutBreakdown({
   maxSize?: number;
   className?: string;
 }) {
+  const t = useT();
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const sum = slices.reduce((a, s) => a + s.value, 0);
   const active = activeKey ? slices.find((s) => s.key === activeKey) : undefined;
@@ -265,6 +308,11 @@ export function DonutBreakdown({
             <span className="tabular text-[11px] text-muted">
               {currency} · {sum > 0 ? formatPercent(active.value / sum) : '–'}
             </span>
+            {(active.held ?? 0) > 0 && (
+              <span className="tabular mt-0.5 text-[10.5px] leading-tight text-muted">
+                {t.ui.donut.ofWhichHeld(formatMoney(active.held!, currency))}
+              </span>
+            )}
           </>
         ) : (
           center
@@ -289,6 +337,7 @@ export function DonutBreakdown({
             return (
               <li
                 key={s.key}
+                title={(s.held ?? 0) > 0 ? t.ui.donut.heldHint : undefined}
                 onMouseEnter={() => setActiveKey(s.key)}
                 onMouseLeave={() => setActiveKey(null)}
                 className={clsx(

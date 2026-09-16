@@ -28,14 +28,13 @@ export default {
     lunchOut: 'Lunch ute',
     removePerson: 'Ta bort person',
     addPerson: 'Lägg till person',
-    lunchOutNote:
-      '”Lunch ute” betyder skollunch på vardagar eller lunch som köps på jobbet. Matlåda hemifrån räknas som hemma.',
+    lunchOutInfo: 'Vad räknas som lunch ute?',
+    lunchOutNote: '”Lunch ute” är skollunch eller lunch som köps på jobbet. Matlåda räknas som hemma.',
     source: (year) => `Konsumentverket ${year}`,
     aMonth: 'i månaden',
     aWeek: (amount) => `≈ ${amount} i veckan`,
-    disclaimer:
-      'En rimlig nivå om maten lagas hemma efter deras matsedel, inte vad hushåll faktiskt lägger. Se det som en utgångspunkt och justera när du ser hur dina riktiga månader blir.',
-    workLunches: ' Luncher som köps på jobbet ingår inte: lägg till dem som Luncher på jobbet.',
+    disclaimer: 'Utgår från att maten lagas hemma. Se det som en startpunkt.',
+    workLunches: ' Luncher på jobbet ingår inte.',
     cancel: 'Avbryt',
   },
   spot: {

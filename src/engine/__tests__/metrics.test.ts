@@ -311,3 +311,43 @@ describe('computeMetrics — confirming bills for the month', () => {
     expect(m.actuals.pending).toEqual([]);
   });
 });
+
+describe('money set aside for quarterly and yearly bills', () => {
+  const plan = () => {
+    const p = emptyPlan(NOW);
+    p.expenses = [
+      expense({ id: 'tax', name: 'Vehicle tax', category: 'transport', amount: 2400, frequency: 'yearly', nextDate: '2027-03-10' }),
+      expense({ id: 'fuel', name: 'Fuel', category: 'transport', amount: 1000 }),
+    ];
+    p.debts = [
+      { id: 'csn', kind: 'csn', csnType: 'annuity', balance: 440_000, rate: 2.135, payment: 4407, frequency: 'quarterly', nextDate: '2027-02-26' },
+    ];
+    return p;
+  };
+
+  it('holds a bill back before its due month and pays it in the due month', () => {
+    const jan = computeMetrics(plan(), new Date(2027, 0, 10));
+    expect(jan.expenses.byCategory.transport).toBe(1200);
+    expect(jan.expenses.byCategoryHeld.transport).toBe(200);
+    expect(jan.expenses.lines.find((l) => l.id === 'tax')!.lump).toMatchObject({ amount: 2400, paidThisMonth: false });
+    expect(jan.expenses.lines.find((l) => l.id === 'fuel')!.lump).toBeUndefined();
+    expect(jan.debt.monthly).toBeCloseTo(4407 / 3, 5);
+    expect(jan.debt.held).toBeCloseTo(4407 / 3, 5);
+    expect(jan.debt.lines[0].lump).toMatchObject({ amount: 4407, paidThisMonth: false, part: 2, of: 3 });
+
+    const mar = computeMetrics(plan(), new Date(2027, 2, 10));
+    expect(mar.expenses.byCategoryHeld.transport).toBe(0);
+    expect(mar.expenses.lines.find((l) => l.id === 'tax')!.lump).toMatchObject({ paidThisMonth: true, part: 12, of: 12 });
+
+    const feb = computeMetrics(plan(), new Date(2027, 1, 10));
+    expect(feb.debt.held).toBe(0);
+    expect(feb.debt.lines[0].lump).toMatchObject({ paidThisMonth: true, part: 3, of: 3 });
+  });
+
+  it('charges no loan payment before the first covered month', () => {
+    const nov = computeMetrics(plan(), new Date(2026, 10, 10));
+    expect(nov.debt.monthly).toBe(0);
+    expect(nov.debt.held).toBe(0);
+    expect(nov.debt.lines[0].lump).toBeUndefined();
+  });
+});

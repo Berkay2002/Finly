@@ -6,6 +6,8 @@ export default {
   },
   donut: {
     ofTotal: (share) => `${share} av totalen`,
+    ofWhichHeld: (amount) => `${amount} avsatt`,
+    heldHint: 'Randigt: avsatt för en räkning som betalas senare',
   },
   menu: {
     moreOptions: 'Fler alternativ',

@@ -438,21 +438,23 @@ export function TogglePill<T extends string>({
   onChange,
   options,
   size = 'sm',
+  className,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: [{ value: T; label: string }, { value: T; label: string }];
   size?: 'sm' | 'md';
+  className?: string;
 }) {
   return (
-    <div className="inline-flex rounded-lg border border-line bg-page p-0.5">
+    <div className={clsx('inline-grid grid-cols-2 rounded-xl border border-line bg-page p-0.5', className)}>
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={clsx(
-            'rounded-md font-medium transition',
+            'rounded-lg font-medium transition',
             size === 'sm' ? 'px-2 py-0.5 text-[11.5px]' : 'px-3 py-1 text-[12.5px]',
             value === o.value ? 'bg-card text-ink shadow-sm' : 'text-muted hover:text-ink',
           )}

@@ -35,6 +35,9 @@ export default {
     title: 'Where your money goes',
     perMonth: '/ month',
     viewAll: 'View all expenses',
+    setAsideFor: (name: string, amount: string, date: string) => `${name}: set aside for ${amount} due ${date}`,
+    paidOn: (name: string, amount: string, date: string) => `${name}: ${amount} paid ${date}`,
+    partOf: (part: number, of: number) => `${part} of ${of}`,
     empty: 'Add expenses to see the breakdown.',
   },
   position: {

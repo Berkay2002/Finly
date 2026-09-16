@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import { formatDate, formatMoney, formatMoneyRange, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
 import { savingsPots } from '@/engine/savings';
+import type { LumpPayment } from '@/engine/periods';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
@@ -66,13 +67,32 @@ export function Dashboard() {
   const isEmpty = !m.hasIncome && !m.hasExpenses && !m.hasAccounts && !m.hasGoals && !m.hasDebts;
   if (isEmpty && !plan.onboarding.completed) return <Navigate to="/welcome" replace />;
 
+  // A quarterly or yearly bill is spread over the months it covers: the tooltip says which months hold
+  // money back for it and which one pays it.
+  const lumpNote = (name: string, lump: LumpPayment): string => {
+    const when = lump.part ? `${formatDate(lump.due)}, ${d.spending.partOf(lump.part, lump.of)}` : formatDate(lump.due);
+    return lump.paidThisMonth
+      ? d.spending.paidOn(name, money(lump.amount), when)
+      : d.spending.setAsideFor(name, money(lump.amount), when);
+  };
   const slices: DonutSlice[] = EXPENSE_CATEGORIES.map((c) => ({
     key: c,
     label: CATEGORY_META[c].shortLabel,
     value: m.expenses.byCategory[c],
     accent: CATEGORY_META[c].accent,
+    held: m.expenses.byCategoryHeld[c],
+    notes: m.expenses.lines.filter((l) => l.category === c && l.lump).map((l) => lumpNote(l.name, l.lump!)),
   }));
-  if (m.debt.monthly > 0) slices.push({ key: 'loans', label: d.loans, value: m.debt.monthly, accent: 'red' });
+  if (m.debt.monthly > 0) {
+    slices.push({
+      key: 'loans',
+      label: d.loans,
+      value: m.debt.monthly,
+      accent: 'red',
+      held: m.debt.held,
+      notes: m.debt.lines.filter((l) => l.lump).map((l) => lumpNote(l.name, l.lump!)),
+    });
+  }
 
   const pots = savingsPots(shown);
   const goals = pots.filter((g) => g.targetAmount).slice(0, 4);

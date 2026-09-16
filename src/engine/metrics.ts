@@ -1,9 +1,10 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
-import { toMonthly } from './frequency';
+import { isIrregular, monthsPerPeriod, toMonthly } from './frequency';
 import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
-import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paysInMonth } from './debts';
+import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paymentsPerYear, paysInMonth } from './debts';
+import { lumpPayment, type LumpPayment } from './periods';
 import type { GovBondRate } from './rates';
 import { savingsPots } from './savings';
 import { capitalTaxSummary, type CapitalTaxSummary } from './tax/capital';
@@ -30,6 +31,8 @@ export interface CostLine {
   essential: boolean;
   committed: boolean;
   fixed: boolean;
+  /** Set for a quarterly or yearly bill: `monthly` is this month's share of it, held back until the due date. */
+  lump?: LumpPayment;
 }
 
 /** Best and worst case of one figure, from the ranges on variable items. */
@@ -91,6 +94,8 @@ export interface DebtLine {
   payoffDate: Date | null;
   /** Interest left to pay over the loan's life, before ränteavdrag. */
   interestLeft: number | null;
+  /** Set for a loan paid quarterly or yearly: `monthly` is this month's share, held back until the due date. */
+  lump?: LumpPayment;
 }
 
 export interface PlanMetrics {
@@ -103,6 +108,8 @@ export interface PlanMetrics {
   };
   expenses: {
     byCategory: Record<ExpenseCategory, number>;
+    /** The part of each category's monthly figure that is set aside for a bill due in a later month. */
+    byCategoryHeld: Record<ExpenseCategory, number>;
     total: number;
     essential: number;
     optional: number;
@@ -147,6 +154,8 @@ export interface PlanMetrics {
     lines: DebtLine[];
     /** Sum of monthly payments. */
     monthly: number;
+    /** The part of `monthly` set aside for a quarterly or yearly payment due in a later month. */
+    held: number;
     /** Known interest per month, before ränteavdrag. */
     interest: number;
     /** Ränteavdrag per month on deductible interest (comes back through tax). */
@@ -363,12 +372,20 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
 
   /* Expenses */
   const active = activeExpenses(plan);
-  const lines = active.map(toCostLine);
-  const byCategory = Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c, 0])) as Record<
-    ExpenseCategory,
-    number
-  >;
-  for (const l of lines) byCategory[l.category] += l.monthly;
+  const lines: CostLine[] = active.map((e) => {
+    const line = toCostLine(e);
+    const step = monthsPerPeriod(e.frequency);
+    const lump =
+      isIrregular(e.frequency, e.occurrences) && step ? lumpPayment(amountSpread(e).typical, step, e.nextDate, now) : null;
+    return lump ? { ...line, lump } : line;
+  });
+  const emptyByCategory = () => Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c, 0])) as Record<ExpenseCategory, number>;
+  const byCategory = emptyByCategory();
+  const byCategoryHeld = emptyByCategory();
+  for (const l of lines) {
+    byCategory[l.category] += l.monthly;
+    if (l.lump && !l.lump.paidThisMonth) byCategoryHeld[l.category] += l.monthly;
+  }
 
   const expenseTotal = sum(lines.map((l) => l.monthly));
   const essentialSpend = sum(lines.filter((l) => l.essential).map((l) => l.monthly));
@@ -379,7 +396,9 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   const debtLines: DebtLine[] = (plan.debts ?? [])
     .map((d) => {
       // Before the first payment period nothing is paid: the interest is added to the debt instead.
-      const flow = paysInMonth(d, now) ? debtFlow(d) : { monthly: 0, interest: 0, principal: 0 };
+      const paying = paysInMonth(d, now);
+      const flow = paying ? debtFlow(d) : { monthly: 0, interest: 0, principal: 0 };
+      const lump = paying ? lumpPayment(Math.max(0, d.payment || 0), 12 / paymentsPerYear(d.frequency), d.nextDate, now) : null;
       const payoff = debtPayoff(d, now);
       return {
         id: d.id,
@@ -396,10 +415,12 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
         payoffMonths: payoff?.months ?? null,
         payoffDate: payoff?.date ?? null,
         interestLeft: payoff?.totalInterest ?? null,
+        ...(lump ? { lump } : {}),
       };
     })
     .filter((l) => l.monthly > 0 || l.balance > 0);
   const debtMonthly = sum(debtLines.map((l) => l.monthly));
+  const debtHeld = sum(debtLines.filter((l) => l.lump && !l.lump.paidThisMonth).map((l) => l.monthly));
   const debtInterest = sum(debtLines.map((l) => l.interest ?? 0));
   const debtPrincipal = sum(debtLines.map((l) => l.principal ?? 0));
   const deductibleInterest = sum(debtLines.filter((l) => l.deductible).map((l) => l.interest ?? 0));
@@ -526,6 +547,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
     income: { reliable, variable, total: totalIncome, excluded },
     expenses: {
       byCategory,
+      byCategoryHeld,
       total: expenseTotal,
       essential: essentialSpend,
       optional: expenseTotal - essentialSpend,
@@ -562,6 +584,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
     debt: {
       lines: debtLines,
       monthly: debtMonthly,
+      held: debtHeld,
       interest: debtInterest,
       taxReduction,
       principal: debtPrincipal,
