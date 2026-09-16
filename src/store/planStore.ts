@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { newId } from '@/lib/id';
-import { computeMetrics } from '@/engine/metrics';
+import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
+import { monthKeyOf } from '@/engine/metrics';
 import type {
   Account,
   ExpenseItem,
@@ -13,34 +14,19 @@ import type {
 import { emptyPlan } from '@/engine/types';
 import { samplePlan } from './sampleData';
 
-/** Numbers frozen at the end of a month so later months can show deltas (Tracking Mode groundwork). */
-export interface MetricsSnapshot {
-  month: string; // YYYY-MM
-  savedAt: string;
-  income: number;
-  /** Planned (baseline) lifestyle cost. */
-  lifestyleCost: number;
-  /** Lifestyle cost with that month's confirmed bills substituted. Missing on older snapshots. */
-  lifestyleCostActual?: number;
-  /** Σ (actual − typical) over confirmed bills that month. */
-  actualVariance?: number;
-  /** How many bills were confirmed when the snapshot was taken. */
-  billsConfirmed?: number;
-  savings: number;
-  breathingRoom: number;
-  safeToSpend: number;
-  totalAssets: number;
-  cashInBank: number;
-  investments: number;
-  savingsRate: number;
-  byCategory: Record<string, number>;
+export type { MetricsSnapshot, SnapshotMap } from '@/engine/history';
+
+/** The whole persisted state: what export, import and sync move around. */
+export interface PlanData {
+  plan: FinancialPlan;
+  snapshots: SnapshotMap;
 }
 
 type Draft<T extends { id: string }> = Omit<T, 'id'> & { id?: string };
 
 interface PlanState {
   plan: FinancialPlan;
-  snapshots: Record<string, MetricsSnapshot>;
+  snapshots: SnapshotMap;
   hydrated: boolean;
 
   setUserName: (name: string) => void;
@@ -69,11 +55,16 @@ interface PlanState {
   reopenOnboarding: () => void;
   startOnboarding: () => void;
 
-  saveSnapshot: (month: string, now?: Date) => void;
+  /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
+  saveSnapshot: (month: string, today?: Date) => void;
+  /** Close every month that is due (see `monthsToClose`). Returns the keys closed; idempotent. */
+  closeMonths: (now?: Date) => string[];
 
   loadSample: () => void;
   reset: () => void;
-  importPlan: (plan: FinancialPlan) => void;
+  importPlan: (data: FinancialPlan | PlanData) => void;
+  /** Replace plan and history verbatim (sync applies a remote copy this way; `updatedAt` is kept). */
+  replaceAll: (data: PlanData) => void;
   setHydrated: () => void;
 }
 
@@ -113,33 +104,61 @@ export const usePlanStore = create<PlanState>()(
           mutate((p) => ({ ...p, expenses: p.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
-          mutate((p) => ({
-            ...p,
-            expenses: p.expenses.map((x) => {
-              if (x.id !== id) return x;
-              const actuals = { ...(x.actuals ?? {}) };
-              if (amount === null || !Number.isFinite(amount)) delete actuals[month];
-              else actuals[month] = Math.max(0, amount);
-              return { ...x, actuals: Object.keys(actuals).length > 0 ? actuals : undefined };
-            }),
-          })),
+          set((s) => {
+            const apply = (plan: FinancialPlan): FinancialPlan => ({
+              ...plan,
+              expenses: plan.expenses.map((x) => {
+                if (x.id !== id) return x;
+                const actuals = { ...(x.actuals ?? {}) };
+                if (amount === null || !Number.isFinite(amount)) delete actuals[month];
+                else actuals[month] = Math.max(0, amount);
+                return { ...x, actuals: Object.keys(actuals).length > 0 ? actuals : undefined };
+              }),
+            });
+            const plan = touch({ ...apply(s.plan), isSample: undefined });
+            // A closed month keeps its own copy of the plan; the bill belongs to both.
+            const frozen = s.snapshots[month];
+            if (!frozen?.plan) return { plan };
+            const frozenPlan = apply(frozen.plan);
+            const snap: MetricsSnapshot = { ...buildSnapshot(frozenPlan, month), savedAt: frozen.savedAt, plan: frozenPlan };
+            return { plan, snapshots: { ...s.snapshots, [month]: snap } };
+          }),
 
         addAccount: (draft) => {
           const id = draft.id ?? newId('acc');
-          mutate((p) => ({ ...p, accounts: [...p.accounts, { ...draft, id }] }));
+          const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), draft.balance);
+          mutate((p) => ({ ...p, accounts: [...p.accounts, { ...draft, id, balances }] }));
           return id;
         },
         updateAccount: (id, patch) =>
-          mutate((p) => ({ ...p, accounts: p.accounts.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+          mutate((p) => ({
+            ...p,
+            accounts: p.accounts.map((x) => {
+              if (x.id !== id) return x;
+              const next = { ...x, ...patch };
+              if (typeof patch.balance === 'number') next.balances = withMonthValue(x.balances, monthKeyOf(new Date()), patch.balance);
+              return next;
+            }),
+          })),
         removeAccount: (id) => mutate((p) => ({ ...p, accounts: p.accounts.filter((x) => x.id !== id) })),
 
         addGoal: (draft) => {
           const id = draft.id ?? newId('goal');
-          mutate((p) => ({ ...p, goals: [...p.goals, { ...draft, id }] }));
+          const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), draft.currentAmount);
+          mutate((p) => ({ ...p, goals: [...p.goals, { ...draft, id, balances }] }));
           return id;
         },
         updateGoal: (id, patch) =>
-          mutate((p) => ({ ...p, goals: p.goals.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+          mutate((p) => ({
+            ...p,
+            goals: p.goals.map((x) => {
+              if (x.id !== id) return x;
+              const next = { ...x, ...patch };
+              if (typeof patch.currentAmount === 'number')
+                next.balances = withMonthValue(x.balances, monthKeyOf(new Date()), patch.currentAmount);
+              return next;
+            }),
+          })),
         removeGoal: (id) => mutate((p) => ({ ...p, goals: p.goals.filter((x) => x.id !== id) })),
 
         completeStep: (step) =>
@@ -161,37 +180,37 @@ export const usePlanStore = create<PlanState>()(
               : { plan: touch({ ...s.plan, onboarding: { completedSteps: [], completed: false } }) },
           ),
 
-        saveSnapshot: (month, now = new Date()) => {
-          const m = computeMetrics(get().plan, now);
-          const snap: MetricsSnapshot = {
-            month,
-            savedAt: new Date().toISOString(),
-            income: m.income.total,
-            lifestyleCost: m.lifestyleCost,
-            lifestyleCostActual: m.actuals.lifestyleCost,
-            actualVariance: m.actuals.variance,
-            billsConfirmed: m.actuals.confirmed.length,
-            savings: m.savings.total,
-            breathingRoom: m.breathingRoom,
-            safeToSpend: m.safeToSpend,
-            totalAssets: m.position.totalAssets,
-            cashInBank: m.position.cashInBank,
-            investments: m.position.investments,
-            savingsRate: m.savings.rate,
-            byCategory: { ...m.expenses.byCategory },
-          };
-          set((s) => ({ snapshots: { ...s.snapshots, [month]: snap } }));
+        saveSnapshot: (month, today = new Date()) =>
+          set((s) => ({ snapshots: { ...s.snapshots, [month]: buildSnapshot(s.plan, month, today) } })),
+        closeMonths: (now = new Date()) => {
+          const { plan, snapshots } = get();
+          const due = monthsToClose(plan, snapshots, now);
+          if (due.length === 0) return due;
+          const next: SnapshotMap = { ...snapshots };
+          for (const key of due) next[key] = buildSnapshot(plan, key, now);
+          set({ snapshots: next });
+          return due;
         },
 
-        loadSample: () => set({ plan: samplePlan() }),
+        loadSample: () => set({ plan: samplePlan(), snapshots: {} }),
         reset: () => set({ plan: emptyPlan(), snapshots: {} }),
-        importPlan: (plan) => set({ plan: touch({ ...emptyPlan(), ...plan, isSample: undefined }) }),
+        importPlan: (data) => {
+          const { plan, snapshots } = 'plan' in data ? data : { plan: data, snapshots: {} };
+          set({ plan: touch({ ...emptyPlan(), ...plan, isSample: undefined }), snapshots });
+        },
+        replaceAll: ({ plan, snapshots }) => set({ plan, snapshots }),
         setHydrated: () => set({ hydrated: true }),
       };
     },
     {
       name: 'finly.plan.v1',
+      version: 2,
       partialize: (s) => ({ plan: s.plan, snapshots: s.snapshots }),
+      // Earlier versions stored the same shape minus the optional history fields; nothing needs rewriting.
+      migrate: (persisted) => {
+        const s = (persisted ?? {}) as Partial<PlanData>;
+        return { plan: s.plan ? { ...emptyPlan(), ...s.plan } : emptyPlan(), snapshots: s.snapshots ?? {} };
+      },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated();
       },
@@ -199,13 +218,10 @@ export const usePlanStore = create<PlanState>()(
   ),
 );
 
-export function serializePlan(plan: FinancialPlan): string {
-  return JSON.stringify(plan, null, 2);
-}
-
-export function parsePlan(json: string): FinancialPlan {
-  const raw = JSON.parse(json) as Partial<FinancialPlan>;
-  if (!raw || typeof raw !== 'object' || raw.version !== 1) {
+/** Normalises a parsed v1 plan object; throws when it is not one. */
+export function parsePlan(input: unknown): FinancialPlan {
+  const raw = input as Partial<FinancialPlan> | null;
+  if (!raw || typeof raw !== 'object' || raw.version !== 1 || !Array.isArray(raw.income)) {
     throw new Error('Not a Finly plan file');
   }
   const base = emptyPlan();

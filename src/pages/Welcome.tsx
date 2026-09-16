@@ -81,7 +81,7 @@ export function Welcome() {
         </Button>
       </div>
       <p className="mt-6 max-w-sm text-center text-[12px] text-faint">
-        Everything stays in this browser. Nothing is uploaded anywhere.
+        Everything stays in this browser unless you turn on sync, and even then it is encrypted before it leaves.
       </p>
     </div>
   );

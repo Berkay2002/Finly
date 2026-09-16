@@ -1,7 +1,7 @@
 import { IconTile } from '@/components/ui/IconTile';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useMetrics, usePlan, usePreviousSnapshot } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -12,7 +12,7 @@ import { ACCOUNT_ACCENT } from '@/components/ui/icons';
 import { StatCard } from '@/components/ui/StatCard';
 
 export function AccountsPage() {
-  const plan = usePlan();
+  const plan = useEffectivePlan();
   const m = useMetrics();
   const currency = useCurrency();
   const prev = usePreviousSnapshot();
@@ -51,9 +51,15 @@ export function AccountsPage() {
           label="Emergency savings"
           value={money(m.position.emergency)}
           sub={
-            m.essentialCost > 0 && m.position.emergency > 0
-              ? `${emergencyMonths.toFixed(1)} months of essentials`
-              : 'Reserved for the unexpected'
+            <DeltaOr
+              before={prev?.emergency}
+              after={m.position.emergency}
+              fallback={
+                m.essentialCost > 0 && m.position.emergency > 0
+                  ? `${emergencyMonths.toFixed(1)} months of essentials`
+                  : 'Reserved for the unexpected'
+              }
+            />
           }
         />
         <StatCard
@@ -69,7 +75,7 @@ export function AccountsPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title="Your accounts" subtitle="Balances are what you tell us. Update them whenever you like." />
-            <AccountEditor autoOpenAdd={autoAdd} />
+            <AccountEditor autoOpenAdd={autoAdd} previous={prev?.byAccount} />
           </Card>
 
           <Card>

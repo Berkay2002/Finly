@@ -62,7 +62,7 @@ export function SavingsPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <Card>
           <CardHeader icon={<IconTile icon="card-goals" accent="brand" size="sm" />} title="Your savings goals" subtitle="Track your progress and stay motivated." />
-          <GoalEditor autoOpenAdd={autoAdd} />
+          <GoalEditor autoOpenAdd={autoAdd} previous={prev?.byGoal} />
         </Card>
 
         <div className="space-y-4 self-start">

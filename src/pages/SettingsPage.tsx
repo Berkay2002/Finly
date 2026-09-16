@@ -1,15 +1,18 @@
 import { Camera, Download, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { formatMoney, formatMonthYear } from '@/engine/format';
+import { formatDate, formatMoney, formatMonthYear } from '@/engine/format';
+import { isFrozen } from '@/engine/history';
 import { downloadText, readFileText } from '@/lib/download';
-import { parsePlan, serializePlan, usePlanStore } from '@/store/planStore';
+import { usePlanStore } from '@/store/planStore';
+import { parsePlanFile, serializePlanFile } from '@/store/planFile';
 import { monthKey, usePlan } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
+import { SyncCard } from '@/components/sync/SyncCard';
 import { SelectField, TextField } from '@/components/ui/fields';
 
 const CURRENCIES = ['SEK', 'NOK', 'DKK', 'EUR', 'GBP', 'USD', 'CHF', 'PLN'];
@@ -25,15 +28,20 @@ export function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
 
   const onExport = () => {
-    downloadText(`finly-plan-${new Date().toISOString().slice(0, 10)}.json`, serializePlan(plan));
+    downloadText(`finly-plan-${new Date().toISOString().slice(0, 10)}.json`, serializePlanFile({ plan, snapshots }));
     setMessage({ tone: 'success', text: 'Your plan was downloaded as a JSON file.' });
   };
 
   const onImport = async (file: File | undefined) => {
     if (!file) return;
     try {
-      importPlan(parsePlan(await readFileText(file)));
-      setMessage({ tone: 'success', text: `Imported ${file.name}.` });
+      const data = parsePlanFile(await readFileText(file));
+      importPlan(data);
+      const n = Object.keys(data.snapshots).length;
+      setMessage({
+        tone: 'success',
+        text: `Imported ${file.name}${n > 0 ? ` with ${n} closed month${n === 1 ? '' : 's'}` : ''}.`,
+      });
     } catch (e) {
       setMessage({ tone: 'warning', text: e instanceof Error ? e.message : 'Could not read that file.' });
     } finally {
@@ -70,12 +78,25 @@ export function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader title="Monthly snapshots" subtitle="Freeze this month's numbers so next month can show what changed." />
+          <CardHeader
+            title="Closed months"
+            subtitle="Each month is closed automatically when the next one starts, so its numbers stay as they were and the next month can show what changed."
+          />
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="soft" icon={Camera} onClick={() => saveSnapshot(key)}>
-              Save snapshot for {formatMonthYear(viewMonth)}
-            </Button>
-            {snapshots[key] && <span className="text-[12px] text-muted">Already saved. Saving again overwrites it.</span>}
+            {isFrozen(snapshots, key) ? (
+              <span className="text-[12.5px] text-muted">
+                {formatMonthYear(viewMonth)} was closed on {formatDate(snapshots[key].savedAt)}.
+              </span>
+            ) : (
+              <>
+                <Button variant="soft" icon={Camera} onClick={() => saveSnapshot(key)}>
+                  Save snapshot for {formatMonthYear(viewMonth)}
+                </Button>
+                {snapshots[key] && (
+                  <span className="text-[12px] text-muted">Already saved. Saving again overwrites it.</span>
+                )}
+              </>
+            )}
           </div>
           {snapshotList.length > 0 && (
             <ul className="mt-4 divide-y divide-line">
@@ -94,8 +115,10 @@ export function SettingsPage() {
           )}
         </Card>
 
+        <SyncCard onMessage={(tone, text) => setMessage({ tone, text })} />
+
         <Card>
-          <CardHeader title="Your data" subtitle="Everything is stored in this browser only." />
+          <CardHeader title="Your data" subtitle="Stored in this browser. Export a file for a backup you control." />
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={Download} onClick={onExport}>
               Export JSON

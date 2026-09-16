@@ -1266,9 +1266,11 @@ costs, balances and the plan as it stood are kept so that a month can be looked 
 not rewritten by later edits. The user records real figures by hand (confirming a bill, updating a
 balance), and the app closes each month automatically.
 
-Storage follows from this. The app works fully offline with local storage and no account. An optional
-account syncs the data as a single document encrypted on the device, so the server never sees an amount.
-See the technical plan, section "Tracking Mode", for the phases.
+Storage follows from this. The app works fully offline with local storage and no account. Sync between
+devices is optional and also needs no account: the app generates a 12-word sync phrase, and every device
+that enters the same phrase shares one copy of the data. The copy is encrypted on the device before it is
+uploaded, so the server never sees an amount, a name or an email address. Losing the phrase means losing
+the cloud copy, not the data on the device. See the technical plan, section "Tracking Mode", for the design.
 
 ---
 

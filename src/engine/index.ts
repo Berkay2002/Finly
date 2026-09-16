@@ -7,5 +7,6 @@ export * from './taxonomy';
 export * from './metrics';
 export * from './projections';
 export * from './scenarios';
+export * from './history';
 export * from './tax/sweden';
 export * from './tax/kommuner';

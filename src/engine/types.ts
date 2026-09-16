@@ -136,7 +136,10 @@ export interface Account {
   name: string;
   institution?: string;
   kind: AccountKind;
+  /** Current balance. */
   balance: number;
+  /** Balance as last entered in each month (YYYY-MM), so net worth has a history. */
+  balances?: Record<string, number>;
 }
 
 export type GoalKind = 'emergency' | 'general' | 'investment' | 'purchase' | 'pension' | 'custom';
@@ -151,6 +154,8 @@ export interface SavingsGoal {
   kind: GoalKind;
   purpose: SavingsPurpose;
   currentAmount: number;
+  /** `currentAmount` as last entered in each month (YYYY-MM), so goal progress has a history. */
+  balances?: Record<string, number>;
   monthlyContribution: number;
   targetAmount?: number;
   /** ISO date (YYYY-MM-DD). */

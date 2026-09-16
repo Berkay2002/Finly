@@ -6,7 +6,7 @@ import { goalProgress } from '@/engine/projections';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
-import { useCurrency, useMetrics, usePlan, usePreviousSnapshot, useUpcoming, useViewDate } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics, usePlan, usePreviousSnapshot, useUpcoming, useViewDate } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 import { BillsToConfirm } from '@/components/forms/BillsToConfirm';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
@@ -33,6 +33,7 @@ function greeting(now: Date): string {
 
 export function Dashboard() {
   const plan = usePlan();
+  const shown = useEffectivePlan();
   const m = useMetrics();
   const currency = useCurrency();
   const prev = usePreviousSnapshot();
@@ -54,7 +55,7 @@ export function Dashboard() {
     accent: CATEGORY_META[c].accent,
   }));
 
-  const goals = plan.goals.filter((g) => g.targetAmount).slice(0, 4);
+  const goals = shown.goals.filter((g) => g.targetAmount).slice(0, 4);
   const name = plan.userName.trim();
 
   return (

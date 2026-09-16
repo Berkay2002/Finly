@@ -9,6 +9,7 @@ import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan, useViewDate } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
+import { Delta } from '@/components/ui/Delta';
 import { GOAL_ICONS, goalAccent, goalIcon } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { DateField, MoneyField, SelectField, TextField, TogglePill } from '@/components/ui/fields';
@@ -34,9 +35,12 @@ export function blankGoal(kind: GoalKind = 'purchase'): Draft {
 export function GoalEditor({
   autoOpenAdd = false,
   compact = false,
+  previous,
 }: {
   autoOpenAdd?: boolean;
   compact?: boolean;
+  /** Amounts saved at the previous month's close, by goal id, for a "vs last month" hint per row. */
+  previous?: Record<string, number>;
 }) {
   const plan = usePlan();
   const currency = useCurrency();
@@ -96,10 +100,13 @@ export function GoalEditor({
                     <span className="tabular text-[12.5px] font-medium text-ink-soft">{formatPercent(p.progress)}</span>
                   </div>
                 ) : null}
-                <div className="tabular mt-1 text-[12px] text-muted">
-                  {g.targetAmount
-                    ? `${formatMoney(g.currentAmount, currency)} / ${formatMoney(g.targetAmount, currency)}`
-                    : `${formatMoney(g.currentAmount, currency)} saved`}
+                <div className="tabular mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
+                  <span>
+                    {g.targetAmount
+                      ? `${formatMoney(g.currentAmount, currency)} / ${formatMoney(g.targetAmount, currency)}`
+                      : `${formatMoney(g.currentAmount, currency)} saved`}
+                  </span>
+                  {previous && <Delta before={previous[g.id]} after={g.currentAmount} />}
                 </div>
               </div>
               <div className="hidden shrink-0 border-l border-line pl-4 text-right sm:block">

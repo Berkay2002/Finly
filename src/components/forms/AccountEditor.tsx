@@ -5,6 +5,7 @@ import type { Account, AccountKind } from '@/engine/types';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
+import { Delta } from '@/components/ui/Delta';
 import { ACCOUNT_ACCENT, ACCOUNT_ICON } from '@/components/ui/icons';
 import { MoneyField, SelectField, TextField } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
@@ -16,7 +17,14 @@ function blank(kind: AccountKind = 'everyday'): Draft {
   return { name: accountKindMeta(kind).label, institution: '', kind, balance: 0 };
 }
 
-export function AccountEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean }) {
+export function AccountEditor({
+  autoOpenAdd = false,
+  previous,
+}: {
+  autoOpenAdd?: boolean;
+  /** Balances at the previous month's close, by account id, for a "vs last month" hint per row. */
+  previous?: Record<string, number>;
+}) {
   const plan = usePlan();
   const currency = useCurrency();
   const { addAccount, updateAccount, removeAccount } = usePlanStore();
@@ -58,6 +66,7 @@ export function AccountEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean }
               <>
                 {a.institution && <span>{a.institution}</span>}
                 <span>· {accountKindMeta(a.kind).label}</span>
+                {previous && <Delta before={previous[a.id]} after={a.balance} className="ml-1" />}
               </>
             }
             fields={

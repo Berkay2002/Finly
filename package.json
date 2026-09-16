@@ -13,7 +13,9 @@
     "tax:kommuner": "node scripts/fetch-kommuner.mjs"
   },
   "dependencies": {
+    "@scure/bip39": "^2.4.0",
     "clsx": "^2.1.1",
+    "convex": "^1.45.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",

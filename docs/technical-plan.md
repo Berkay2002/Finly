@@ -110,7 +110,7 @@ Gaps: snapshots are only saved by a button on Settings, export contains the plan
 account balances and goal progress are single numbers with no history, and viewing an earlier month runs
 today's plan against an earlier date, so editing rent in October changes September too.
 
-### Phase 1: local history (no backend)
+### Phase 1: local history (no backend) — implemented
 
 1. **Automatic month close.** On load, if the previous month has no snapshot, save one. The Settings button
    stays as a manual override.
@@ -123,22 +123,45 @@ today's plan against an earlier date, so editing rent in October changes Septemb
    rendered from the plan as it was, not the plan as it is now. Chosen over effective dates on every item
    because it needs no change to the editing model.
 
-Size is not a concern: a snapshot is under 1 KB, the plan a few tens of KB, ten years of history well
-under 200 KB against a 5 MB `localStorage` budget.
+Size is not a concern: a frozen month is 15–25 KB (the plan copy is pruned to that month's bills and
+carries no balance history), ten years of history a few MB against a 5 MB `localStorage` budget.
 
-### Phase 2: encrypted sync (optional account)
+How it landed: `src/engine/history.ts` holds the pure snapshot logic (`buildSnapshot`, `freezePlan`,
+`monthsToClose`); `useMonthClose` runs `closeMonths` on load and when the tab becomes visible; selectors
+render a closed month from its frozen plan (`useEffectivePlan`) while editors always work on the live
+plan; bill amounts entered in a closed month are written to both the live item and the frozen copy;
+balances are keyed by the current calendar month; `src/store/planFile.ts` exports and imports the
+`{ version: 2, plan, snapshots }` envelope and still reads the old bare plan.
+
+### Phase 2: encrypted sync with a sync phrase (no accounts) — implemented
 
 `localStorage` is bound to one browser, is lost when site data is cleared and is purged by iOS Safari after
-seven days without a visit, which a monthly-use app will hit. The fix is durability, not a relational schema.
+seven days without a visit, which a monthly-use app will hit. The fix is durability, not a relational schema,
+and it must not bring sign-up, email providers or OAuth with it. The model is Brave Sync: a generated phrase
+is the whole identity.
 
-- The Zustand store stays the source of truth; all calculation stays on the client.
-- An optional account syncs the persisted state as **one JSON document, encrypted in the browser** with a key
-  derived from a user passphrase. The server stores `user_id, ciphertext, version, updated_at` and never sees
-  an amount.
-- Conflict handling is last write wins with a version check and a warning when two devices diverge.
-- Hosting: the static app on Vercel as now; Supabase (auth + Postgres, one table) or Neon plus a small auth
-  library for the blob store.
-- No account is required to use the app, so trying it stays free of sign-up.
+- **Identity.** 16 random bytes shown once as a 12-word BIP39 phrase (`@scure/bip39`, English list, checksum).
+  HKDF-SHA256 over the secret gives two independent values: a 64-hex **sync id** the server stores the data
+  under, and an AES-GCM-256 **key** the server never sees. Knowing the id does not give the key.
+- **Payload.** `{ payloadVersion, plan, snapshots }` → JSON → gzip (`CompressionStream`) → AES-GCM with a
+  fresh 12-byte IV → base64. Gzip keeps decades of months far below the 1 MiB document limit.
+- **Backend.** Convex, used as a blob store with no auth: one table `blobs { syncId, ciphertext, iv,
+  version, updatedAt, size }`, one document per sync id, and three functions `get`, `put`, `remove`
+  (`convex/blobs.ts`). `put` does an optimistic version check, rejects ciphertext over 900 000 characters and
+  refuses more than one write per second per id. The sync id is a capability: holding it allows overwrite
+  and delete but never read. It leaves the client only inside Convex calls.
+- **Client.** `src/sync/`: `crypto.ts` (Web Crypto, testable in Node), `phrase.ts`, `resolve.ts`,
+  `syncStore.ts` (zustand persist `finly.sync.v1`) and `useSync.ts`. `SyncController` is mounted once in the
+  app shell: local edits are pushed after a 2 s pause, and the live query brings other devices' pushes here.
+  A remote copy is applied through `replaceAll`, which does not bump `updatedAt`.
+- **Conflicts.** A push with a stale version, or a remote change while this device has unsent edits, raises
+  a banner: "Keep mine" or "Use theirs", with the newer copy (by `plan.updatedAt`) pre-selected. Closed months
+  from both sides are kept either way. Nothing is overwritten silently.
+- **Trade-off.** The secret is kept in `localStorage` next to the plan, which is already plaintext there, so
+  it adds no exposure on the device; what it protects is the copy on the server. Losing the phrase loses the
+  cloud copy only.
+- **Without a backend.** When `VITE_CONVEX_URL` is unset the app runs exactly as before and the Settings card
+  says sync is not configured.
 
 A real schema is only worth it if server-side features arrive (shared households, reminders). Data can be
 decrypted and migrated at that point.
@@ -155,3 +178,5 @@ decrypted and migrated at that point.
 8. Planning tools and insights
 9. Settings, export/import
 10. Type-check, tests, production build
+11. Tracking Mode: local history (frozen months, month-keyed balances, automatic close)
+12. Sync phrase on Convex (encrypted blob, conflict banner)
