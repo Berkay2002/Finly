@@ -83,6 +83,8 @@ export interface ExpenseSuggestion {
   committed: boolean;
   tags?: ExpenseTag[];
   hint?: string;
+  /** Months the bill trails the period it covers. See `ExpenseItem.billingLag`. */
+  billingLag?: number;
 }
 
 const s = (
@@ -90,7 +92,15 @@ const s = (
   group: string,
   slug: string,
   name: string,
-  flags: { f?: boolean; e?: boolean; c?: boolean; freq?: Frequency; tags?: ExpenseTag[]; hint?: string } = {},
+  flags: {
+    f?: boolean;
+    e?: boolean;
+    c?: boolean;
+    freq?: Frequency;
+    tags?: ExpenseTag[];
+    hint?: string;
+    lag?: number;
+  } = {},
 ): ExpenseSuggestion => ({
   slug,
   name,
@@ -102,6 +112,7 @@ const s = (
   committed: flags.c ?? flags.f ?? true,
   tags: flags.tags,
   hint: flags.hint,
+  billingLag: flags.lag,
 });
 
 export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
@@ -112,11 +123,24 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('home', 'Housing', 'hoa_fees', 'Housing association fees'),
   s('home', 'Housing', 'property_charges', 'Property charges'),
   s('home', 'Housing', 'home_insurance', 'Home insurance', { tags: ['insurance'] }),
-  s('home', 'Utilities', 'electricity', 'Electricity', { f: false, c: true, tags: ['utility'] }),
-  s('home', 'Utilities', 'gas', 'Gas', { f: false, c: true, tags: ['utility'] }),
-  s('home', 'Utilities', 'heating', 'Heating', { f: false, c: true, tags: ['utility'] }),
-  s('home', 'Utilities', 'water', 'Water', { f: false, c: true, tags: ['utility'] }),
-  s('home', 'Utilities', 'internet', 'Internet', { tags: ['utility', 'subscription'] }),
+  s('home', 'Utilities', 'electricity', 'Electricity', {
+    f: false,
+    c: true,
+    tags: ['utility'],
+    lag: 1,
+    hint: 'Usage is billed the month after',
+  }),
+  s('home', 'Utilities', 'grid_fee', 'Elnät (grid fee)', {
+    f: false,
+    c: true,
+    tags: ['utility'],
+    lag: 1,
+    hint: 'E.ON, Vattenfall, Ellevio…',
+  }),
+  s('home', 'Utilities', 'gas', 'Gas', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'heating', 'Heating', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'water', 'Water', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'internet', 'Internet', { tags: ['utility', 'subscription'], lag: 1 }),
   s('home', 'Utilities', 'waste', 'Waste collection', { tags: ['utility'] }),
   s('home', 'Other', 'home_parking', 'Parking at home'),
   s('home', 'Other', 'maintenance', 'Maintenance', { f: false, e: false, c: false }),
@@ -245,7 +269,7 @@ export interface IncomeKindMeta {
 }
 
 export const INCOME_KINDS: IncomeKindMeta[] = [
-  { id: 'salary', label: 'Salary (after tax)', reliability: 'reliable', frequency: 'monthly' },
+  { id: 'salary', label: 'Salary', reliability: 'reliable', frequency: 'monthly' },
   { id: 'pension', label: 'Pension', reliability: 'reliable', frequency: 'monthly' },
   { id: 'benefits', label: 'Benefits', reliability: 'reliable', frequency: 'monthly' },
   { id: 'tax_credit', label: 'Tax credits', reliability: 'reliable', frequency: 'monthly' },

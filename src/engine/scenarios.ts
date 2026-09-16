@@ -1,6 +1,6 @@
 import { computeMetrics, type PlanMetrics } from './metrics';
 import { allGoalProgress, type GoalProgress } from './projections';
-import type { ExpenseCategory, FinancialPlan, Frequency } from './types';
+import type { AmountRange, ExpenseCategory, FinancialPlan, Frequency } from './types';
 
 /* ------------------------------------------------------------------ */
 /* Scenario definitions                                                */
@@ -9,7 +9,10 @@ import type { ExpenseCategory, FinancialPlan, Frequency } from './types';
 export interface RecurringExpenseScenario {
   type: 'add_expense';
   name: string;
+  /** Typical amount per period; the plan budgets for this. */
   amount: number;
+  /** Optional expected spread for a cost that varies, e.g. a floating-rate electricity plan. */
+  range?: AmountRange;
   frequency: Frequency;
   category: ExpenseCategory;
   essential: boolean;
@@ -44,7 +47,8 @@ export function applyScenario(plan: FinancialPlan, scenario: Scenario): Financia
           subcategory: 'custom',
           amount: scenario.amount,
           frequency: scenario.frequency,
-          fixed: true,
+          fixed: !scenario.range,
+          range: scenario.range,
           essential: scenario.essential,
           committed: scenario.committed,
           tags: [],

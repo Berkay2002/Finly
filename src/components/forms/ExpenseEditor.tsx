@@ -1,8 +1,10 @@
-import { Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
+import { actualsHistory, suggestFromActuals } from '@/engine/actuals';
+import { amountSpread, monthlySpread, varies } from '@/engine/amounts';
 import { FREQUENCIES, FREQUENCY_LABELS, isIrregular, toMonthly } from '@/engine/frequency';
-import { formatDate, formatMoney } from '@/engine/format';
+import { formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
 import { CATEGORY_META, groupsFor, suggestionBySlug, suggestionsFor, type ExpenseSuggestion } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type ExpenseItem, type ExpenseTag, type Frequency } from '@/engine/types';
 import { usePlanStore } from '@/store/planStore';
@@ -15,6 +17,12 @@ import { Sheet } from '@/components/ui/Sheet';
 import { ItemRow } from './ItemRow';
 
 const freqOptions = FREQUENCIES.map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
+
+const lagOptions: { value: '0' | '1' | '2'; label: string }[] = [
+  { value: '0', label: 'The same month' },
+  { value: '1', label: 'The month before (paid a month later)' },
+  { value: '2', label: 'Two months before' },
+];
 
 const TAG_LABELS: Record<ExpenseTag, string> = {
   car: 'Car',
@@ -39,6 +47,7 @@ function fromSuggestion(s: ExpenseSuggestion): Draft {
     essential: s.essential,
     committed: s.committed,
     tags: s.tags ?? [],
+    billingLag: s.billingLag,
   };
 }
 
@@ -107,7 +116,10 @@ export function ExpenseEditor({
   };
 
   const row = (e: ExpenseItem) => {
-    const monthly = toMonthly(e.amount, e.frequency);
+    const spread = monthlySpread(e);
+    const monthly = spread.typical;
+    const ranged = varies(e);
+    const suggestion = suggestFromActuals(e);
     return (
       <ItemRow
         key={e.id}
@@ -119,11 +131,18 @@ export function ExpenseEditor({
         meta={
           <>
             {e.note && <span>{e.note}</span>}
-            {e.frequency !== 'monthly' && e.amount > 0 && !e.includedElsewhere && (
+            {e.frequency !== 'monthly' && monthly > 0 && !e.includedElsewhere && (
               <span className="tabular">≈ {formatMoney(monthly, currency)}/month</span>
+            )}
+            {ranged && !e.includedElsewhere && (
+              <span className="tabular">
+                varies {formatMoneyRange(spread.low, spread.high, currency)}
+                {e.frequency !== 'monthly' ? '/month' : ''}
+              </span>
             )}
             {isIrregular(e.frequency) && e.nextDate && <span>next {formatDate(e.nextDate)}</span>}
             {e.includedElsewhere && <Chip tone="neutral">Included elsewhere</Chip>}
+            {suggestion && <Chip tone="orange">Estimate outdated</Chip>}
             {!e.essential && <Chip tone="purple">Optional</Chip>}
             {!e.committed && <Chip tone="blue">Flexible</Chip>}
           </>
@@ -134,6 +153,8 @@ export function ExpenseEditor({
               size="sm"
               currency={currency}
               value={e.amount}
+              placeholder={ranged && e.amount === 0 ? String(Math.round(amountSpread(e).typical)) : undefined}
+              title={ranged ? 'Typical amount' : undefined}
               onValueChange={(amount) => updateExpense(e.id, { amount })}
               className="min-w-0 flex-1 sm:w-36 sm:flex-none"
               disabled={e.includedElsewhere}
@@ -295,6 +316,12 @@ function ExpenseDetailForm({
   showCategory?: boolean;
 }) {
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
+  const setRange = (patch: Partial<NonNullable<Draft['range']>>) => {
+    const next = { low: draft.range?.low ?? 0, high: draft.range?.high ?? 0, ...patch };
+    set({ range: next.low > 0 || next.high > 0 ? next : undefined });
+  };
+  const spread = amountSpread(draft);
+  const hasRange = !draft.fixed && spread.high > spread.low;
   const toggleTag = (t: ExpenseTag) =>
     set({ tags: draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t] });
   return (
@@ -317,7 +344,14 @@ function ExpenseDetailForm({
         onChange={(e) => set({ note: e.target.value })}
       />
       <div className="grid grid-cols-2 gap-3">
-        <MoneyField label="Amount" currency={currency} value={draft.amount} onValueChange={(amount) => set({ amount })} />
+        <MoneyField
+          label={draft.fixed ? 'Amount' : 'Typical amount'}
+          hint={!draft.fixed && hasRange ? '(what you budget for)' : undefined}
+          currency={currency}
+          value={draft.amount}
+          placeholder={hasRange && draft.amount === 0 ? String(Math.round(spread.typical)) : undefined}
+          onValueChange={(amount) => set({ amount })}
+        />
         <SelectField
           label="Frequency"
           value={draft.frequency}
@@ -325,6 +359,48 @@ function ExpenseDetailForm({
           options={freqOptions}
         />
       </div>
+      {!draft.fixed && (
+        <div className="rounded-xl border border-dashed border-line bg-page/40 p-3">
+          <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
+            Usual range
+            <span className="ml-1 font-normal text-faint">(per {periodNoun(draft.frequency)}, optional)</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <MoneyField
+              label="Cheapest"
+              currency={currency}
+              value={draft.range?.low ?? 0}
+              onValueChange={(low) => setRange({ low })}
+            />
+            <MoneyField
+              label="Most expensive"
+              currency={currency}
+              value={draft.range?.high ?? 0}
+              onValueChange={(high) => setRange({ high })}
+            />
+          </div>
+          <p className="mt-2 text-[12px] text-muted">
+            {hasRange
+              ? `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
+              : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
+          </p>
+          <RecordedBills
+            draft={draft}
+            currency={currency}
+            onApply={(s) => set({ amount: s.typical, range: { low: s.low, high: s.high } })}
+          />
+          {draft.frequency === 'monthly' && (
+            <SelectField
+              label="The bill covers"
+              hint="(so we ask for the right month)"
+              className="mt-3"
+              value={String(Math.min(2, Math.max(0, draft.billingLag ?? 0))) as '0' | '1' | '2'}
+              onValueChange={(v) => set({ billingLag: Number(v) || undefined })}
+              options={lagOptions}
+            />
+          )}
+        </div>
+      )}
       {draft.frequency !== 'monthly' && draft.frequency !== 'weekly' && (
         <DateField
           label={draft.frequency === 'once' ? 'Expected date' : 'Next due date'}
@@ -346,7 +422,9 @@ function ExpenseDetailForm({
             label="Amount"
             help="Does it cost the same each time?"
             value={draft.fixed ? 'fixed' : 'variable'}
-            onChange={(v) => set({ fixed: v === 'fixed' })}
+            onChange={(v) =>
+              v === 'fixed' ? set({ fixed: true, range: undefined, billingLag: undefined }) : set({ fixed: false })
+            }
             options={[
               { value: 'fixed', label: 'Fixed' },
               { value: 'variable', label: 'Variable' },
@@ -405,6 +483,75 @@ function ExpenseDetailForm({
       />
     </div>
   );
+}
+
+/**
+ * The bills recorded for a variable item and, once there are enough, the estimate they imply.
+ * Lives inside the edit sheet so the suggestion is one tap from the fields it would change.
+ */
+function RecordedBills({
+  draft,
+  currency,
+  onApply,
+}: {
+  draft: Draft;
+  currency: string;
+  onApply: (s: { typical: number; low: number; high: number }) => void;
+}) {
+  const history = actualsHistory(draft);
+  if (!history) return null;
+  const suggestion = suggestFromActuals(draft);
+  const recent = history.entries.slice(0, 6);
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <div className="mb-1.5 flex items-center justify-between text-[12px]">
+        <span className="font-medium text-ink-soft">
+          Recorded bills
+          <span className="ml-1 font-normal text-faint">({history.count})</span>
+        </span>
+        <span className="tabular text-muted">
+          avg {formatMoney(history.average, currency)} · {formatMoneyRange(history.min, history.max, currency)}
+        </span>
+      </div>
+      <ul className="flex flex-wrap gap-1.5">
+        {recent.map((x) => (
+          <li key={x.month} className="tabular rounded-md bg-page px-2 py-1 text-[11.5px] text-ink-soft">
+            {formatMonthKey(x.month)}: <span className="font-medium text-ink">{formatMoney(x.amount, currency)}</span>
+          </li>
+        ))}
+        {history.count > recent.length && (
+          <li className="rounded-md px-1 py-1 text-[11.5px] text-faint">+{history.count - recent.length} more</li>
+        )}
+      </ul>
+      {suggestion && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
+          <Sparkles size={14} className="shrink-0 text-orange-500" />
+          <span className="min-w-0 flex-1">
+            Your last {suggestion.basedOn} bills say <span className="tabular font-semibold">{formatMoney(suggestion.typical, currency)}</span> typical,{' '}
+            <span className="tabular font-semibold">{formatMoneyRange(suggestion.low, suggestion.high, currency)}</span>.
+          </span>
+          <Button size="sm" variant="soft" onClick={() => onApply(suggestion)}>
+            Use these
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function periodNoun(f: Frequency): string {
+  switch (f) {
+    case 'weekly':
+      return 'week';
+    case 'monthly':
+      return 'month';
+    case 'quarterly':
+      return 'quarter';
+    case 'yearly':
+      return 'year';
+    case 'once':
+      return 'occurrence';
+  }
 }
 
 function ClassificationRow<T extends string>({

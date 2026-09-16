@@ -1,4 +1,5 @@
 import { getDaysInMonth } from 'date-fns';
+import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
 import { accountRole, type AccountRole } from './taxonomy';
 import type { ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan } from './types';
@@ -12,11 +13,55 @@ export interface CostLine {
   id: string;
   name: string;
   category: ExpenseCategory;
+  /** Typical monthly equivalent — the figure the plan budgets for. */
   monthly: number;
   annual: number;
+  /** Monthly equivalents of the expected low and high. Equal to `monthly` for fixed items. */
+  monthlyLow: number;
+  monthlyHigh: number;
+  /** True when the cost has a real spread between periods. */
+  varies: boolean;
   essential: boolean;
   committed: boolean;
   fixed: boolean;
+}
+
+/** Best and worst case of one figure, from the ranges on variable items. */
+export interface Range {
+  low: number;
+  high: number;
+}
+
+/** A variable monthly item whose bill is paid in the viewed month. */
+export interface PendingBill extends CostLine {
+  /** YYYY-MM the bill covers; earlier than the paid month when the item bills in arrears. */
+  periodMonth: string;
+  billingLag: number;
+}
+
+/** A pending bill whose real amount has been entered. */
+export interface ActualLine extends PendingBill {
+  actual: number;
+  /** actual − typical monthly. Positive means the bill ran above plan. */
+  variance: number;
+}
+
+/**
+ * Where the viewed month stands against the estimates. Variable items are guesses until the
+ * bill arrives; once entered, the month runs on the real figure.
+ */
+export interface MonthActuals {
+  /** YYYY-MM of the viewed month. */
+  month: string;
+  confirmed: ActualLine[];
+  /** Variable monthly items still waiting for the bill paid this month. */
+  pending: PendingBill[];
+  /** Σ (actual − typical) over confirmed items. */
+  variance: number;
+  /** Normal lifestyle cost with confirmed bills substituted for their estimates. */
+  lifestyleCost: number;
+  /** Same, but with pending items at their low / high bound. */
+  lifestyleRange: Range;
 }
 
 export interface PlanMetrics {
@@ -38,6 +83,24 @@ export interface PlanMetrics {
     flexible: number;
     lines: CostLine[];
   };
+  /**
+   * Spread of the normal month when every variable item runs at its low or its high.
+   * `hasRanges` is false when nothing in the plan has a range, in which case low = high.
+   */
+  range: {
+    hasRanges: boolean;
+    lifestyleCost: Range;
+    essentialCost: Range;
+    byCategory: Record<ExpenseCategory, Range>;
+    /** Income − savings − lifestyle at its high (low) / low (high). */
+    breathingRoom: Range;
+    /** Breathing room range minus one-offs this month, with confirmed bills fixed at their actual. */
+    safeToSpend: Range;
+    /** lifestyleCost.high − lifestyleCost.low: how much a normal month can swing. */
+    swing: number;
+  };
+  /** Confirmed and pending bills for the viewed month. */
+  actuals: MonthActuals;
   savings: {
     futureSpending: number;
     longTerm: number;
@@ -53,7 +116,10 @@ export interface PlanMetrics {
   plannedCost: number;
   /** PRD §18.24 / §18.12 — income minus lifestyle minus savings. */
   breathingRoom: number;
-  /** PRD §18.1 — breathing room minus one-off costs dated in the current month. */
+  /**
+   * PRD §18.1 — breathing room minus one-off costs dated in the current month, adjusted by
+   * how far confirmed bills landed from their estimates.
+   */
   safeToSpend: number;
   oneOffsThisMonth: number;
   /** PRD §18.27 */
@@ -117,22 +183,60 @@ export function monthlyOf(item: { amount: number; frequency: ExpenseItem['freque
   return toMonthly(item.amount, item.frequency);
 }
 
+/** Typical amount per period: `amount`, or the midpoint of the range when only a range was given. */
+export function typicalAmount(e: ExpenseItem): number {
+  return amountSpread(e).typical;
+}
+
 export function activeExpenses(plan: FinancialPlan): ExpenseItem[] {
-  return plan.expenses.filter((e) => !e.includedElsewhere && e.amount > 0);
+  return plan.expenses.filter((e) => !e.includedElsewhere && typicalAmount(e) > 0);
 }
 
 export function toCostLine(e: ExpenseItem): CostLine {
-  const monthly = monthlyOf(e);
+  const s = monthlySpread(e);
   return {
     id: e.id,
     name: e.name,
     category: e.category,
-    monthly,
-    annual: monthly * 12,
+    monthly: s.typical,
+    annual: s.typical * 12,
+    monthlyLow: s.low,
+    monthlyHigh: s.high,
+    varies: s.high > s.low,
     essential: e.essential,
     committed: e.committed,
     fixed: e.fixed,
   };
+}
+
+/** YYYY-MM key used for `ExpenseItem.actuals`. */
+export function monthKeyOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** The entered bill for an item in a month, if any. */
+export function actualFor(e: ExpenseItem, month: string): number | undefined {
+  const v = e.actuals?.[month];
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
+}
+
+/** Whether an item is the kind whose bill we ask the user to confirm each month. */
+export function awaitsActual(e: ExpenseItem): boolean {
+  return !e.fixed && e.frequency === 'monthly' && !e.includedElsewhere && typicalAmount(e) > 0;
+}
+
+export function billingLagOf(e: { billingLag?: number; fixed?: boolean }): number {
+  if (e.fixed) return 0;
+  const n = e.billingLag ?? 0;
+  return Number.isInteger(n) && n > 0 ? n : 0;
+}
+
+/** Month (YYYY-MM) that a bill paid in `paidMonth` covers, given the item's billing lag. */
+export function billPeriodFor(e: { billingLag?: number; fixed?: boolean }, paidMonth: string): string {
+  const lag = billingLagOf(e);
+  const [y, m] = paidMonth.split('-').map(Number);
+  const d = new Date(y, (m ?? 1) - 1 - lag, 1);
+  return monthKeyOf(d);
 }
 
 function sum(nums: number[]): number {
@@ -180,6 +284,42 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   const fixed = sum(lines.filter((l) => l.fixed).map((l) => l.monthly));
   const committed = sum(lines.filter((l) => l.committed).map((l) => l.monthly));
 
+  /* Ranges — best and worst normal month */
+  const rangeOf = (ls: CostLine[]): Range => ({
+    low: sum(ls.map((l) => l.monthlyLow)),
+    high: sum(ls.map((l) => l.monthlyHigh)),
+  });
+  const lifestyleRange = rangeOf(lines);
+  const essentialRange = rangeOf(lines.filter((l) => l.essential));
+  const byCategoryRange = Object.fromEntries(
+    EXPENSE_CATEGORIES.map((c) => [c, rangeOf(lines.filter((l) => l.category === c))]),
+  ) as Record<ExpenseCategory, Range>;
+  const hasRanges = lines.some((l) => l.varies);
+
+  /* Actuals — bills confirmed for the viewed month */
+  const month = monthKeyOf(now);
+  const byId = new Map(lines.map((l) => [l.id, l]));
+  const confirmed: ActualLine[] = [];
+  const pending: PendingBill[] = [];
+  for (const e of active) {
+    const line = byId.get(e.id);
+    if (!line) continue;
+    const actual = actualFor(e, month);
+    const bill: PendingBill = { ...line, periodMonth: billPeriodFor(e, month), billingLag: billingLagOf(e) };
+    if (actual !== undefined) {
+      confirmed.push({ ...bill, actual, variance: actual - line.monthly });
+    } else if (awaitsActual(e)) {
+      pending.push(bill);
+    }
+  }
+  const confirmedIds = new Set(confirmed.map((l) => l.id));
+  const actualVariance = sum(confirmed.map((l) => l.variance));
+  const monthLifestyle = expenseTotal + actualVariance;
+  const monthLifestyleRange: Range = {
+    low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
+    high: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance,
+  };
+
   /* Savings */
   const goals = plan.goals.filter((g) => g.monthlyContribution > 0);
   const futureSpending = sum(
@@ -193,9 +333,17 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   const plannedCost = lifestyleCost + savingsTotal;
   const breathingRoom = totalIncome - plannedCost;
   const oneOffsThisMonth = sum(
-    active.filter((e) => e.frequency === 'once' && isDatedInMonth(e.nextDate, now)).map((e) => e.amount),
+    active.filter((e) => e.frequency === 'once' && isDatedInMonth(e.nextDate, now)).map(typicalAmount),
   );
-  const safeToSpend = breathingRoom - oneOffsThisMonth;
+  const safeToSpend = breathingRoom - oneOffsThisMonth - actualVariance;
+  const breathingRoomRange: Range = {
+    low: totalIncome - savingsTotal - lifestyleRange.high,
+    high: totalIncome - savingsTotal - lifestyleRange.low,
+  };
+  const safeToSpendRange: Range = {
+    low: totalIncome - savingsTotal - monthLifestyleRange.high - oneOffsThisMonth,
+    high: totalIncome - savingsTotal - monthLifestyleRange.low - oneOffsThisMonth,
+  };
 
   /* Position */
   const byRole: Record<AccountRole, number> = {
@@ -239,6 +387,23 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       committed,
       flexible: flexibleSpend,
       lines,
+    },
+    range: {
+      hasRanges,
+      lifestyleCost: lifestyleRange,
+      essentialCost: essentialRange,
+      byCategory: byCategoryRange,
+      breathingRoom: breathingRoomRange,
+      safeToSpend: safeToSpendRange,
+      swing: lifestyleRange.high - lifestyleRange.low,
+    },
+    actuals: {
+      month,
+      confirmed,
+      pending,
+      variance: actualVariance,
+      lifestyleCost: monthLifestyle,
+      lifestyleRange: monthLifestyleRange,
     },
     savings: {
       futureSpending,

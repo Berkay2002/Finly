@@ -162,3 +162,24 @@ describe('savingsProjection (§18.11)', () => {
     expect(proj[11].added).toBe((6000 + 4800) * 12);
   });
 });
+
+describe('ranges in the outlook', () => {
+  it('carries the expected low and high of each upcoming occurrence', () => {
+    const p = prdExamplePlan();
+    p.expenses.find((e) => e.id === 'vehicle_tax')!.fixed = false;
+    p.expenses.find((e) => e.id === 'vehicle_tax')!.range = { low: 2500, high: 3500 };
+    const tax = upcomingExpenses(p, NOW).find((u) => u.expenseId === 'vehicle_tax')!;
+    expect(tax).toMatchObject({ amount: 3000, low: 2500, high: 3500 });
+    const xmas = upcomingExpenses(p, NOW).find((u) => u.expenseId === 'christmas')!;
+    expect(xmas).toMatchObject({ amount: 6000, low: 6000, high: 6000 });
+  });
+
+  it('shows what a month costs if every variable bill runs high', () => {
+    const plan = prdExamplePlan();
+    const m = computeMetrics(plan, NOW);
+    const out = monthOutlook(plan, m, NOW);
+    // Regular spend is lifestyle minus the provision for irregular items; high adds 800 of spread.
+    const sep = out[0];
+    expect(sep.expectedHigh - sep.expected).toBe(800);
+  });
+});

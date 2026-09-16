@@ -93,3 +93,25 @@ describe('income change (§18.20)', () => {
     expect(JSON.stringify(plan)).toBe(before);
   });
 });
+
+describe('add recurring expense with a range', () => {
+  it('budgets for the typical amount and widens the band', () => {
+    const r = runScenario(
+      prdExamplePlan(),
+      {
+        type: 'add_expense',
+        name: 'Heat pump electricity',
+        amount: 1000,
+        range: { low: 600, high: 1800 },
+        frequency: 'monthly',
+        category: 'home',
+        essential: true,
+        committed: true,
+      },
+      NOW,
+    );
+    expect(r.after.breathingRoom).toBe(3800);
+    expect(r.after.range.breathingRoom.low).toBe(r.before.range.breathingRoom.low - 1800);
+    expect(r.after.range.breathingRoom.high).toBe(r.before.range.breathingRoom.high - 600);
+  });
+});

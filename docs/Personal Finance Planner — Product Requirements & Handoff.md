@@ -1261,6 +1261,15 @@ It adds questions such as:
 
 Tracking Mode should extend the financial model rather than replace it.
 
+Tracking Mode does not mean importing bank transactions. It means the app remembers: each month's
+costs, balances and the plan as it stood are kept so that a month can be looked at a year later and is
+not rewritten by later edits. The user records real figures by hand (confirming a bill, updating a
+balance), and the app closes each month automatically.
+
+Storage follows from this. The app works fully offline with local storage and no account. An optional
+account syncs the data as a single document encrypted on the device, so the server never sees an amount.
+See the technical plan, section "Tracking Mode", for the phases.
+
 ---
 
 # 22. Customization

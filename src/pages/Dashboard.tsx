@@ -1,13 +1,14 @@
 import { ArrowRight } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { formatDate, formatMoney, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
+import { formatDate, formatMoney, formatMoneyRange, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
 import { goalProgress } from '@/engine/projections';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
 import { useCurrency, useMetrics, usePlan, usePreviousSnapshot, useUpcoming, useViewDate } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
+import { BillsToConfirm } from '@/components/forms/BillsToConfirm';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -85,7 +86,15 @@ export function Dashboard() {
           accent="brand"
           label="Safe to spend"
           value={money(m.safeToSpend)}
-          sub={m.oneOffsThisMonth > 0 ? `After ${money(m.oneOffsThisMonth)} of one-off costs` : 'Available this month'}
+          sub={
+            m.actuals.confirmed.length > 0 && m.actuals.variance !== 0
+              ? `Bills came in ${money(Math.abs(m.actuals.variance))} ${m.actuals.variance > 0 ? 'above' : 'below'} plan`
+              : m.actuals.pending.length > 0 && m.range.safeToSpend.low < m.safeToSpend
+                ? `Down to ${money(m.range.safeToSpend.low)} if every bill runs high`
+                : m.oneOffsThisMonth > 0
+                  ? `After ${money(m.oneOffsThisMonth)} of one-off costs`
+                  : 'Available this month'
+          }
           className={clsx('col-span-2 xl:col-span-1', m.safeToSpend < 0 && 'border-orange-500/40')}
         />
         <StatCard
@@ -100,7 +109,23 @@ export function Dashboard() {
           accent="red"
           label="Normal monthly cost"
           value={money(m.lifestyleCost)}
-          sub={<DeltaOr before={prev?.lifestyleCost} after={m.lifestyleCost} invert fallback={`${money(m.essentialCost)} essential`} />}
+          sub={
+            <DeltaOr
+              before={prev?.lifestyleCostActual ?? prev?.lifestyleCost}
+              after={m.actuals.lifestyleCost}
+              invert
+              suffix={
+                (prev?.billsConfirmed ?? 0) > 0 || m.actuals.confirmed.length > 0
+                  ? 'vs last month, real bills'
+                  : undefined
+              }
+              fallback={
+                m.range.hasRanges
+                  ? `Usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
+                  : `${money(m.essentialCost)} essential`
+              }
+            />
+          }
         />
         <StatCard
           icon="stat-saving"
@@ -117,6 +142,8 @@ export function Dashboard() {
           sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback="All cash accounts combined" />}
         />
       </div>
+
+      <BillsToConfirm className="mb-5" onEdit={expenses.openEdit} />
 
       {/* Spending · Position · Goals */}
       <div className="mb-5 grid gap-4 lg:grid-cols-3">

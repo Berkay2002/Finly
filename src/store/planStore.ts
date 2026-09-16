@@ -18,7 +18,14 @@ export interface MetricsSnapshot {
   month: string; // YYYY-MM
   savedAt: string;
   income: number;
+  /** Planned (baseline) lifestyle cost. */
   lifestyleCost: number;
+  /** Lifestyle cost with that month's confirmed bills substituted. Missing on older snapshots. */
+  lifestyleCostActual?: number;
+  /** Σ (actual − typical) over confirmed bills that month. */
+  actualVariance?: number;
+  /** How many bills were confirmed when the snapshot was taken. */
+  billsConfirmed?: number;
   savings: number;
   breathingRoom: number;
   safeToSpend: number;
@@ -46,6 +53,8 @@ interface PlanState {
   addExpense: (draft: Draft<ExpenseItem>) => string;
   updateExpense: (id: string, patch: Partial<ExpenseItem>) => void;
   removeExpense: (id: string) => void;
+  /** Record (or clear, with null) the real bill for a variable item in a month (YYYY-MM). */
+  setExpenseActual: (id: string, month: string, amount: number | null) => void;
 
   addAccount: (draft: Draft<Account>) => string;
   updateAccount: (id: string, patch: Partial<Account>) => void;
@@ -103,6 +112,17 @@ export const usePlanStore = create<PlanState>()(
         updateExpense: (id, patch) =>
           mutate((p) => ({ ...p, expenses: p.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
+        setExpenseActual: (id, month, amount) =>
+          mutate((p) => ({
+            ...p,
+            expenses: p.expenses.map((x) => {
+              if (x.id !== id) return x;
+              const actuals = { ...(x.actuals ?? {}) };
+              if (amount === null || !Number.isFinite(amount)) delete actuals[month];
+              else actuals[month] = Math.max(0, amount);
+              return { ...x, actuals: Object.keys(actuals).length > 0 ? actuals : undefined };
+            }),
+          })),
 
         addAccount: (draft) => {
           const id = draft.id ?? newId('acc');
@@ -148,6 +168,9 @@ export const usePlanStore = create<PlanState>()(
             savedAt: new Date().toISOString(),
             income: m.income.total,
             lifestyleCost: m.lifestyleCost,
+            lifestyleCostActual: m.actuals.lifestyleCost,
+            actualVariance: m.actuals.variance,
+            billsConfirmed: m.actuals.confirmed.length,
             savings: m.savings.total,
             breathingRoom: m.breathingRoom,
             safeToSpend: m.safeToSpend,

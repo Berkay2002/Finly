@@ -188,3 +188,126 @@ describe('computeMetrics — edge cases', () => {
     expect(m.safeToSpend).toBeCloseTo(m.breathingRoom - 6000, 5);
   });
 });
+
+describe('computeMetrics — variable costs with a range', () => {
+  it('budgets for the typical amount, so headline totals are unchanged by a range', () => {
+    const m = computeMetrics(prdExamplePlan(), NOW);
+    expect(m.lifestyleCost).toBe(25200);
+    expect(m.range.hasRanges).toBe(true);
+  });
+
+  it('reports the cheapest and most expensive normal month', () => {
+    const m = computeMetrics(prdExamplePlan(), NOW);
+    // electricity 300–900 (typical 500), fuel 900–1600 (typical 1200)
+    expect(m.range.lifestyleCost).toEqual({ low: 25200 - 200 - 300, high: 25200 + 400 + 400 });
+    expect(m.range.swing).toBe(1300);
+    expect(m.range.essentialCost).toEqual({ low: 19950 - 500, high: 19950 + 800 });
+    expect(m.range.byCategory.home).toEqual({ low: 8800, high: 9400 });
+    expect(m.range.byCategory.finance).toEqual({ low: 1500, high: 1500 });
+  });
+
+  it('gives breathing room and safe to spend as a band', () => {
+    const m = computeMetrics(prdExamplePlan(), NOW);
+    expect(m.range.breathingRoom).toEqual({ low: 4800 - 800, high: 4800 + 500 });
+    expect(m.range.safeToSpend).toEqual({ low: 4000, high: 5300 });
+  });
+
+  it('marks the lines that vary with their monthly bounds', () => {
+    const m = computeMetrics(prdExamplePlan(), NOW);
+    const el = m.expenses.lines.find((l) => l.id === 'electricity')!;
+    expect(el).toMatchObject({ monthly: 500, monthlyLow: 300, monthlyHigh: 900, varies: true });
+    const rent = m.expenses.lines.find((l) => l.id === 'rent')!;
+    expect(rent).toMatchObject({ monthly: 8500, monthlyLow: 8500, monthlyHigh: 8500, varies: false });
+  });
+
+  it('collapses to a single figure when nothing varies', () => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [expense({ name: 'Rent', amount: 10000, category: 'home' })];
+    const m = computeMetrics(plan, NOW);
+    expect(m.range.hasRanges).toBe(false);
+    expect(m.range.lifestyleCost).toEqual({ low: 10000, high: 10000 });
+    expect(m.range.breathingRoom).toEqual({ low: 20000, high: 20000 });
+  });
+
+  it('counts an item entered as a range only, budgeting for the midpoint', () => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [
+      expense({ name: 'Electricity', amount: 0, category: 'home', fixed: false, range: { low: 300, high: 900 } }),
+    ];
+    const m = computeMetrics(plan, NOW);
+    expect(m.lifestyleCost).toBe(600);
+    expect(m.range.lifestyleCost).toEqual({ low: 300, high: 900 });
+  });
+});
+
+describe('computeMetrics — confirming bills for the month', () => {
+  it('lists variable monthly items as pending until their bill is entered', () => {
+    const m = computeMetrics(prdExamplePlan(), NOW);
+    expect(m.actuals.month).toBe('2026-09');
+    expect(m.actuals.pending.map((p) => p.id).sort()).toEqual(
+      ['electricity', 'fuel', 'groceries', 'hobbies', 'restaurants'].sort(),
+    );
+    expect(m.actuals.confirmed).toEqual([]);
+    expect(m.actuals.variance).toBe(0);
+    expect(m.actuals.lifestyleCost).toBe(25200);
+  });
+
+  it('runs the month on the real figure once a bill is confirmed', () => {
+    const plan = prdExamplePlan();
+    const el = plan.expenses.find((e) => e.id === 'electricity')!;
+    el.actuals = { '2026-09': 820 };
+    const m = computeMetrics(plan, NOW);
+    expect(m.actuals.confirmed).toHaveLength(1);
+    expect(m.actuals.confirmed[0]).toMatchObject({ id: 'electricity', actual: 820, variance: 320 });
+    expect(m.actuals.pending.find((p) => p.id === 'electricity')).toBeUndefined();
+    expect(m.actuals.variance).toBe(320);
+    expect(m.actuals.lifestyleCost).toBe(25200 + 320);
+    // Baseline plan is untouched; only this month's spendable money moves.
+    expect(m.lifestyleCost).toBe(25200);
+    expect(m.breathingRoom).toBe(4800);
+    expect(m.safeToSpend).toBe(4800 - 320);
+  });
+
+  it('fixes a confirmed bill at its actual inside the safe-to-spend band', () => {
+    const plan = prdExamplePlan();
+    plan.expenses.find((e) => e.id === 'electricity')!.actuals = { '2026-09': 820 };
+    const m = computeMetrics(plan, NOW);
+    // Electricity no longer spreads 300–900; only fuel (900–1600 around 1200) still does.
+    expect(m.range.safeToSpend).toEqual({ low: 4800 - 320 - 400, high: 4800 - 320 + 300 });
+  });
+
+  it('keeps bills with the month they are paid in', () => {
+    const plan = prdExamplePlan();
+    plan.expenses.find((e) => e.id === 'electricity')!.actuals = { '2026-08': 700 };
+    const m = computeMetrics(plan, NOW);
+    expect(m.actuals.confirmed).toEqual([]);
+    expect(m.safeToSpend).toBe(4800);
+    const aug = computeMetrics(plan, new Date(2026, 7, 10));
+    expect(aug.actuals.confirmed[0]).toMatchObject({ id: 'electricity', actual: 700, variance: 200 });
+  });
+
+  it('names the period a lagged bill covers', () => {
+    const plan = prdExamplePlan();
+    plan.expenses.find((e) => e.id === 'electricity')!.billingLag = 1;
+    const m = computeMetrics(plan, NOW);
+    const el = m.actuals.pending.find((p) => p.id === 'electricity')!;
+    expect(el.periodMonth).toBe('2026-08');
+    expect(el.billingLag).toBe(1);
+    const jan = computeMetrics(plan, new Date(2027, 0, 5)).actuals.pending.find((p) => p.id === 'electricity')!;
+    expect(jan.periodMonth).toBe('2026-12');
+  });
+
+  it('does not ask for bills on fixed, irregular or bundled items', () => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [
+      expense({ name: 'Rent', amount: 10000, category: 'home' }),
+      expense({ name: 'Vehicle tax', amount: 3000, category: 'transport', frequency: 'yearly', fixed: false }),
+      expense({ name: 'Water', amount: 300, category: 'home', fixed: false, includedElsewhere: true }),
+    ];
+    const m = computeMetrics(plan, NOW);
+    expect(m.actuals.pending).toEqual([]);
+  });
+});

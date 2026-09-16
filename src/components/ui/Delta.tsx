@@ -49,11 +49,17 @@ export function DeltaOr({
   after,
   fallback,
   invert,
+  suffix,
 }: {
   before: number | undefined;
   after: number;
   fallback: ReactNode;
   invert?: boolean;
+  suffix?: string;
 }) {
-  return change(before, after) === null ? <>{fallback}</> : <Delta before={before} after={after} invert={invert} />;
+  return change(before, after) === null ? (
+    <>{fallback}</>
+  ) : (
+    <Delta before={before} after={after} invert={invert} suffix={suffix} />
+  );
 }

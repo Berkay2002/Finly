@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import clsx from 'clsx';
 import { FREQUENCIES, FREQUENCY_LABELS } from '@/engine/frequency';
-import { formatCompact, formatDuration, formatMoney, formatMonths, formatPercent, formatShortMonth, formatShortMonthYear } from '@/engine/format';
+import { formatCompact, formatDuration, formatMoney, formatMoneyRange, formatMonths, formatPercent, formatShortMonth, formatShortMonthYear } from '@/engine/format';
 import { runScenario, type IncomeChangeScenario, type RecurringExpenseScenario, type ScenarioResult } from '@/engine/scenarios';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Frequency } from '@/engine/types';
@@ -392,7 +392,7 @@ function OutlookCard() {
                     </div>
                     {p.items.slice(0, 4).map((it) => (
                       <div key={it.id} className="text-muted">
-                        {it.name}: {money(it.amount)}
+                        {it.name}: {it.high > it.low ? formatMoneyRange(it.low, it.high, currency) : money(it.amount)}
                       </div>
                     ))}
                   </div>

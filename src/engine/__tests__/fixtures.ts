@@ -42,7 +42,14 @@ export function prdExamplePlan(): FinancialPlan {
   ];
   plan.expenses = [
     expense({ id: 'rent', name: 'Rent', category: 'home', amount: 8500 }),
-    expense({ id: 'electricity', name: 'Electricity', category: 'home', amount: 500, fixed: false }),
+    expense({
+      id: 'electricity',
+      name: 'Electricity',
+      category: 'home',
+      amount: 500,
+      fixed: false,
+      range: { low: 300, high: 900 },
+    }),
     expense({ id: 'groceries', name: 'Groceries', category: 'living', amount: 4000, fixed: false, committed: false }),
     expense({
       id: 'restaurants',
@@ -54,7 +61,16 @@ export function prdExamplePlan(): FinancialPlan {
       committed: false,
     }),
     expense({ id: 'car_finance', name: 'Car finance', category: 'transport', amount: 3200, tags: ['car', 'debt'] }),
-    expense({ id: 'fuel', name: 'Fuel', category: 'transport', amount: 1200, fixed: false, committed: false, tags: ['car'] }),
+    expense({
+      id: 'fuel',
+      name: 'Fuel',
+      category: 'transport',
+      amount: 1200,
+      fixed: false,
+      committed: false,
+      tags: ['car'],
+      range: { low: 900, high: 1600 },
+    }),
     expense({ id: 'car_insurance', name: 'Car insurance', category: 'transport', amount: 800, tags: ['car', 'insurance'] }),
     expense({
       id: 'vehicle_tax',

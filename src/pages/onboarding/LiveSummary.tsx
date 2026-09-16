@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { formatMoney } from '@/engine/format';
+import { formatMoney, formatMoneyRange } from '@/engine/format';
 import { useCurrency, useMetrics } from '@/store/selectors';
 import type { Accent } from '@/components/ui/accent';
 import { Callout } from '@/components/ui/Callout';
@@ -65,7 +65,13 @@ export function LiveSummary({ className }: { className?: string }) {
           icon="stat-cost"
           accent="red"
           label="Normal lifestyle cost"
-          sub={m.hasExpenses ? 'All expenses, monthly equivalent' : 'Not added yet'}
+          sub={
+            !m.hasExpenses
+              ? 'Not added yet'
+              : m.range.hasRanges
+                ? `Usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
+                : 'All expenses, monthly equivalent'
+          }
           value={money(m.lifestyleCost)}
         />
         <Row

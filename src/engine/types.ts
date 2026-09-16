@@ -70,6 +70,17 @@ export type ExpenseCategory = 'home' | 'living' | 'transport' | 'finance' | 'lei
 
 export type ExpenseTag = 'car' | 'subscription' | 'debt' | 'insurance' | 'utility' | 'public_transport';
 
+/**
+ * Expected spread of a variable cost, per period and in the same frequency as `amount`.
+ * A bill on a floating tariff (electricity on "rörligt pris", fuel, groceries) is not one number
+ * but a band; the budget runs on the typical figure while the band feeds the best/worst-case view.
+ * Either bound may be left at 0 to mean "same as the typical amount".
+ */
+export interface AmountRange {
+  low: number;
+  high: number;
+}
+
 export interface ExpenseItem {
   id: string;
   name: string;
@@ -77,12 +88,30 @@ export interface ExpenseItem {
   category: ExpenseCategory;
   /** Slug from the taxonomy, or 'custom'. */
   subcategory: string;
+  /**
+   * Typical amount per period. For a variable item with a `range` this is the figure the plan
+   * budgets for; leave it at 0 to budget for the midpoint of the range.
+   */
   amount: number;
   frequency: Frequency;
   /** ISO date (YYYY-MM-DD) of the next occurrence. Used for non-monthly items. */
   nextDate?: string;
-  /** Fixed amount each period vs variable amount. */
+  /** Fixed amount each period vs variable amount. Only variable items honour `range`. */
   fixed: boolean;
+  /** Expected low and high per period. Ignored while `fixed` is true. */
+  range?: AmountRange;
+  /**
+   * Months between the period a bill covers and the month it is paid. Swedish utilities
+   * (el, elnät, internet) usually bill in arrears: January's usage is invoiced in mid-February
+   * and paid at the end of February, so the lag is 1. Fixed items ignore this.
+   */
+  billingLag?: number;
+  /**
+   * Real bills once they are known, keyed by the month they are paid (YYYY-MM). A variable
+   * estimate is only a placeholder; when the electricity bill lands the month should run on
+   * that figure instead.
+   */
+  actuals?: Record<string, number>;
   /** Required to maintain basic obligations vs optional. */
   essential: boolean;
   /** Hard to change in the short term vs realistically adjustable. */

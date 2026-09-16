@@ -2,7 +2,7 @@ import { Pencil } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { formatMoney, formatPercent } from '@/engine/format';
+import { formatMoney, formatMoneyRange, formatPercent } from '@/engine/format';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { useCurrency, useMetrics } from '@/store/selectors';
@@ -104,7 +104,16 @@ export function SummaryStep() {
               />
             );
           })}
-          <Line label="Normal lifestyle cost" value={money(m.lifestyleCost)} strong />
+          <Line
+            label="Normal lifestyle cost"
+            value={money(m.lifestyleCost)}
+            strong
+            sub={
+              m.range.hasRanges
+                ? `usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
+                : undefined
+            }
+          />
         </Section>
 
         <Section icon="nav-savings" title="Financial plan" editTo="/onboarding/savings">
@@ -120,7 +129,13 @@ export function SummaryStep() {
             value={money(m.breathingRoom)}
             strong
             negative={m.breathingRoom < 0}
-            sub={m.income.total > 0 ? `${formatPercent(m.breathingRoom / m.income.total)} of income` : undefined}
+            sub={
+              m.range.hasRanges && m.income.total > 0
+                ? `${money(m.range.breathingRoom.low)} in an expensive month`
+                : m.income.total > 0
+                  ? `${formatPercent(m.breathingRoom / m.income.total)} of income`
+                  : undefined
+            }
           />
         </Section>
 

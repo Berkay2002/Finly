@@ -32,6 +32,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       essential: s.essential,
       committed: s.committed,
       tags: s.tags ?? [],
+      billingLag: s.billingLag,
       ...extra,
     };
   };
@@ -85,18 +86,18 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     expenses: [
       // Home — 8,500
       exp('rent', 7300),
-      exp('electricity', 500),
+      exp('electricity', 500, { range: { low: 250, high: 950 }, note: 'Rörligt pris' }),
       exp('internet', 350),
       exp('home_insurance', 350),
       exp('water', 0, { includedElsewhere: true, note: 'Included in rent' }),
       // Living — 4,800
-      exp('groceries', 3200),
+      exp('groceries', 3200, { range: { low: 2800, high: 3800 } }),
       exp('restaurants', 900),
       exp('haircuts', 300),
       exp('clothes', 400),
       // Transport — 4,200
       exp('car_finance', 2200),
-      exp('fuel', 850),
+      exp('fuel', 850, { range: { low: 600, high: 1200 } }),
       exp('car_insurance', 450),
       exp('vehicle_tax', 2300, { nextDate: inMonths(1, 12) }),
       exp('car_parking', 300),

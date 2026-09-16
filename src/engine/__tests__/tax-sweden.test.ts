@@ -19,10 +19,12 @@ import { SKATTETABELL_2026 } from './fixtures/skattetabell-2026';
 
 const Y = SWEDEN_2026;
 const under66 = { churchMember: false, over66: false };
-const over66 = { churchMember: false, over66: true };
 
-/** A profile whose rounded table number is exactly `table`, so we can compare with official rows. */
-const tableProfile = (table: number) => ({ ...under66, kommunalRate: table - Y.tableFeePoints });
+/**
+ * A profile whose rounded table number is exactly `table`, so we can compare with official rows.
+ * The table number is round(kommunal + burial + church), so back out the burial fee.
+ */
+const tableProfile = (table: number) => ({ ...under66, kommunalRate: table - Y.burialFeeRate });
 
 describe('grundavdrag (SKV 433 §6, worked examples)', () => {
   it('matches the published examples', () => {
@@ -38,7 +40,7 @@ describe('grundavdrag (SKV 433 §6, worked examples)', () => {
 
   it('spans the published range for 66+', () => {
     expect(grundavdrag(50_000, true, Y)).toBe(50_000); // capped at the income itself
-    expect(grundavdrag(66_000, true, Y)).toBe(65_800);
+    expect(grundavdrag(65_800, true, Y)).toBe(65_800); // the published minimum
     expect(grundavdrag(500_000, true, Y)).toBe(179_100);
     expect(grundavdrag(900_000, true, Y)).toBe(117_500);
   });

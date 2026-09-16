@@ -9,6 +9,14 @@ export function formatMoney(amount: number, currency = 'SEK', opts: { sign?: boo
   return `${sign}${body} ${currency}`;
 }
 
+/** "300–900 SEK", collapsing to a single figure when the bounds round to the same number. */
+export function formatMoneyRange(low: number, high: number, currency = 'SEK'): string {
+  const a = Math.round(Number.isFinite(low) ? low : 0);
+  const b = Math.round(Number.isFinite(high) ? high : 0);
+  if (a === b) return formatMoney(a, currency);
+  return `${intFormatter.format(Math.min(a, b))}–${intFormatter.format(Math.max(a, b))} ${currency}`;
+}
+
 /** "34,200" without the currency code. */
 export function formatAmount(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
@@ -48,6 +56,12 @@ const shortMonth = new Intl.DateTimeFormat('en-GB', { month: 'short' });
 
 export function formatMonthYear(date: Date): string {
   return monthYear.format(date);
+}
+/** "January 2026" from a YYYY-MM key. */
+export function formatMonthKey(key: string): string {
+  const [y, m] = key.split('-').map(Number);
+  if (!y || !m) return key;
+  return monthYear.format(new Date(y, m - 1, 1));
 }
 export function formatShortMonthYear(date: Date): string {
   return shortMonthYear.format(date);

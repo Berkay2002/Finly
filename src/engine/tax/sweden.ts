@@ -17,8 +17,9 @@
  * (columns 1 and 3) to within 1 kr. See __tests__/tax-sweden.test.ts.
  */
 
+import { toMonthly } from '../frequency';
+import type { Frequency, GrossIncome, SwedishTaxProfile } from '../types';
 import { kommunerFor, NATIONAL_AVERAGE_RATE } from './kommuner';
-import type { SwedishTaxProfile } from '../types';
 import { SWEDISH_TAX_YEARS, type PiecewiseSegment, type SwedishTaxYear } from './years';
 
 export type { SwedishTaxYear } from './years';
@@ -281,6 +282,18 @@ export function monthlyWithholding(
 /** Convenience: net monthly salary from gross monthly salary. */
 export function netFromGrossMonthly(grossMonthly: number, profile: SwedishTaxProfile, y?: SwedishTaxYear): number {
   return monthlyWithholding(grossMonthly, profile, y).netMonthly;
+}
+
+/**
+ * Net amount per period for a gross amount at any frequency. Non-monthly amounts are converted
+ * to a monthly salary, withheld with the monthly table, and converted back. Good enough for a
+ * budget; payroll would use the two-week table for weekly pay.
+ */
+export function withholdingForGross(gross: GrossIncome, frequency: Frequency): MonthlyWithholding & { netPerPeriod: number } {
+  const y = resolveTaxYear(gross.taxYear);
+  const perMonth = toMonthly(1, frequency) || 1;
+  const w = monthlyWithholding(toMonthly(gross.amount, frequency), gross.profile, y);
+  return { ...w, netPerPeriod: Math.round(w.netMonthly / perMonth) };
 }
 
 /**

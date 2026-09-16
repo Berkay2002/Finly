@@ -84,6 +84,9 @@ export function SettingsPage() {
                   <span className="font-medium text-ink">{s.month}</span>
                   <span className="tabular text-muted">
                     income {formatMoney(s.income, plan.currency)} · costs {formatMoney(s.lifestyleCost, plan.currency)}
+                    {s.lifestyleCostActual !== undefined && s.actualVariance
+                      ? ` · real ${formatMoney(s.lifestyleCostActual, plan.currency)}`
+                      : ''}
                   </span>
                 </li>
               ))}

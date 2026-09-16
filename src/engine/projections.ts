@@ -1,5 +1,6 @@
 import { addMonths, differenceInCalendarMonths, startOfMonth } from 'date-fns';
-import { isIrregular, monthsPerPeriod, toMonthly } from './frequency';
+import { amountSpread } from './amounts';
+import { isIrregular, monthsPerPeriod } from './frequency';
 import type { PlanMetrics } from './metrics';
 import { activeExpenses } from './metrics';
 import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
@@ -14,7 +15,11 @@ export interface UpcomingExpense {
   name: string;
   category: ExpenseItem['category'];
   date: Date;
+  /** Typical amount of this occurrence. */
   amount: number;
+  /** Expected low / high of this occurrence; equal to `amount` for fixed items. */
+  low: number;
+  high: number;
 }
 
 function parseIso(iso: string): Date {
@@ -54,6 +59,7 @@ export function upcomingExpenses(
       continue;
     }
 
+    const spread = amountSpread(e);
     let guard = 0;
     while (date < end && guard < 24) {
       out.push({
@@ -62,7 +68,9 @@ export function upcomingExpenses(
         name: e.name,
         category: e.category,
         date,
-        amount: e.amount,
+        amount: spread.typical,
+        low: spread.low,
+        high: spread.high,
       });
       if (!step) break;
       date = addMonths(date, step);
@@ -81,6 +89,8 @@ export interface MonthOutlook {
   month: Date;
   /** Regular monthly spend + irregular occurrences in the month. */
   expected: number;
+  /** Same with every variable item at its high — the month if all bills run hot. */
+  expectedHigh: number;
   /** Difference vs. the normal (provisioned) monthly lifestyle cost. */
   aboveNormal: number;
   items: UpcomingExpense[];
@@ -94,10 +104,14 @@ export function monthOutlook(
 ): MonthOutlook[] {
   const start = startOfMonth(now);
   const upcoming = upcomingExpenses(plan, now, horizonMonths);
-  const irregularProvision = activeExpenses(plan)
-    .filter((e) => isIrregular(e.frequency))
-    .reduce((acc, e) => acc + toMonthly(e.amount, e.frequency), 0);
-  const regularSpend = metrics.lifestyleCost - irregularProvision;
+  const irregularIds = new Set(
+    activeExpenses(plan)
+      .filter((e) => isIrregular(e.frequency))
+      .map((e) => e.id),
+  );
+  const regularLines = metrics.expenses.lines.filter((l) => !irregularIds.has(l.id));
+  const regularSpend = regularLines.reduce((acc, l) => acc + l.monthly, 0);
+  const regularSpendHigh = regularLines.reduce((acc, l) => acc + l.monthlyHigh, 0);
 
   const out: MonthOutlook[] = [];
   for (let i = 0; i < horizonMonths; i += 1) {
@@ -106,8 +120,10 @@ export function monthOutlook(
       (u) => u.date.getFullYear() === month.getFullYear() && u.date.getMonth() === month.getMonth(),
     );
     const irregularThisMonth = items.reduce((a, b) => a + b.amount, 0);
+    const irregularHigh = items.reduce((a, b) => a + b.high, 0);
     const expected = regularSpend + irregularThisMonth;
-    out.push({ month, expected, aboveNormal: expected - metrics.lifestyleCost, items });
+    const expectedHigh = regularSpendHigh + irregularHigh;
+    out.push({ month, expected, expectedHigh, aboveNormal: expected - metrics.lifestyleCost, items });
   }
   return out;
 }

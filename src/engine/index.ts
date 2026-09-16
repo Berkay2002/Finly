@@ -1,5 +1,7 @@
 export * from './types';
 export * from './frequency';
+export * from './amounts';
+export * from './actuals';
 export * from './format';
 export * from './taxonomy';
 export * from './metrics';
