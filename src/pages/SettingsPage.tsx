@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { SyncCard } from '@/components/sync/SyncCard';
+import { useSyncActions } from '@/sync/useSync';
 import { SelectField, TextField } from '@/components/ui/fields';
 
 const CURRENCIES = ['SEK', 'NOK', 'DKK', 'EUR', 'GBP', 'USD', 'CHF', 'PLN'];
@@ -26,6 +27,8 @@ export function SettingsPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const sync = useSyncActions();
+  const synced = sync.configured && sync.status !== 'off';
 
   const onExport = () => {
     downloadText(`finly-plan-${new Date().toISOString().slice(0, 10)}.json`, serializePlanFile({ plan, snapshots }));
@@ -147,8 +150,15 @@ export function SettingsPage() {
               variant="secondary"
               icon={Sparkles}
               onClick={() => {
+                // A sample is a playground: never let it reach the cloud copy or other devices.
+                if (synced) sync.turnOff();
                 loadSample();
-                setMessage({ tone: 'success', text: 'Sample plan loaded. Your previous plan was replaced.' });
+                setMessage({
+                  tone: 'success',
+                  text: synced
+                    ? 'Sample plan loaded and sync turned off on this device. Your cloud copy and other devices keep your plan.'
+                    : 'Sample plan loaded. Your previous plan was replaced.',
+                });
               }}
             >
               Load sample data
@@ -159,12 +169,14 @@ export function SettingsPage() {
                   variant="danger"
                   icon={Trash2}
                   onClick={() => {
+                    // Reset is local: detach first so an empty plan is never pushed to other devices.
+                    if (synced) sync.turnOff();
                     reset();
                     setConfirmReset(false);
                     navigate('/welcome');
                   }}
                 >
-                  Yes, delete everything
+                  {synced ? 'Yes, delete everything on this device' : 'Yes, delete everything'}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmReset(false)}>
                   Cancel

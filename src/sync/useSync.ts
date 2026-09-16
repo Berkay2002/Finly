@@ -127,7 +127,7 @@ export function SyncController() {
   useEffect(() => {
     if (!syncId) return;
     const unsubscribe = usePlanStore.subscribe((s, prev) => {
-      if (applyingRemote) return;
+      if (applyingRemote || useSyncStore.getState().status === 'off') return;
       if (s.plan === prev.plan && s.snapshots === prev.snapshots) return;
       dirty = true;
       schedulePush();

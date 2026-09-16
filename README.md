@@ -33,9 +33,14 @@ sync is not configured.
 npx convex dev     # once: log in, pick or create a project; writes VITE_CONVEX_URL to .env.local
 ```
 
-`.env.local` is gitignored. On Vercel set `CONVEX_DEPLOY_KEY` (from the Convex dashboard, production
-deployment) and use the build command `npx convex deploy --cmd 'npm run build'`, which pushes the functions
-and injects `VITE_CONVEX_URL` into the build.
+`.env.local` is gitignored. Production runs on Vercel: `vercel.json` builds with
+`npx convex deploy --cmd 'npm run build'` when `CONVEX_DEPLOY_KEY` is set, which pushes the functions to the
+production deployment and injects its `VITE_CONVEX_URL`; without the key it falls back to a local-only build.
+Create the key with `npx convex deployment token create vercel --prod` and store it with
+`npx vercel env add CONVEX_DEPLOY_KEY production`.
+
+A live check of the protocol against the deployment in `.env.local` (two devices, conflict, throttle,
+tamper, delete) runs with `FINLY_E2E=1 npx vitest run src/sync/__tests__/e2e.test.ts`.
 
 ## How it is put together
 
