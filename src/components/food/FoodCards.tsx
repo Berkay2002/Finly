@@ -60,16 +60,21 @@ export function FoodCard() {
           {f.atHome > 0 && f.eatingOut > 0 && (
             <div className="mt-3">
               <SplitBar a={f.atHome} b={f.eatingOut} accentA="green" accentB="orange" />
-              <div className="mt-1.5 flex justify-between gap-3 text-[12px]">
-                <span className="text-ink-soft">
-                  <span className={clsx('mr-1 inline-block h-2 w-2 rounded-full align-middle', ACCENT.green.dot)} />
-                  {t.atHome} <span className="tabular text-ink">{money(f.atHome)}</span>
-                </span>
-                <span className="text-ink-soft">
-                  <span className={clsx('mr-1 inline-block h-2 w-2 rounded-full align-middle', ACCENT.orange.dot)} />
-                  {t.eatingOut} <span className="tabular text-ink">{money(f.eatingOut)}</span>
-                  <span className="ml-1 text-muted">({formatPercent(f.eatingOutShare)})</span>
-                </span>
+              <div className="mt-3 grid grid-cols-2 divide-x divide-line">
+                <div>
+                  <div className="tabular text-[17px] font-semibold text-ink">{money(f.atHome)}</div>
+                  <div className="text-[12px] text-muted">
+                    <span className={clsx('mr-1.5 inline-block h-2 w-2 rounded-full align-middle', ACCENT.green.dot)} />
+                    {t.atHome}
+                  </div>
+                </div>
+                <div className="pl-4">
+                  <div className="tabular text-[17px] font-semibold text-ink">{money(f.eatingOut)}</div>
+                  <div className="text-[12px] text-muted">
+                    <span className={clsx('mr-1.5 inline-block h-2 w-2 rounded-full align-middle', ACCENT.orange.dot)} />
+                    {t.eatingOut} · <span className="tabular">{formatPercent(f.eatingOutShare)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}

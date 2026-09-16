@@ -3,7 +3,7 @@ import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
 import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
-import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, repaymentStart } from './debts';
+import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paysInMonth } from './debts';
 import type { GovBondRate } from './rates';
 import { savingsPots } from './savings';
 import { capitalTaxSummary, type CapitalTaxSummary } from './tax/capital';
@@ -379,7 +379,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   const debtLines: DebtLine[] = (plan.debts ?? [])
     .map((d) => {
       // Before the first payment period nothing is paid: the interest is added to the debt instead.
-      const flow = repaymentStart(d, now) ? { monthly: 0, interest: 0, principal: 0 } : debtFlow(d);
+      const flow = paysInMonth(d, now) ? debtFlow(d) : { monthly: 0, interest: 0, principal: 0 };
       const payoff = debtPayoff(d, now);
       return {
         id: d.id,

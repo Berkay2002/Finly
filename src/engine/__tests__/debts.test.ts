@@ -16,6 +16,7 @@ import {
   migrateLegacyDebts,
   nextCsnDueDate,
   repaymentOrder,
+  paysInMonth,
   repaymentStart,
 } from '../debts';
 import { buildSnapshot } from '../history';
@@ -146,6 +147,14 @@ describe('repayment not started yet', () => {
     const now = debtPayoff(csn('2026-11-30'), NOW)!;
     expect(later.months).toBeGreaterThan(now.months);
     expect(later.totalInterest!).toBeGreaterThan(now.totalInterest!);
+  });
+
+  it('charges a month only once it is inside the first paid quarter', () => {
+    const later = csn('2027-02-28');
+    expect(paysInMonth(later, NOW)).toBe(false);
+    expect(paysInMonth(later, new Date(2026, 10, 1))).toBe(false);
+    expect(paysInMonth(later, new Date(2026, 11, 1))).toBe(true);
+    expect(paysInMonth(csn('2026-11-30'), NOW)).toBe(true);
   });
 
   it('adds up the interest until the first payment', () => {

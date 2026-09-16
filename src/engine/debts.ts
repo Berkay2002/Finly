@@ -191,6 +191,14 @@ export function repaymentStart(d: Debt, now: Date): Date | null {
 }
 
 /**
+ * Whether the month of `now` is inside a paid period, so it carries a share of the payment. A quarterly
+ * payment due in February covers December to February: in November nothing is owed yet.
+ */
+export function paysInMonth(d: Debt, now: Date): boolean {
+  return firstPaidMonth(d, now) <= 0 || !d.nextDate || d.frequency === 'monthly';
+}
+
+/**
  * Interest that builds up between now and the first payment, at today's rate or along `rateAt`. Null when
  * repayment has already started or balance or rate is missing.
  */
