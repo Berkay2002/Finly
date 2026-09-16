@@ -43,6 +43,7 @@ export function QuickAddSheet() {
     { label: 'Income', description: 'Salary, freelance, benefits', icon: 'stat-income' as const, accent: 'green' as const, to: '/income?add=1' },
     { label: 'Savings goal', description: 'Something you are saving for', icon: 'nav-savings' as const, accent: 'purple' as const, to: '/savings?add=1' },
     { label: 'Account', description: 'A bank or investment account', icon: 'account-other' as const, accent: 'blue' as const, to: '/accounts?add=1' },
+    { label: 'Loan', description: 'CSN, mortgage, car loan or credit', icon: 'stat-bank' as const, accent: 'red' as const, to: '/loans?add=1' },
   ];
   return (
     <Sheet open={open} onClose={() => setOpen(false)} title="What would you like to add?" size="sm">

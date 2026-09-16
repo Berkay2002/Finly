@@ -1,5 +1,7 @@
 import type {
   AccountKind,
+  DebtFrequency,
+  DebtKind,
   ExpenseCategory,
   ExpenseTag,
   Frequency,
@@ -49,7 +51,7 @@ export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
     id: 'finance',
     label: 'Finance & Insurance',
     shortLabel: 'Finance & insurance',
-    description: 'Loans, credit, banking fees and insurance policies.',
+    description: 'Banking fees, insurance policies and other financial commitments. Loans have their own page.',
     accent: 'yellow',
   },
   leisure: {
@@ -118,8 +120,6 @@ const s = (
 export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   // Home
   s('home', 'Housing', 'rent', 'Rent'),
-  s('home', 'Housing', 'mortgage', 'Mortgage payment', { tags: ['debt'] }),
-  s('home', 'Housing', 'mortgage_interest', 'Mortgage interest', { tags: ['debt'] }),
   s('home', 'Housing', 'hoa_fees', 'Housing association fees'),
   s('home', 'Housing', 'property_charges', 'Property charges'),
   s('home', 'Housing', 'home_insurance', 'Home insurance', { tags: ['insurance'] }),
@@ -168,7 +168,6 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('living', 'Work-related', 'work_clothing', 'Work clothing', { f: false, c: false }),
 
   // Transport
-  s('transport', 'Car', 'car_finance', 'Car finance / loan', { tags: ['car', 'debt'] }),
   s('transport', 'Car', 'car_lease', 'Car lease', { tags: ['car'] }),
   s('transport', 'Car', 'fuel', 'Fuel', { f: false, c: false, tags: ['car'] }),
   s('transport', 'Car', 'ev_charging', 'Electric charging', { f: false, c: false, tags: ['car'] }),
@@ -190,10 +189,6 @@ export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   s('transport', 'Other travel', 'rental_cars', 'Rental cars', { freq: 'yearly', f: false, e: false, c: false }),
 
   // Finance
-  s('finance', 'Debt', 'personal_loan', 'Personal loan', { tags: ['debt'] }),
-  s('finance', 'Debt', 'credit_card', 'Credit card repayment', { tags: ['debt'] }),
-  s('finance', 'Debt', 'student_loan', 'Student loan', { tags: ['debt'] }),
-  s('finance', 'Debt', 'other_debt', 'Other debt repayment', { tags: ['debt'] }),
   s('finance', 'Banking', 'bank_fees', 'Banking fees'),
   s('finance', 'Insurance', 'life_insurance', 'Life insurance', { tags: ['insurance'] }),
   s('finance', 'Insurance', 'health_insurance', 'Health insurance', { tags: ['insurance'] }),
@@ -322,6 +317,76 @@ export function accountKindMeta(kind: AccountKind): AccountKindMeta {
 }
 
 /* ------------------------------------------------------------------ */
+/* Loans                                                               */
+/* ------------------------------------------------------------------ */
+
+export interface DebtKindMeta {
+  id: DebtKind;
+  label: string;
+  /** Default name for a new loan of this kind. */
+  name: string;
+  description: string;
+  frequency: DebtFrequency;
+  /** Default for car and other loans; mortgages are always secured, the rest never. */
+  secured: boolean;
+}
+
+export const DEBT_KINDS: DebtKindMeta[] = [
+  {
+    id: 'csn',
+    label: 'CSN student loan',
+    name: 'CSN',
+    description: 'Its own rules: low rate, lower payments if your income drops, written off at death.',
+    frequency: 'quarterly',
+    secured: false,
+  },
+  {
+    id: 'mortgage',
+    label: 'Mortgage (bolån)',
+    name: 'Bolån',
+    description: 'Secured by your home. Interest plus amortering; the interest gives ränteavdrag.',
+    frequency: 'monthly',
+    secured: true,
+  },
+  {
+    id: 'car',
+    label: 'Car loan (billån)',
+    name: 'Billån',
+    description: 'Secured against the car, or an unsecured loan used to buy it.',
+    frequency: 'monthly',
+    secured: true,
+  },
+  {
+    id: 'personal',
+    label: 'Personal loan (privatlån)',
+    name: 'Privatlån',
+    description: 'Unsecured, so usually expensive. No ränteavdrag from 2026.',
+    frequency: 'monthly',
+    secured: false,
+  },
+  {
+    id: 'credit_card',
+    label: 'Credit card or account credit',
+    name: 'Credit card',
+    description: 'Usually the most expensive debt you have. No ränteavdrag from 2026.',
+    frequency: 'monthly',
+    secured: false,
+  },
+  {
+    id: 'other',
+    label: 'Other loan',
+    name: 'Loan',
+    description: 'Anything else you are paying back.',
+    frequency: 'monthly',
+    secured: false,
+  },
+];
+
+export function debtKindMeta(kind: DebtKind): DebtKindMeta {
+  return DEBT_KINDS.find((k) => k.id === kind) ?? DEBT_KINDS[DEBT_KINDS.length - 1];
+}
+
+/* ------------------------------------------------------------------ */
 /* Goals                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -395,7 +460,7 @@ export const STEP_META: Record<OnboardingStep, StepMeta> = {
     label: 'Finance & Insurance',
     shortLabel: 'Finance',
     title: 'Finance & insurance',
-    description: 'Loan repayments, credit, banking fees and insurance.',
+    description: 'Your loans (CSN, mortgage, car, credit), then banking fees and insurance.',
     category: 'finance',
   },
   leisure: {

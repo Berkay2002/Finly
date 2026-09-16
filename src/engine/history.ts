@@ -25,10 +25,17 @@ export interface MetricsSnapshot {
   cashInBank: number;
   investments: number;
   emergency?: number;
+  /** Loans at close. Missing on snapshots from before loans had their own model. */
+  totalDebt?: number;
+  netWorth?: number;
+  /** Monthly loan payments (included in `lifestyleCost`). */
+  debtPayments?: number;
   savingsRate: number;
   byCategory: Record<string, number>;
   /** Account id → balance at close. */
   byAccount?: Record<string, number>;
+  /** Loan id → balance at close. */
+  byDebt?: Record<string, number>;
   /** Goal id → amount saved at close. */
   byGoal?: Record<string, number>;
   /** The plan as it stood at close (see `freezePlan`). Absent on snapshots from before Tracking Mode. */
@@ -86,6 +93,12 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
     void _b;
     return rest;
   });
+  if (copy.debts) {
+    copy.debts = copy.debts.map(({ balances: _b, ...rest }) => {
+      void _b;
+      return rest;
+    });
+  }
   return copy;
 }
 
@@ -106,9 +119,13 @@ export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = 
     cashInBank: m.position.cashInBank,
     investments: m.position.investments,
     emergency: m.position.emergency,
+    totalDebt: m.position.totalDebt,
+    netWorth: m.position.netWorth,
+    debtPayments: m.debt.monthly,
     savingsRate: m.savings.rate,
     byCategory: { ...m.expenses.byCategory },
     byAccount: Object.fromEntries(plan.accounts.map((a) => [a.id, a.balance])),
+    byDebt: Object.fromEntries((plan.debts ?? []).map((d) => [d.id, d.balance])),
     byGoal: Object.fromEntries(plan.goals.map((g) => [g.id, g.currentAmount])),
     plan: freezePlan(plan, month),
   };

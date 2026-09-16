@@ -383,6 +383,26 @@ Two insight cards have no dedicated illustration yet. Until these are generated 
 > Subject: a chunky rounded padlock, closed, with a plain coin set into its face. Committed
 > costs that cannot easily change.
 
+**`loan-csn.png`** · accent indigo `#4F46E5`
+> Subject: a rounded graduation cap resting on a small stack of two plain coins. A student loan.
+> Until generated, CSN loans reuse `goal-graduation`.
+
+**`loan-mortgage.png`** · accent red `#EF4444`
+> Subject: a small rounded house with a plain key lying in front of it, the key's bow a coin.
+> Until generated, mortgages reuse `goal-home`.
+
+**`loan-car.png`** · accent orange `#F2994A`
+> Subject: a small rounded car seen from the front three-quarter with a plain paper tag hanging from
+> its mirror. Until generated, car loans reuse `goal-car`.
+
+**`loan-credit.png`** · accent purple `#8B5CF6`
+> Subject: a chunky rounded payment card at a slight angle with a small plain coin half-tucked behind
+> it. Until generated, credit cards reuse `account-everyday` and personal loans `account-cash`.
+
+**`nav-loans.png`** · accent red `#EF4444`
+> Subject: a plain coin with a rounded downward arrow beside it, the balance going down. The Loans page
+> and the Loans row on Home; until generated they reuse `stat-bank`.
+
 **`card-reduce.png`** · accent green `#34B27B`
 > Subject: a pair of rounded scissors about to snip a plain receipt with a zig-zag edge.
 > Expenses you could realistically cut.

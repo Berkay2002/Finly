@@ -6,6 +6,7 @@ import { usePlanStore } from '@/store/planStore';
 import { usePlan } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
 import { ExpenseEditor } from '@/components/forms/ExpenseEditor';
+import { LoanEditor } from '@/components/forms/LoanEditor';
 import { GoalEditor } from '@/components/forms/GoalEditor';
 import { HomeFields } from '@/components/forms/HomeFields';
 import { IncomeEditor } from '@/components/forms/IncomeEditor';
@@ -68,6 +69,23 @@ export function OnboardingPage() {
     if (step === 'savings') return <GoalEditor />;
     if (step === 'accounts') return <AccountEditor />;
     if (step === 'summary') return <SummaryStep />;
+    if (step === 'finance')
+      return (
+        <div className="space-y-6">
+          <div>
+            <h3 className="mb-1 text-[14px] font-semibold text-ink">Loans</h3>
+            <p className="mb-3 text-[12.5px] text-muted">
+              CSN, bolån, billån and credit. Payments count as essential costs; the balance and rate show what the debt really
+              costs you.
+            </p>
+            <LoanEditor />
+          </div>
+          <div>
+            <h3 className="mb-3 text-[14px] font-semibold text-ink">Banking and insurance</h3>
+            <ExpenseEditor category={meta.category!} />
+          </div>
+        </div>
+      );
     return <ExpenseEditor category={meta.category!} />;
   })();
 

@@ -1,8 +1,9 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
+import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured } from './debts';
 import { accountRole, type AccountRole } from './taxonomy';
-import type { ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan } from './types';
+import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan } from './types';
 import { EXPENSE_CATEGORIES } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -64,6 +65,29 @@ export interface MonthActuals {
   lifestyleRange: Range;
 }
 
+/** One loan, as the month sees it. */
+export interface DebtLine {
+  id: string;
+  name: string;
+  kind: DebtKind;
+  balance: number;
+  /** Monthly equivalent of the payment. */
+  monthly: number;
+  /** Interest and repayment parts; null while balance or rate is missing. */
+  interest: number | null;
+  principal: number | null;
+  rate?: number;
+  /** Rate after ränteavdrag (equal to `rate` when the loan gives none). */
+  effectiveRate?: number;
+  secured: boolean;
+  deductible: boolean;
+  /** Months to debt-free at today's rate and payment; Infinity when never, null when unknown. */
+  payoffMonths: number | null;
+  payoffDate: Date | null;
+  /** Interest left to pay over the loan's life, before ränteavdrag. */
+  interestLeft: number | null;
+}
+
 export interface PlanMetrics {
   income: {
     reliable: number;
@@ -110,8 +134,34 @@ export interface PlanMetrics {
     /** Share of reliable income (PRD §18.7). */
     rateOfReliable: number;
   };
-  /** PRD §15 */
+  /**
+   * Loans. Payments are part of the month's cost (essential and committed), but only the interest is
+   * a real cost: the repayment part lowers the debt and counts as building wealth.
+   */
+  debt: {
+    lines: DebtLine[];
+    /** Sum of monthly payments. */
+    monthly: number;
+    /** Known interest per month, before ränteavdrag. */
+    interest: number;
+    /** Ränteavdrag per month on deductible interest (comes back through tax). */
+    taxReduction: number;
+    /** Known repayment per month. */
+    principal: number;
+    /** Payments whose interest/repayment split is unknown. */
+    unsplit: number;
+    /** Total owed. */
+    balance: number;
+    /** Monthly payments as a share of total income. */
+    shareOfIncome: number;
+    /** CSN payments per month, which nedsättning can lower if income falls. */
+    csnMonthly: number;
+  };
+  /** Spending only: active expenses without loan payments. */
+  spendingCost: number;
+  /** PRD §15. Includes loan payments: minimum debt repayments are essential. */
   essentialCost: number;
+  /** Spending plus loan payments: what a normal month costs. */
   lifestyleCost: number;
   plannedCost: number;
   /** PRD §18.24 / §18.12 — income minus lifestyle minus savings. */
@@ -127,6 +177,8 @@ export interface PlanMetrics {
     lifestyle: number;
     futureSpending: number;
     longTerm: number;
+    /** Repayment part of loan payments. */
+    debtPaydown: number;
     unallocated: number;
   };
   /** PRD §13 / §19 */
@@ -139,6 +191,10 @@ export interface PlanMetrics {
     cashInBank: number;
     totalAssets: number;
     byRole: Record<AccountRole, number>;
+    /** Sum of loan balances. */
+    totalDebt: number;
+    /** totalAssets − totalDebt. */
+    netWorth: number;
   };
   /** PRD §18.25 / §18.26 / §18.14 */
   resilience: {
@@ -150,13 +206,16 @@ export interface PlanMetrics {
     reliableCoversLifestyle: boolean;
     /** reliable income − essential cost; negative means variable income is needed for essentials. */
     essentialMargin: number;
+    /** Essential runway with CSN payments lowered to nothing, as nedsättning allows when income stops. */
+    essentialRunwayCsnReducedMonths: number;
   };
   /** PRD §18.3 / §18.23 */
   topCosts: CostLine[];
   /** PRD §18.22 */
   subscriptions: { monthly: number; annual: number; lines: CostLine[] };
   /** PRD §18.21 */
-  car: { monthly: number; annual: number; lines: CostLine[] };
+  /** Car costs: tagged expenses plus car loan payments (`loans`). */
+  car: { monthly: number; annual: number; lines: CostLine[]; loans: DebtLine[] };
   /** PRD §18.15 — optional and flexible, largest first. */
   reducible: CostLine[];
   /** PRD §18.18 */
@@ -173,6 +232,7 @@ export interface PlanMetrics {
   hasExpenses: boolean;
   hasAccounts: boolean;
   hasGoals: boolean;
+  hasDebts: boolean;
 }
 
 /* ------------------------------------------------------------------ */
@@ -280,17 +340,50 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   for (const l of lines) byCategory[l.category] += l.monthly;
 
   const expenseTotal = sum(lines.map((l) => l.monthly));
-  const essential = sum(lines.filter((l) => l.essential).map((l) => l.monthly));
+  const essentialSpend = sum(lines.filter((l) => l.essential).map((l) => l.monthly));
   const fixed = sum(lines.filter((l) => l.fixed).map((l) => l.monthly));
   const committed = sum(lines.filter((l) => l.committed).map((l) => l.monthly));
+
+  /* Loans */
+  const debtLines: DebtLine[] = (plan.debts ?? [])
+    .map((d) => {
+      const flow = debtFlow(d);
+      const payoff = debtPayoff(d, now);
+      return {
+        id: d.id,
+        name: d.name,
+        kind: d.kind,
+        balance: Math.max(0, d.balance || 0),
+        monthly: flow.monthly,
+        interest: flow.interest,
+        principal: flow.principal,
+        rate: d.rate,
+        effectiveRate: effectiveRate(d),
+        secured: isSecured(d),
+        deductible: isDeductible(d),
+        payoffMonths: payoff?.months ?? null,
+        payoffDate: payoff?.date ?? null,
+        interestLeft: payoff?.totalInterest ?? null,
+      };
+    })
+    .filter((l) => l.monthly > 0 || l.balance > 0);
+  const debtMonthly = sum(debtLines.map((l) => l.monthly));
+  const debtInterest = sum(debtLines.map((l) => l.interest ?? 0));
+  const debtPrincipal = sum(debtLines.map((l) => l.principal ?? 0));
+  const deductibleInterest = sum(debtLines.filter((l) => l.deductible).map((l) => l.interest ?? 0));
+  const taxReduction = interestTaxReduction(deductibleInterest * 12) / 12;
+  const csnMonthly = sum(debtLines.filter((l) => l.kind === 'csn').map((l) => l.monthly));
+  const totalDebt = sum(debtLines.map((l) => l.balance));
+  const essential = essentialSpend + debtMonthly;
 
   /* Ranges — best and worst normal month */
   const rangeOf = (ls: CostLine[]): Range => ({
     low: sum(ls.map((l) => l.monthlyLow)),
     high: sum(ls.map((l) => l.monthlyHigh)),
   });
-  const lifestyleRange = rangeOf(lines);
-  const essentialRange = rangeOf(lines.filter((l) => l.essential));
+  const withDebt = (r: Range): Range => ({ low: r.low + debtMonthly, high: r.high + debtMonthly });
+  const lifestyleRange = withDebt(rangeOf(lines));
+  const essentialRange = withDebt(rangeOf(lines.filter((l) => l.essential)));
   const byCategoryRange = Object.fromEntries(
     EXPENSE_CATEGORIES.map((c) => [c, rangeOf(lines.filter((l) => l.category === c))]),
   ) as Record<ExpenseCategory, Range>;
@@ -314,11 +407,11 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   }
   const confirmedIds = new Set(confirmed.map((l) => l.id));
   const actualVariance = sum(confirmed.map((l) => l.variance));
-  const monthLifestyle = expenseTotal + actualVariance;
-  const monthLifestyleRange: Range = {
+  const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
+  const monthLifestyleRange: Range = withDebt({
     low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
     high: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance,
-  };
+  });
 
   /* Savings */
   const goals = plan.goals.filter((g) => g.monthlyContribution > 0);
@@ -329,7 +422,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   const savingsTotal = futureSpending + longTerm;
 
   /* Core numbers */
-  const lifestyleCost = expenseTotal;
+  const lifestyleCost = expenseTotal + debtMonthly;
   const plannedCost = lifestyleCost + savingsTotal;
   const breathingRoom = totalIncome - plannedCost;
   const oneOffsThisMonth = sum(
@@ -356,15 +449,18 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   for (const a of plan.accounts) byRole[accountRole(a.kind)] += a.balance;
   const cashInBank = byRole.everyday + byRole.cash_savings;
   const totalAssets = sum(Object.values(byRole));
+  const netWorth = totalAssets - totalDebt;
 
   /* Resilience */
   const availableForRunway = cashInBank + byRole.emergency;
   const essentialMargin = reliable - essential;
+  const essentialWithoutCsn = essential - csnMonthly;
 
   /* Analyses */
   const sortedLines = [...lines].sort((a, b) => b.monthly - a.monthly);
   const subLines = active.filter((e) => hasTag(e, 'subscription')).map(toCostLine);
   const carLines = active.filter((e) => hasTag(e, 'car')).map(toCostLine);
+  const carLoans = debtLines.filter((l) => l.kind === 'car');
   const reducible = sortedLines.filter((l) => !l.essential && !l.committed);
 
   /* Daily */
@@ -380,8 +476,8 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
     expenses: {
       byCategory,
       total: expenseTotal,
-      essential,
-      optional: expenseTotal - essential,
+      essential: essentialSpend,
+      optional: expenseTotal - essentialSpend,
       fixed,
       variable: expenseTotal - fixed,
       committed,
@@ -412,6 +508,18 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       rate: totalIncome > 0 ? savingsTotal / totalIncome : 0,
       rateOfReliable: reliable > 0 ? savingsTotal / reliable : 0,
     },
+    debt: {
+      lines: debtLines,
+      monthly: debtMonthly,
+      interest: debtInterest,
+      taxReduction,
+      principal: debtPrincipal,
+      unsplit: sum(debtLines.filter((l) => l.principal === null).map((l) => l.monthly)),
+      balance: totalDebt,
+      shareOfIncome: totalIncome > 0 ? debtMonthly / totalIncome : 0,
+      csnMonthly,
+    },
+    spendingCost: expenseTotal,
     essentialCost: essential,
     lifestyleCost,
     plannedCost,
@@ -419,9 +527,10 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
     safeToSpend,
     oneOffsThisMonth,
     allocation: {
-      lifestyle: totalIncome > 0 ? lifestyleCost / totalIncome : 0,
+      lifestyle: totalIncome > 0 ? (lifestyleCost - debtPrincipal) / totalIncome : 0,
       futureSpending: totalIncome > 0 ? futureSpending / totalIncome : 0,
       longTerm: totalIncome > 0 ? longTerm / totalIncome : 0,
+      debtPaydown: totalIncome > 0 ? debtPrincipal / totalIncome : 0,
       unallocated: totalIncome > 0 ? Math.max(0, breathingRoom) / totalIncome : 0,
     },
     position: {
@@ -433,6 +542,8 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       cashInBank,
       totalAssets,
       byRole,
+      totalDebt,
+      netWorth,
     },
     resilience: {
       emergencyMonths: safeDiv(byRole.emergency, essential),
@@ -442,6 +553,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       reliableCoversEssentials: reliable >= essential,
       reliableCoversLifestyle: reliable >= lifestyleCost,
       essentialMargin,
+      essentialRunwayCsnReducedMonths: safeDiv(availableForRunway, essentialWithoutCsn),
     },
     topCosts: sortedLines.slice(0, 8),
     subscriptions: {
@@ -450,9 +562,10 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       lines: subLines.sort((a, b) => b.monthly - a.monthly),
     },
     car: {
-      monthly: sum(carLines.map((l) => l.monthly)),
-      annual: sum(carLines.map((l) => l.annual)),
+      monthly: sum(carLines.map((l) => l.monthly)) + sum(carLoans.map((l) => l.monthly)),
+      annual: sum(carLines.map((l) => l.annual)) + sum(carLoans.map((l) => l.monthly * 12)),
       lines: carLines.sort((a, b) => b.monthly - a.monthly),
+      loans: carLoans,
     },
     reducible,
     daily: {
@@ -467,5 +580,6 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
     hasExpenses: expenseTotal > 0,
     hasAccounts: plan.accounts.length > 0,
     hasGoals: plan.goals.length > 0,
+    hasDebts: debtLines.length > 0,
   };
 }

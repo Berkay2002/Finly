@@ -9,6 +9,7 @@ import { EXPENSE_CATEGORIES, type ExpenseTag } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
 import { useCurrency, useMetrics } from '@/store/selectors';
 import { customDraft, useExpenseSheet } from '@/components/forms/ExpenseEditor';
+import { useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { ACCENT } from '@/components/ui/accent';
 import { Callout } from '@/components/ui/Callout';
@@ -22,10 +23,13 @@ export function InsightsPage() {
   const m = useMetrics();
   const currency = useCurrency();
   const money = (n: number) => formatMoney(n, currency);
+  // Loan payments are committed: they cannot be cut this month.
+  const committed = m.expenses.committed + m.debt.monthly;
   const maxCat = Math.max(1, ...EXPENSE_CATEGORIES.map((c) => m.expenses.byCategory[c]));
 
   // One shared edit dialog so every card can add, edit or remove an expense without leaving the page.
   const expenses = useExpenseSheet();
+  const loans = useLoanSheet();
   const openEdit = expenses.openEdit;
   const openNew = (tags: ExpenseTag[]) => expenses.openNew(customDraft('leisure', '', tags));
 
@@ -102,11 +106,14 @@ export function InsightsPage() {
             action="Home & bills"
             actionTo={CATEGORY_ROUTE.home}
           />
-          <SplitBar a={m.expenses.committed} b={m.expenses.flexible} accentA="orange" accentB="green" />
+          <SplitBar a={committed} b={m.expenses.flexible} accentA="orange" accentB="green" />
           <div className="mt-3 grid grid-cols-2 divide-x divide-line">
             <div>
-              <div className="tabular text-[17px] font-semibold text-ink">{money(m.expenses.committed)}</div>
-              <div className="text-[12px] text-muted">Committed · {m.lifestyleCost > 0 ? formatPercent(m.expenses.committed / m.lifestyleCost) : '–'}</div>
+              <div className="tabular text-[17px] font-semibold text-ink">{money(committed)}</div>
+              <div className="text-[12px] text-muted">
+                Committed · {m.lifestyleCost > 0 ? formatPercent(committed / m.lifestyleCost) : '–'}
+                {m.debt.monthly > 0 && <span className="block text-faint">incl. {money(m.debt.monthly)} of loans</span>}
+              </div>
             </div>
             <div className="pl-4">
               <div className="tabular text-[17px] font-semibold text-ink">{money(m.expenses.flexible)}</div>
@@ -141,6 +148,7 @@ export function InsightsPage() {
               <StackedBar
                 segments={[
                   { value: m.allocation.lifestyle, accent: 'blue' },
+                  { value: m.allocation.debtPaydown, accent: 'red' },
                   { value: m.allocation.futureSpending, accent: 'green' },
                   { value: m.allocation.longTerm, accent: 'purple' },
                   { value: m.allocation.unallocated, accent: 'neutral' },
@@ -149,6 +157,7 @@ export function InsightsPage() {
               <ul className="mt-3 space-y-1.5 text-[13px]">
                 {[
                   ['Current lifestyle', m.allocation.lifestyle, 'blue'],
+                  ...(m.allocation.debtPaydown > 0 ? [['Paying down loans', m.allocation.debtPaydown, 'red']] : []),
                   ['Planned future spending', m.allocation.futureSpending, 'green'],
                   ['Long-term saving & investing', m.allocation.longTerm, 'purple'],
                   ['Unallocated', m.allocation.unallocated, 'neutral'],
@@ -220,7 +229,24 @@ export function InsightsPage() {
               onAction={() => expenses.openNew(customDraft('transport', '', ['car']))}
             />
             <Total monthly={money(m.car.monthly)} annual={money(m.car.annual)} />
-            <TaggedLines lines={m.car.lines} money={money} onEdit={openEdit} empty="No car costs yet. Add one here, or tag an existing expense as car-related." />
+            <TaggedLines
+              lines={m.car.lines}
+              money={money}
+              onEdit={openEdit}
+              empty={m.car.loans.length > 0 ? '' : 'No car costs yet. Add one here, or tag an existing expense as car-related.'}
+            />
+            {m.car.loans.length > 0 && (
+              <ul className={clsx('divide-y divide-line', m.car.lines.length > 0 ? 'border-t border-line' : 'mt-3')}>
+                {m.car.loans.map((l) => (
+                  <li key={l.id}>
+                    <EditableLine onClick={() => loans.openEdit(l.id)} name={l.name}>
+                      <span className="text-[12px] text-muted">Loan</span>
+                      <span className="tabular text-ink">{money(l.monthly)}</span>
+                    </EditableLine>
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
               Common car costs like fuel, insurance and tax are one tap away on{' '}
               <Link to={CATEGORY_ROUTE.transport} className="font-medium text-brand-700">
@@ -259,6 +285,7 @@ export function InsightsPage() {
       </div>
 
       {expenses.sheet}
+      {loans.sheet}
     </div>
   );
 }
@@ -295,7 +322,7 @@ function TaggedLines({
   onEdit: (id: string) => void;
   empty: string;
 }) {
-  if (lines.length === 0) return <p className="mt-2 text-[12.5px] text-muted">{empty}</p>;
+  if (lines.length === 0) return empty ? <p className="mt-2 text-[12.5px] text-muted">{empty}</p> : null;
   return (
     <ul className="mt-3 divide-y divide-line">
       {lines.map((l) => (

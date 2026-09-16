@@ -167,6 +167,42 @@ describe('persist migration', () => {
   });
 });
 
+describe('loans', () => {
+  it('records a loan balance under the current month', () => {
+    const id = usePlanStore
+      .getState()
+      .addDebt({ name: 'CSN', kind: 'csn', balance: 200_000, payment: 4500, frequency: 'quarterly' });
+    usePlanStore.getState().updateDebt(id, { balance: 196_000 });
+    usePlanStore.getState().updateDebt(id, { lender: 'CSN' });
+    const debt = usePlanStore.getState().plan.debts![0];
+    expect(debt.balance).toBe(196_000);
+    expect(debt.balances).toEqual({ [thisMonth]: 196_000 });
+    usePlanStore.getState().removeDebt(id);
+    expect(usePlanStore.getState().plan.debts).toEqual([]);
+  });
+
+  it('moves loan expenses into loans on import, but leaves closed months as they were', () => {
+    usePlanStore.setState({ plan: prdExamplePlan() });
+    usePlanStore.getState().saveSnapshot('2026-08', NOW);
+    const data = { plan: usePlanStore.getState().plan, snapshots: usePlanStore.getState().snapshots };
+    usePlanStore.getState().reset();
+    usePlanStore.getState().importPlan(data);
+    const s = usePlanStore.getState();
+    expect(s.plan.debts?.map((d) => d.id)).toEqual(['debt_car_finance', 'debt_student_loan']);
+    expect(s.plan.expenses.some((e) => e.tags.includes('debt'))).toBe(false);
+    expect(s.snapshots['2026-08'].plan?.expenses.some((e) => e.id === 'car_finance')).toBe(true);
+  });
+
+  it('migrates a plan persisted before loans had their own model', async () => {
+    memory.setItem('finly.plan.v1', JSON.stringify({ state: { plan: prdExamplePlan(), snapshots: {} }, version: 2 }));
+    vi.resetModules();
+    const fresh = await import('../planStore');
+    const s = fresh.usePlanStore.getState();
+    expect(s.plan.debts).toHaveLength(2);
+    expect(s.plan.expenses.find((e) => e.id === 'student_loan')).toBeUndefined();
+  });
+});
+
 describe('profile picture', () => {
   it('stores a picture on the plan, bumps updatedAt, and removes it again', () => {
     const before = usePlanStore.getState().plan.updatedAt;

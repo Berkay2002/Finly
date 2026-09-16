@@ -5,6 +5,7 @@ export * from './electricity';
 export * from './actuals';
 export * from './format';
 export * from './taxonomy';
+export * from './debts';
 export * from './metrics';
 export * from './projections';
 export * from './scenarios';

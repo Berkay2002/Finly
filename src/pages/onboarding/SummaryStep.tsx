@@ -104,6 +104,18 @@ export function SummaryStep() {
               />
             );
           })}
+          {m.debt.monthly > 0 && (
+            <Line
+              label={
+                <>
+                  <Icon icon="stat-bank" size={14} pictureScale={1.5} className="text-muted" />
+                  Loan payments
+                </>
+              }
+              value={money(m.debt.monthly)}
+              sub={m.debt.interest > 0 ? `${money(m.debt.interest)} of it interest` : undefined}
+            />
+          )}
           <Line
             label="Normal lifestyle cost"
             value={money(m.lifestyleCost)}
@@ -145,7 +157,13 @@ export function SummaryStep() {
           <Line label="Emergency savings" value={money(m.position.emergency)} />
           <Line label="Investments" value={money(m.position.investments)} />
           {m.position.other > 0 && <Line label="Other tracked balances" value={money(m.position.other)} />}
-          <Line label="Total tracked assets" value={money(m.position.totalAssets)} strong />
+          <Line label="Total tracked assets" value={money(m.position.totalAssets)} strong={m.position.totalDebt === 0} />
+          {m.position.totalDebt > 0 && (
+            <>
+              <Line label="Loans" value={money(-m.position.totalDebt)} />
+              <Line label="Net worth" value={money(m.position.netWorth)} strong negative={m.position.netWorth < 0} />
+            </>
+          )}
         </Section>
       </div>
     </div>

@@ -45,10 +45,10 @@ const lagOptions: { value: '0' | '1' | '2'; label: string }[] = [
   { value: '2', label: 'Two months before' },
 ];
 
-const TAG_LABELS: Record<ExpenseTag, string> = {
+// Loans have their own model and page; the `debt` tag only survives on plans from before that.
+const TAG_LABELS: Record<Exclude<ExpenseTag, 'debt'>, string> = {
   car: 'Car',
   subscription: 'Subscription',
-  debt: 'Debt repayment',
   insurance: 'Insurance',
   utility: 'Utility',
   public_transport: 'Public transport',
@@ -509,7 +509,7 @@ function ExpenseDetailForm({
       <div>
         <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">Tags</div>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(TAG_LABELS) as ExpenseTag[]).map((t) => (
+          {(Object.keys(TAG_LABELS) as (keyof typeof TAG_LABELS)[]).map((t) => (
             <button
               key={t}
               type="button"

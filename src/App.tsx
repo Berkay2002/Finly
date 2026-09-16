@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
 import { AccountsPage } from '@/pages/AccountsPage';
+import { LoansPage } from '@/pages/LoansPage';
 import { Dashboard } from '@/pages/Dashboard';
 import { ExpenseSectionPage } from '@/pages/ExpenseSectionPage';
 import { IncomePage } from '@/pages/IncomePage';
@@ -27,6 +28,7 @@ export default function App() {
         ))}
         <Route path="savings" element={<SavingsPage />} />
         <Route path="accounts" element={<AccountsPage />} />
+        <Route path="loans" element={<LoansPage />} />
         <Route path="planning" element={<PlanningPage />} />
         <Route path="insights" element={<InsightsPage />} />
         <Route path="settings" element={<SettingsPage />} />

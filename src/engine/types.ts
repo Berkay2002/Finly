@@ -154,6 +154,53 @@ export interface ExpenseItem {
   includedElsewhere?: boolean;
 }
 
+/**
+ * Loans are not expenses. A payment is partly interest (a cost) and partly repayment (it shrinks what
+ * you owe), the balance belongs in net worth, and each Swedish loan type follows its own rules. See
+ * engine/debts.ts and docs/swedish-loans.md.
+ */
+export type DebtKind = 'csn' | 'mortgage' | 'car' | 'personal' | 'credit_card' | 'other';
+
+/**
+ * CSN rules by when the money was paid out. `annuity`: from July 2001, a yearly amount (årsbelopp) set
+ * by CSN. `income_based`: 1989 to June 2001, 4 % of the income from two years earlier.
+ */
+export type CsnLoanType = 'annuity' | 'income_based';
+
+export type DebtFrequency = 'monthly' | 'quarterly' | 'yearly';
+
+export interface Debt {
+  id: string;
+  name: string;
+  lender?: string;
+  note?: string;
+  kind: DebtKind;
+  /** Remaining debt. 0 while not entered. */
+  balance: number;
+  /** Balance as last entered in each month (YYYY-MM), so net worth has a history. */
+  balances?: Record<string, number>;
+  /** Nominal yearly interest rate in percent (3.85 means 3.85 %). Undefined while not entered. */
+  rate?: number;
+  /** Car and other loans: secured against what was bought. Mortgages always are; CSN, personal loans and credit cards never. */
+  secured?: boolean;
+  /**
+   * What is paid on each due date, in `frequency`. For CSN this is the årsbelopp split over the
+   * schedule. A mortgage with balance, rate and amortisation ignores it and pays amortisation + interest.
+   */
+  payment: number;
+  frequency: DebtFrequency;
+  /** ISO date (YYYY-MM-DD) of the next payment, for quarterly and yearly schedules. */
+  nextDate?: string;
+  /** Mortgage: amortering per month. */
+  amortization?: number;
+  /** Mortgage: market value of the home, for loan-to-value and the amortisation requirement. */
+  propertyValue?: number;
+  /** Mortgage: end of the fixed-rate period (YYYY-MM-DD). Absent means a variable rate. */
+  rateFixedUntil?: string;
+  /** CSN only. */
+  csnType?: CsnLoanType;
+}
+
 export type AccountKind =
   | 'everyday'
   | 'salary'
@@ -230,6 +277,8 @@ export interface FinancialPlan {
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];
+  /** Missing on plans saved before loans had their own model; see `migrateLegacyDebts`. */
+  debts?: Debt[];
   goals: SavingsGoal[];
   onboarding: {
     completedSteps: OnboardingStep[];
@@ -272,6 +321,7 @@ export function emptyPlan(now: Date = new Date()): FinancialPlan {
     income: [],
     expenses: [],
     accounts: [],
+    debts: [],
     goals: [],
     onboarding: { completedSteps: [], completed: false },
     createdAt: iso,

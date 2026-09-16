@@ -11,6 +11,7 @@ import { useUiStore } from '@/store/uiStore';
 import { BillsToConfirm } from '@/components/forms/BillsToConfirm';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
+import { DEBT_ACCENT, DEBT_ICON, useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -44,8 +45,9 @@ export function Dashboard() {
   // Goals and upcoming expenses can be edited right here instead of on their own pages.
   const expenses = useExpenseSheet();
   const goalSheet = useGoalSheet();
+  const loanSheet = useLoanSheet();
 
-  const isEmpty = !m.hasIncome && !m.hasExpenses && !m.hasAccounts && !m.hasGoals;
+  const isEmpty = !m.hasIncome && !m.hasExpenses && !m.hasAccounts && !m.hasGoals && !m.hasDebts;
   if (isEmpty && !plan.onboarding.completed) return <Navigate to="/welcome" replace />;
 
   const slices: DonutSlice[] = EXPENSE_CATEGORIES.map((c) => ({
@@ -54,6 +56,7 @@ export function Dashboard() {
     value: m.expenses.byCategory[c],
     accent: CATEGORY_META[c].accent,
   }));
+  if (m.debt.monthly > 0) slices.push({ key: 'loans', label: 'Loans', value: m.debt.monthly, accent: 'red' });
 
   const goals = shown.goals.filter((g) => g.targetAmount).slice(0, 4);
   const name = plan.userName.trim();
@@ -159,7 +162,7 @@ export function Dashboard() {
             action="View all expenses"
             actionTo="/insights"
           />
-          {m.hasExpenses ? (
+          {m.hasExpenses || m.hasDebts ? (
             <DonutBreakdown
               slices={slices}
               currency={currency}
@@ -183,8 +186,11 @@ export function Dashboard() {
               { icon: 'account-savings' as const, accent: 'purple' as const, label: 'Savings', value: m.position.cashSavings },
               { icon: 'account-emergency' as const, accent: 'yellow' as const, label: 'Emergency fund', value: m.position.emergency },
               { icon: 'account-investment' as const, accent: 'green' as const, label: 'Investments', value: m.position.investments },
+              ...(m.position.totalDebt > 0
+                ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: 'Loans', value: -m.position.totalDebt }]
+                : []),
             ].map((r) => (
-              <li key={r.label} className="flex items-center gap-3 py-2.5">
+              <li key={r.label} className={clsx('flex items-center gap-3', m.position.totalDebt > 0 ? 'py-2' : 'py-2.5')}>
                 <IconTile icon={r.icon} accent={r.accent} size="sm" />
                 <span className="flex-1 text-[13.5px] text-ink-soft">{r.label}</span>
                 <span className="tabular text-[13.5px] font-medium text-ink">{money(r.value)}</span>
@@ -192,8 +198,10 @@ export function Dashboard() {
             ))}
           </ul>
           <div className="mt-2 flex items-center justify-between border-t border-line pt-3">
-            <span className="text-[14px] font-semibold text-ink">Total assets</span>
-            <span className="tabular text-[16px] font-bold text-ink">{money(m.position.totalAssets)}</span>
+            <span className="text-[14px] font-semibold text-ink">{m.position.totalDebt > 0 ? 'Net worth' : 'Total assets'}</span>
+            <span className="tabular text-[16px] font-bold text-ink">
+              {money(m.position.totalDebt > 0 ? m.position.netWorth : m.position.totalAssets)}
+            </span>
           </div>
         </Card>
 
@@ -279,10 +287,20 @@ export function Dashboard() {
             </p>
           ) : (
             <ul className="divide-y divide-line">
-              {upcoming.map((u) => (
+              {upcoming.map((u) => {
+                const loan = u.source === 'debt' ? shown.debts?.find((d) => d.id === u.expenseId) : undefined;
+                return (
                 <li key={u.id}>
-                  <EditableRow onClick={() => expenses.openEdit(u.expenseId)} title="Edit expense" className="py-2.5">
-                  <IconTile icon={CATEGORY_ICON[u.category]} accent={CATEGORY_META[u.category].accent} size="sm" />
+                  <EditableRow
+                    onClick={() => (u.source === 'debt' ? loanSheet.openEdit(u.expenseId) : expenses.openEdit(u.expenseId))}
+                    title={u.source === 'debt' ? 'Edit loan' : 'Edit expense'}
+                    className="py-2.5"
+                  >
+                  <IconTile
+                    icon={loan ? DEBT_ICON[loan.kind] : CATEGORY_ICON[u.category]}
+                    accent={loan ? DEBT_ACCENT[loan.kind] : CATEGORY_META[u.category].accent}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <EditableTitle className="text-[13.5px] font-medium text-ink">{u.name}</EditableTitle>
                     <div className="text-[12px] text-muted">{formatDate(u.date)}</div>
@@ -290,7 +308,8 @@ export function Dashboard() {
                   <div className="tabular text-[13.5px] font-semibold text-ink">{money(u.amount)}</div>
                   </EditableRow>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           )}
         </Card>
@@ -317,6 +336,9 @@ export function Dashboard() {
               {m.resilience.availableForRunway > 0 && m.essentialCost > 0
                 ? `You could cover your essential costs for ${formatMonths(m.resilience.essentialRunwayMonths)} with ${money(m.resilience.availableForRunway)} of cash and emergency savings.`
                 : 'Add cash accounts and expenses to see how long your savings would last.'}
+              {m.debt.csnMonthly > 0 &&
+                m.resilience.availableForRunway > 0 &&
+                ` CSN can lower its payments if your income drops, which stretches it to ${formatMonths(m.resilience.essentialRunwayCsnReducedMonths)}.`}
             </Callout>
           </div>
         </Card>
@@ -344,6 +366,7 @@ export function Dashboard() {
 
       {expenses.sheet}
       {goalSheet.sheet}
+      {loanSheet.sheet}
 
       {/* Quick links for the sections on small screens */}
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:hidden">

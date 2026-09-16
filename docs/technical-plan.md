@@ -40,12 +40,13 @@ The engine is the product. The UI is a thin projection of `computeMetrics(plan)`
 Everything hangs off one `FinancialPlan`:
 
 - **IncomeSource** — amount, frequency, `reliability` (reliable | variable), `includeInBaseline`.
-- **ExpenseItem** — category (home | living | transport | finance | leisure | planned), subcategory, amount, frequency, optional `nextDate` for non-monthly items, and three independent classification flags from PRD §14: `fixed`, `essential`, `committed`. Tags (`car`, `subscription`, `debt`, `insurance`, `utility`) power the deeper analyses. `includedElsewhere` marks utilities bundled into rent so they are visible but excluded from totals.
+- **ExpenseItem** — category (home | living | transport | finance | leisure | planned), subcategory, amount, frequency, optional `nextDate` for non-monthly items, and three independent classification flags from PRD §14: `fixed`, `essential`, `committed`. Tags (`car`, `subscription`, `insurance`, `utility`) power the deeper analyses (`debt` only survives on old plans; loans are their own model). `includedElsewhere` marks utilities bundled into rent so they are visible but excluded from totals.
   - Variable items may carry a `range` (`low`/`high` per period). `amount` stays the typical figure the plan budgets for; leave it at 0 to budget for the midpoint. `engine/amounts.ts` turns an item into a low/typical/high spread (bounds at 0 mean "same as typical"; bounds are ordered and widened so low ≤ typical ≤ high). Fixed items ignore the range.
   - `billingLag` (months) says which period a bill covers. Swedish utilities bill in arrears: January's usage is invoiced mid-February and paid at the end of February, so the lag is 1.
   - `actuals` records real bills keyed by the month they are paid (`YYYY-MM`). Until entered, a variable item is only an estimate.
   - `engine/actuals.ts` summarises recorded bills and, after three or more, suggests a rounded typical amount and range when the estimate on file is more than 5% off. The edit sheet shows the history and a one-tap "Use these".
 - **Account** — kind (everyday | salary | savings | emergency | joint | cash | investment | other) and balance. Kind determines whether the balance counts as spendable, cash savings, emergency, or investment.
+- **Debt** — kind (csn | mortgage | car | personal | credit_card | other), balance with month-keyed `balances`, `rate` (percent), `payment` + `frequency` (monthly | quarterly | yearly), `secured`, and kind-specific fields: `amortization` and `propertyValue` for a mortgage, `csnType` and `nextDate` for CSN. Rules, formulas and sources: [swedish-loans.md](swedish-loans.md).
 - **SavingsGoal** — kind, `purpose` (future_spending | long_term, PRD §2.4), current amount, monthly contribution, optional target amount and date.
 
 All amounts are stored as entered with their frequency. Monthly equivalents are computed, never stored.
@@ -57,17 +58,20 @@ All amounts are stored as entered with their frequency. Monthly equivalents are 
 | Reliable income | Σ reliable sources |
 | Variable income | Σ variable sources |
 | Total income | reliable + variable (sources with `includeInBaseline = false` are excluded) |
-| Lifestyle cost | Σ all expense items (monthly equivalent), excluding `includedElsewhere` |
-| Essential cost | Σ items with `essential = true` |
+| Spending cost | Σ all expense items (monthly equivalent), excluding `includedElsewhere` |
+| Loan payments (`debt.monthly`) | Σ loan payments, monthly equivalent; split into `interest` and `principal` when balance and rate are known |
+| Lifestyle cost | spending cost + loan payments |
+| Essential cost | Σ items with `essential = true` + loan payments |
 | Committed / flexible | split on `committed` |
 | Planned saving / investing | Σ goal contributions by purpose |
 | Planned cost | lifestyle + savings + investing |
 | Breathing room (= unallocated) | total income − planned cost |
 | Safe to spend this month | breathing room − one-off expenses dated this month |
 | Savings rate | savings ÷ total income (also reported against reliable income) |
-| Allocation | lifestyle %, future-spending %, long-term % of income |
+| Allocation | lifestyle % (without loan repayment), debt paydown %, future-spending %, long-term % of income |
 | Cash in bank | everyday + salary + joint + savings + cash accounts |
 | Total assets | all account balances |
+| Net worth | total assets − Σ loan balances |
 | Emergency cover | emergency balance ÷ essential cost |
 | Essential runway | (cash in bank + emergency) ÷ essential cost |
 | Lifestyle runway | (cash in bank + emergency) ÷ lifestyle cost |
@@ -86,6 +90,7 @@ All amounts are stored as entered with their frequency. Monthly equivalents are 
 | `/income`, `/home`, `/living`, `/transport`, `/finance`, `/leisure`, `/planned` | Editable section pages with a stat strip and the same line-item editor as onboarding |
 | `/savings` | Goals list, savings split donut, 12-month projection |
 | `/accounts` | Accounts list, allocation donut, financial position |
+| `/loans` | Loans list, interest vs repayment, payoff order, amorteringskrav and CSN notes |
 | `/planning` | Can I afford this?, income-change scenario, daily/weekly allowance |
 | `/insights` | Subscriptions, true car cost, annualised costs, reducible spending, allocation |
 | `/settings` | Name, currency, export/import JSON, reset, load sample data |

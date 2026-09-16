@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/planned', label: 'Planned Spending', icon: 'nav-planned', category: 'planned' },
   { to: '/savings', label: 'Savings & Goals', icon: 'nav-savings' },
   { to: '/accounts', label: 'Accounts', icon: 'nav-accounts' },
+  { to: '/loans', label: 'Loans', icon: 'stat-bank' },
   { to: '/planning', label: 'Planning Tools', icon: 'nav-planning' },
   { to: '/insights', label: 'Insights', icon: 'nav-insights' },
 ];

@@ -1,11 +1,12 @@
 import { addMonths, format } from 'date-fns';
+import { CSN_RATE_2026, nextCsnDueDate } from '@/engine/debts';
 import { suggestionBySlug } from '@/engine/taxonomy';
 import type { ExpenseItem, FinancialPlan, Frequency } from '@/engine/types';
 import { ONBOARDING_STEPS } from '@/engine/types';
 
 /**
  * Demo data modelled on the "Alex" screens in the design folder.
- * Totals: income 34,200 · lifestyle 25,500 · savings 5,700 · breathing room 3,000.
+ * Totals: income 34,200 · lifestyle 25,500 (of which 4,200 loan payments) · savings 5,700 · breathing room 3,000.
  */
 export function samplePlan(now: Date = new Date()): FinancialPlan {
   const iso = now.toISOString();
@@ -95,16 +96,13 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       exp('restaurants', 900),
       exp('haircuts', 300),
       exp('clothes', 400),
-      // Transport — 4,200
-      exp('car_finance', 2200),
+      // Transport — 2,000 (the car loan is under loans)
       exp('fuel', 850, { range: { low: 600, high: 1200 } }),
       exp('car_insurance', 450),
       exp('vehicle_tax', 2300, { nextDate: inMonths(1, 12) }),
       exp('car_parking', 300),
       exp('car_service', 2500, { nextDate: inMonths(5, 12) }),
-      // Finance — 2,400
-      exp('student_loan', 1500),
-      exp('credit_card', 500),
+      // Finance — 400 (CSN and the credit card are under loans)
       exp('life_insurance', 250),
       exp('income_insurance', 150),
       // Leisure — 3,100
@@ -133,6 +131,42 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       { id: id('acc'), name: 'Emergency fund', institution: 'Nordnet', kind: 'emergency', balance: 40000 },
       { id: id('acc'), name: 'Joint account', institution: 'Swedbank', kind: 'joint', balance: 18000 },
       { id: id('acc'), name: 'Investments', institution: 'Avanza', kind: 'investment', balance: 120000 },
+    ],
+    // Loans — 4,200 a month
+    debts: [
+      {
+        id: id('debt'),
+        name: 'CSN',
+        lender: 'CSN',
+        kind: 'csn',
+        csnType: 'annuity',
+        balance: 212000,
+        rate: CSN_RATE_2026,
+        payment: 4500,
+        frequency: 'quarterly',
+        nextDate: nextCsnDueDate(now),
+      },
+      {
+        id: id('debt'),
+        name: 'Billån',
+        lender: 'Santander Consumer Bank',
+        kind: 'car',
+        secured: true,
+        balance: 96000,
+        rate: 6.95,
+        payment: 2200,
+        frequency: 'monthly',
+      },
+      {
+        id: id('debt'),
+        name: 'Credit card',
+        lender: 'Nordea',
+        kind: 'credit_card',
+        balance: 7800,
+        rate: 19.9,
+        payment: 500,
+        frequency: 'monthly',
+      },
     ],
     goals: [
       {

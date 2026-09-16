@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { newId } from '@/lib/id';
+import { migrateLegacyDebts } from '@/engine/debts';
 import { shareUsage, withTariffAmounts } from '@/engine/electricity';
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
 import type {
   Account,
+  Debt,
   ExpenseItem,
   FinancialPlan,
   HomeLocation,
@@ -52,6 +54,10 @@ interface PlanState {
   addAccount: (draft: Draft<Account>) => string;
   updateAccount: (id: string, patch: Partial<Account>) => void;
   removeAccount: (id: string) => void;
+
+  addDebt: (draft: Draft<Debt>) => string;
+  updateDebt: (id: string, patch: Partial<Debt>) => void;
+  removeDebt: (id: string) => void;
 
   addGoal: (draft: Draft<SavingsGoal>) => string;
   updateGoal: (id: string, patch: Partial<SavingsGoal>) => void;
@@ -163,6 +169,24 @@ export const usePlanStore = create<PlanState>()(
           })),
         removeAccount: (id) => mutate((p) => ({ ...p, accounts: p.accounts.filter((x) => x.id !== id) })),
 
+        addDebt: (draft) => {
+          const id = draft.id ?? newId('debt');
+          const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), draft.balance);
+          mutate((p) => ({ ...p, debts: [...(p.debts ?? []), { ...draft, id, balances }] }));
+          return id;
+        },
+        updateDebt: (id, patch) =>
+          mutate((p) => ({
+            ...p,
+            debts: (p.debts ?? []).map((x) => {
+              if (x.id !== id) return x;
+              const next = { ...x, ...patch };
+              if (typeof patch.balance === 'number') next.balances = withMonthValue(x.balances, monthKeyOf(new Date()), patch.balance);
+              return next;
+            }),
+          })),
+        removeDebt: (id) => mutate((p) => ({ ...p, debts: (p.debts ?? []).filter((x) => x.id !== id) })),
+
         addGoal: (draft) => {
           const id = draft.id ?? newId('goal');
           const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), draft.currentAmount);
@@ -217,20 +241,21 @@ export const usePlanStore = create<PlanState>()(
         reset: () => set({ plan: emptyPlan(), snapshots: {} }),
         importPlan: (data) => {
           const { plan, snapshots } = 'plan' in data ? data : { plan: data, snapshots: {} };
-          set({ plan: touch({ ...emptyPlan(), ...plan, isSample: undefined }), snapshots });
+          set({ plan: touch(normalizePlan({ ...emptyPlan(), ...plan, isSample: undefined })), snapshots });
         },
-        replaceAll: ({ plan, snapshots }) => set({ plan, snapshots }),
+        replaceAll: ({ plan, snapshots }) => set({ plan: normalizePlan(plan), snapshots }),
         setHydrated: () => set({ hydrated: true }),
       };
     },
     {
       name: 'finly.plan.v1',
-      version: 2,
+      version: 3,
       partialize: (s) => ({ plan: s.plan, snapshots: s.snapshots }),
-      // Earlier versions stored the same shape minus the optional history fields; nothing needs rewriting.
+      // v1–2 stored the same shape minus the optional history fields. v3 moved loan repayments out of
+      // expenses into `debts`; closed months keep their frozen plans as they were.
       migrate: (persisted) => {
         const s = (persisted ?? {}) as Partial<PlanData>;
-        return { plan: s.plan ? { ...emptyPlan(), ...s.plan } : emptyPlan(), snapshots: s.snapshots ?? {} };
+        return { plan: s.plan ? normalizePlan({ ...emptyPlan(), ...s.plan }) : emptyPlan(), snapshots: s.snapshots ?? {} };
       },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated();
@@ -238,6 +263,11 @@ export const usePlanStore = create<PlanState>()(
     },
   ),
 );
+
+/** Brings a plan saved by an older version up to the current shape. Idempotent. */
+export function normalizePlan(plan: FinancialPlan): FinancialPlan {
+  return migrateLegacyDebts({ ...plan, debts: Array.isArray(plan.debts) ? plan.debts : [] });
+}
 
 /** Normalises a parsed v1 plan object; throws when it is not one. */
 export function parsePlan(input: unknown): FinancialPlan {
@@ -252,6 +282,7 @@ export function parsePlan(input: unknown): FinancialPlan {
     income: Array.isArray(raw.income) ? raw.income : [],
     expenses: Array.isArray(raw.expenses) ? raw.expenses : [],
     accounts: Array.isArray(raw.accounts) ? raw.accounts : [],
+    debts: Array.isArray(raw.debts) ? raw.debts : [],
     goals: Array.isArray(raw.goals) ? raw.goals : [],
     onboarding: raw.onboarding ?? base.onboarding,
   };

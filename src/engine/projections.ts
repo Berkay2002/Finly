@@ -1,5 +1,6 @@
 import { addMonths, differenceInCalendarMonths, startOfMonth } from 'date-fns';
 import { amountSpread } from './amounts';
+import { debtFlow } from './debts';
 import { isIrregular, monthsPerPeriod } from './frequency';
 import type { PlanMetrics } from './metrics';
 import { activeExpenses } from './metrics';
@@ -11,6 +12,9 @@ import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
 
 export interface UpcomingExpense {
   id: string;
+  /** Where the occurrence comes from: an expense item, or a loan paid quarterly or yearly. */
+  source: 'expense' | 'debt';
+  /** Id of the expense item or loan. */
   expenseId: string;
   name: string;
   category: ExpenseItem['category'];
@@ -64,6 +68,7 @@ export function upcomingExpenses(
     while (date < end && guard < 24) {
       out.push({
         id: `${e.id}-${date.toISOString().slice(0, 10)}`,
+        source: 'expense',
         expenseId: e.id,
         name: e.name,
         category: e.category,
@@ -75,6 +80,34 @@ export function upcomingExpenses(
       if (!step) break;
       date = addMonths(date, step);
       guard += 1;
+    }
+  }
+
+  // Loans paid quarterly or yearly (CSN's default schedule is four times a year).
+  for (const d of plan.debts ?? []) {
+    if (d.frequency === 'monthly') continue;
+    const monthly = debtFlow(d).monthly;
+    if (monthly <= 0) continue;
+    const step = d.frequency === 'quarterly' ? 3 : 12;
+    const first = d.nextDate ? parseIso(d.nextDate) : addMonths(start, step);
+    // Step from the first date each time so a month-end due date does not drift (30 Nov → 28 Feb → 28 May).
+    let k = 0;
+    while (addMonths(first, k * step) < start) k += 1;
+    const amount = monthly * step;
+    for (let date = addMonths(first, k * step), guard = 0; date < end && guard < 24; guard += 1) {
+      out.push({
+        id: `${d.id}-${date.toISOString().slice(0, 10)}`,
+        source: 'debt',
+        expenseId: d.id,
+        name: d.name,
+        category: 'finance',
+        date,
+        amount,
+        low: amount,
+        high: amount,
+      });
+      k += 1;
+      date = addMonths(first, k * step);
     }
   }
 
@@ -110,8 +143,11 @@ export function monthOutlook(
       .map((e) => e.id),
   );
   const regularLines = metrics.expenses.lines.filter((l) => !irregularIds.has(l.id));
-  const regularSpend = regularLines.reduce((acc, l) => acc + l.monthly, 0);
-  const regularSpendHigh = regularLines.reduce((acc, l) => acc + l.monthlyHigh, 0);
+  const monthlyDebt = (plan.debts ?? [])
+    .filter((d) => d.frequency === 'monthly')
+    .reduce((acc, d) => acc + debtFlow(d).monthly, 0);
+  const regularSpend = regularLines.reduce((acc, l) => acc + l.monthly, 0) + monthlyDebt;
+  const regularSpendHigh = regularLines.reduce((acc, l) => acc + l.monthlyHigh, 0) + monthlyDebt;
 
   const out: MonthOutlook[] = [];
   for (let i = 0; i < horizonMonths; i += 1) {

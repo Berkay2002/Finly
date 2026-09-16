@@ -88,6 +88,12 @@ export function AccountsPage() {
                 ['Investment value', m.position.investments, 'Tracked, not spendable'],
                 ...(m.position.other > 0 ? [['Other tracked balances', m.position.other, '']] : []),
                 ['Total tracked assets', m.position.totalAssets, ''],
+                ...(m.position.totalDebt > 0
+                  ? [
+                      ['Loans', -m.position.totalDebt, 'CSN, mortgage and other credit'],
+                      ['Net worth', m.position.netWorth, 'Assets minus loans'],
+                    ]
+                  : []),
               ].map(([label, value, sub], i, arr) => (
                 <div key={String(label)} className="flex items-center justify-between gap-3 py-2.5">
                   <dt className={i === arr.length - 1 ? 'text-[13.5px] font-semibold text-ink' : 'text-[13.5px] text-ink-soft'}>

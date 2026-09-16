@@ -71,9 +71,32 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
         </Card>
 
         <div className="space-y-4 self-start">
+          {category === 'finance' && (
+            <Card>
+              <CardHeader
+                title="Loans"
+                subtitle="CSN, mortgage, car loans and credit have their own page, with balance, rate and payoff."
+                icon={<IconTile icon="stat-bank" accent="red" size="sm" />}
+                action={m.hasDebts ? 'View loans' : 'Add a loan'}
+                actionTo={m.hasDebts ? '/loans' : '/loans?add=1'}
+              />
+              {m.hasDebts && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-page p-3">
+                    <div className="text-[11.5px] text-muted">Payments per month</div>
+                    <div className="tabular text-[18px] font-semibold text-ink">{money(m.debt.monthly)}</div>
+                  </div>
+                  <div className="rounded-xl bg-page p-3">
+                    <div className="text-[11.5px] text-muted">Total owed</div>
+                    <div className="tabular text-[18px] font-semibold text-ink">{money(m.debt.balance)}</div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
           {category === 'transport' && m.car.monthly > 0 && (
             <Card>
-              <CardHeader title="True car cost" subtitle="All car-tagged items combined." icon={<IconTile icon="card-car-cost" accent="orange" size="sm" />} />
+              <CardHeader title="True car cost" subtitle={m.car.loans.length > 0 ? 'Car-tagged items and car loans combined.' : 'All car-tagged items combined.'} icon={<IconTile icon="card-car-cost" accent="orange" size="sm" />} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-page p-3">
                   <div className="text-[11.5px] text-muted">Per month</div>

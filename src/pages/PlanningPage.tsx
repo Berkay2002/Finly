@@ -10,6 +10,7 @@ import { EXPENSE_CATEGORIES, type ExpenseCategory, type Frequency } from '@/engi
 import { useCurrency, useMetrics, useMonthOutlook, usePlan, useViewDate } from '@/store/selectors';
 import { customDraft, useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
+import { useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -367,6 +368,7 @@ function OutlookCard() {
   }));
   const expensive = outlook.filter((o) => o.aboveNormal > 0).sort((a, b) => b.aboveNormal - a.aboveNormal).slice(0, 4);
   const expenses = useExpenseSheet();
+  const loans = useLoanSheet();
 
   return (
     <Card>
@@ -418,8 +420,8 @@ function OutlookCard() {
                     <button
                       key={i.id}
                       type="button"
-                      onClick={() => expenses.openEdit(i.expenseId)}
-                      title="Edit expense"
+                      onClick={() => (i.source === 'debt' ? loans.openEdit(i.expenseId) : expenses.openEdit(i.expenseId))}
+                      title={i.source === 'debt' ? 'Edit loan' : 'Edit expense'}
                       className="rounded-full border border-line bg-card px-2 py-0.5 text-[11.5px] text-ink-soft transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
                     >
                       {i.name}
@@ -435,6 +437,7 @@ function OutlookCard() {
         <p className="mt-3 text-[13px] text-muted">No month stands out. Add due dates to yearly or one-off costs to see spikes.</p>
       )}
       {expenses.sheet}
+      {loans.sheet}
     </Card>
   );
 }
