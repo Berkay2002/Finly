@@ -9,6 +9,7 @@ import {
   snapshotDateFor,
   type SnapshotMap,
 } from '../history';
+import { savingsPots } from '../savings';
 import { NOW, expense, prdExamplePlan } from './fixtures';
 
 const closable = () => {
@@ -45,7 +46,8 @@ describe('buildSnapshot', () => {
     const plan = closable();
     const snap = buildSnapshot(plan, '2026-08', NOW);
     expect(snap.byAccount).toEqual(Object.fromEntries(plan.accounts.map((a) => [a.id, a.balance])));
-    expect(snap.byGoal).toEqual(Object.fromEntries(plan.goals.map((g) => [g.id, g.currentAmount])));
+    expect(snap.byGoal).toEqual(Object.fromEntries(savingsPots(plan).map((g) => [g.id, g.currentAmount])));
+    expect(snap.byGoal?.g1).toBe(40000);
     expect(snap.emergency).toBe(40000);
     expect(snap.plan).toBeDefined();
   });

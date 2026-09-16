@@ -77,6 +77,13 @@ whatever the rates, because paying a bunden del early can cost ränteskillnadser
 Secured (billån through the dealer, the car is security) keeps ränteavdrag; unsecured (a blancolån used for a
 car) does not. New car loans default to secured. Fixed monthly payment (annuity).
 
+### Net worth
+
+Loans count against net worth, and what they bought counts for it (`loanAssets`): the home value entered on
+the mortgage (once, however many parts), and `assetValue` on car loans and secured other loans. CSN has
+nothing behind it, so Home and Accounts also show net worth without CSN: it is cheap, repaid over many
+years, lowered when income drops and written off at death.
+
 ### Personal loan, credit card (`personal`, `credit_card`)
 
 Always unsecured, so no ränteavdrag from 2026. Fixed monthly payment.

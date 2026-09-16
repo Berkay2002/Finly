@@ -126,10 +126,16 @@ export function LoansPage() {
         />
         <StatCard
           icon="card-position"
-          accent="blue"
-          label={t.page.netWorth}
-          value={money(m.position.netWorth)}
-          sub={<DeltaOr before={prev?.netWorth} after={m.position.netWorth} fallback={t.page.accountsMinusLoans} />}
+          accent="green"
+          label={t.page.repaidPerMonth}
+          value={money(m.debt.principal)}
+          sub={
+            m.debt.principal > 0
+              ? t.page.repaidPerYear(money(m.debt.principal * 12))
+              : m.debt.unsplit > 0
+                ? t.page.addBalanceAndRate
+                : t.page.notRepayingYet
+          }
         />
       </div>
 
@@ -260,6 +266,8 @@ export function LoansPage() {
               {t.page.csnBody(csnRateDecided(now.getFullYear()), pct(csnRateForYear(outlook, now.getFullYear())), now.getFullYear())}
               {m.resilience.availableForRunway > 0 &&
                 m.essentialCost > m.debt.csnMonthly &&
+                // Only when lowering CSN changes the rounded figure; "1 month instead of 1 month" says nothing.
+                formatMonths(m.resilience.essentialRunwayMonths) !== formatMonths(m.resilience.essentialRunwayCsnReducedMonths) &&
                 t.page.csnRunway(
                   formatMonths(m.resilience.essentialRunwayMonths),
                   formatMonths(m.resilience.essentialRunwayCsnReducedMonths),

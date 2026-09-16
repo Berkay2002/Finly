@@ -6,6 +6,7 @@ import {
   csnIncomeBasedYearly,
   debtFlow,
   debtPayoff,
+  hasAssetValue,
   interestBeforeRepayment,
   interestTaxReduction,
   isDeductible,
@@ -85,6 +86,8 @@ function finalize(d: Draft, now: Date): Draft {
   // A CSN rate saved before rateYear existed was entered for this year's rate.
   out.rateYear = out.kind === 'csn' && out.rate !== undefined ? (out.rateYear ?? now.getFullYear()) : undefined;
   if (out.kind !== 'csn') out.csnBefore2022 = undefined;
+  if (out.kind !== 'mortgage') out.propertyValue = undefined;
+  if (!hasAssetValue(out)) out.assetValue = undefined;
   if (out.kind === 'mortgage') {
     out.rateType = mortgageRateType(out);
     if (out.rateType === 'variable') out.rateFixedUntil = undefined;
@@ -193,7 +196,7 @@ export function LoanEditor({
 
 const pct = (n: number) => `${formatNumber(n, 3)} %`;
 
-/** "Rörlig", or "Bunden till okt 2027" style label for a mortgage part. */
+/** "Variable", or "Fixed until Oct 2027" style label for a mortgage part. */
 export function rateTypeLabel(d: Pick<Debt, 'rateType' | 'rateFixedUntil'>): string {
   const t = messages().loans.editor;
   if (mortgageRateType(d) === 'variable') return t.variable;
@@ -232,7 +235,8 @@ export function LoanSheet({
     onChange({
       ...fresh,
       id: draft.id,
-      name: draft.id || !isDefaultName(draft.name, draft.kind) ? draft.name : fresh.name,
+      // A name the user typed stays; the old type's default name follows the new type, on saved loans too.
+      name: draft.name.trim() && !isDefaultName(draft.name, draft.kind) ? draft.name : fresh.name,
       balance: draft.balance,
       lender: draft.lender && draft.lender !== 'CSN' ? draft.lender : fresh.lender,
       rate: kind === 'csn' ? fresh.rate : draft.kind === 'csn' ? undefined : draft.rate,
@@ -336,6 +340,15 @@ export function LoanSheet({
                   onChange={(secured) => onChange({ ...draft, secured })}
                   label={t.sheet.secured}
                   description={draft.kind === 'car' ? t.sheet.securedCar : t.sheet.securedOther}
+                />
+              )}
+              {hasAssetValue(draft) && (
+                <MoneyField
+                  label={draft.kind === 'car' ? t.sheet.carValue : t.sheet.propertyValue}
+                  hint={t.sheet.assetValueHint}
+                  currency={currency}
+                  value={draft.assetValue ?? 0}
+                  onValueChange={(v) => onChange({ ...draft, assetValue: v > 0 ? v : undefined })}
                 />
               )}
             </>
@@ -629,13 +642,16 @@ function MortgageFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft
             </button>
           )}
         </div>
-        <MoneyField
-          label={t.homeValue}
-          hint={others.some((x) => x.propertyValue) ? t.sameHome : t.forRequirement}
-          currency={currency}
-          value={draft.propertyValue ?? 0}
-          onValueChange={(v) => onChange({ ...draft, propertyValue: v > 0 ? v : undefined })}
-        />
+        <div>
+          <MoneyField
+            label={t.homeValue}
+            currency={currency}
+            value={draft.propertyValue ?? 0}
+            onValueChange={(v) => onChange({ ...draft, propertyValue: v > 0 ? v : undefined })}
+          />
+          {/* Below the field, not in the label, so a wrapping hint does not push this input below Amortering. */}
+          <p className="mt-1 text-[12px] text-muted">{others.some((x) => x.propertyValue) ? t.sameHome : t.forRequirement}</p>
+        </div>
       </div>
       <div>
         <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.rate}</div>

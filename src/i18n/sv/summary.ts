@@ -63,9 +63,12 @@ export default {
       emergency: 'Buffert',
       investments: 'Investeringar',
       other: 'Övriga saldon',
-      totalAssets: 'Totala tillgångar',
+      totalAssets: 'Totalt på konton',
+      home: 'Bostad',
+      otherProperty: 'Bil & annan egendom',
       loans: 'Lån',
       netWorth: 'Nettoförmögenhet',
+      excludingCsn: (amount) => `${amount} utan CSN`,
     },
   },
 } satisfies Messages['summary'];

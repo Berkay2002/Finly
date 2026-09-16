@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 import clsx from 'clsx';
 import { formatDuration, formatMoney, formatNumber, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
+import { goalForAccount, isSavingsAccount, savingsPots } from '@/engine/savings';
 import { GOAL_KINDS, goalKindMeta } from '@/engine/taxonomy';
-import type { GoalKind, SavingsGoal, SavingsPurpose } from '@/engine/types';
+import type { GoalKind, SavingsPurpose } from '@/engine/types';
 import { useT } from '@/i18n';
-import { usePlanStore } from '@/store/planStore';
+import { usePlanStore, type PotDraft } from '@/store/planStore';
 import { useAccountReturns, useCurrency, usePlan, useViewDate } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
@@ -17,7 +18,7 @@ import { DateField, MoneyField, SelectField, TextField, TogglePill } from '@/com
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { Sheet } from '@/components/ui/Sheet';
 
-export type GoalDraft = Omit<SavingsGoal, 'id'> & { id?: string };
+export type GoalDraft = PotDraft;
 type Draft = GoalDraft;
 
 export function blankGoal(kind: GoalKind = 'purchase'): Draft {
@@ -47,9 +48,11 @@ export function GoalEditor({
   const currency = useCurrency();
   const now = useViewDate();
   const returns = useAccountReturns();
-  const { addGoal, updateGoal, removeGoal } = usePlanStore();
+  const { saveSavingsPot, removeGoal } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
   const t = useT().goals.editor;
+  const pots = savingsPots(plan);
+  const accountName = new Map(plan.accounts.map((a) => [a.id, a.name]));
 
   useEffect(() => {
     if (autoOpenAdd) setEditing(blankGoal());
@@ -57,10 +60,7 @@ export function GoalEditor({
 
   const save = () => {
     if (!editing) return;
-    if (editing.id) {
-      const { id, ...patch } = editing;
-      updateGoal(id, patch);
-    } else addGoal(editing);
+    saveSavingsPot(editing);
     setEditing(null);
   };
 
@@ -69,7 +69,7 @@ export function GoalEditor({
       {!compact && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-[12.5px] text-muted">
-            {plan.goals.length === 0 ? t.noGoals : t.goalCount(plan.goals.length)}
+            {pots.length === 0 ? t.noGoals : t.goalCount(pots.length)}
           </p>
           <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing(blankGoal())}>
             {t.addNewGoal}
@@ -78,7 +78,7 @@ export function GoalEditor({
       )}
 
       <div className="space-y-2.5">
-        {plan.goals.map((g) => {
+        {pots.map((g) => {
           const p = goalProgress(g, now, goalReturn(g, returns));
           const Icon = goalIcon(g.icon, g.kind);
           return (
@@ -95,6 +95,7 @@ export function GoalEditor({
                   <Chip tone={g.purpose === 'long_term' ? 'brand' : 'blue'}>
                     {g.purpose === 'long_term' ? t.longTerm : t.plannedSpending}
                   </Chip>
+                  {g.goalId && g.accountId && <Chip>{accountName.get(g.accountId)}</Chip>}
                 </div>
                 {g.description && <div className="truncate text-[12.5px] text-muted">{g.description}</div>}
                 {g.targetAmount ? (
@@ -133,7 +134,7 @@ export function GoalEditor({
             </button>
           );
         })}
-        {plan.goals.length === 0 && (
+        {pots.length === 0 && (
           <button
             type="button"
             onClick={() => setEditing(blankGoal())}
@@ -150,7 +151,7 @@ export function GoalEditor({
         onClose={() => setEditing(null)}
         onSave={save}
         onRemove={() => {
-          if (editing?.id) removeGoal(editing.id);
+          if (editing?.goalId) removeGoal(editing.goalId);
           setEditing(null);
         }}
       />
@@ -178,14 +179,35 @@ export function GoalSheet({
   const plan = usePlan();
   const currency = useCurrency();
   const t = useT().goals.sheet;
+  // A savings account with no goal yet: its account is fixed, and there is no goal to remove.
+  const accountPot = !!draft?.id && !draft.goalId && !!draft.accountId;
+  const account = draft?.linkedAccountId ? plan.accounts.find((a) => a.id === draft.linkedAccountId) : undefined;
+  const accountOptions = plan.accounts.filter(
+    (a) => a.id === draft?.linkedAccountId || (isSavingsAccount(a) && !goalForAccount(plan, a.id)),
+  );
+  const linkAccount = (id: string) => {
+    if (!draft) return;
+    const a = plan.accounts.find((x) => x.id === id);
+    onChange(
+      a
+        ? {
+            ...draft,
+            linkedAccountId: a.id,
+            currentAmount: a.balance,
+            balances: a.balances,
+            monthlyContribution: Math.max(0, a.monthlyDeposit ?? 0),
+          }
+        : { ...draft, linkedAccountId: undefined },
+    );
+  };
   return (
     <Sheet
       open={draft !== null}
       onClose={onClose}
-      title={draft?.id ? t.editGoal : t.newGoal}
+      title={accountPot ? t.editSavings : draft?.id ? t.editGoal : t.newGoal}
       footer={
         <div className="flex items-center justify-between gap-2">
-          {draft?.id && onRemove ? (
+          {draft?.goalId && onRemove ? (
             <Button variant="danger" onClick={onRemove}>
               {t.remove}
             </Button>
@@ -267,19 +289,35 @@ export function GoalSheet({
                 ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <MoneyField
-                label={t.savedSoFar}
-                currency={currency}
-                value={draft.currentAmount}
-                onValueChange={(currentAmount) => onChange({ ...draft, currentAmount })}
-              />
-              <MoneyField
-                label={t.monthlyContribution}
-                currency={currency}
-                value={draft.monthlyContribution}
-                onValueChange={(monthlyContribution) => onChange({ ...draft, monthlyContribution })}
-              />
+            {accountPot && account ? (
+              <p className="text-[12px] text-muted">{t.accountPotHint(account.name)}</p>
+            ) : (
+              accountOptions.length > 0 && (
+                <SelectField
+                  label={t.linkedAccount}
+                  hint={t.optional}
+                  value={draft.linkedAccountId ?? ''}
+                  onValueChange={linkAccount}
+                  options={[{ value: '', label: t.none }, ...accountOptions.map((a) => ({ value: a.id, label: a.name }))]}
+                />
+              )
+            )}
+            <div>
+              <div className="grid grid-cols-2 gap-3">
+                <MoneyField
+                  label={t.savedSoFar}
+                  currency={currency}
+                  value={draft.currentAmount}
+                  onValueChange={(currentAmount) => onChange({ ...draft, currentAmount })}
+                />
+                <MoneyField
+                  label={t.monthlyContribution}
+                  currency={currency}
+                  value={draft.monthlyContribution}
+                  onValueChange={(monthlyContribution) => onChange({ ...draft, monthlyContribution })}
+                />
+              </div>
+              {account && <p className="mt-1 text-[12px] text-muted">{t.syncedWith(account.name)}</p>}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MoneyField
@@ -296,15 +334,6 @@ export function GoalSheet({
                 onChange={(e) => onChange({ ...draft, targetDate: e.target.value || undefined })}
               />
             </div>
-            {plan.accounts.length > 0 && (
-              <SelectField
-                label={t.linkedAccount}
-                hint={t.optional}
-                value={draft.linkedAccountId ?? ''}
-                onValueChange={(v) => onChange({ ...draft, linkedAccountId: v || undefined })}
-                options={[{ value: '', label: t.none }, ...plan.accounts.map((a) => ({ value: a.id, label: a.name }))]}
-              />
-            )}
           </div>
       )}
     </Sheet>
@@ -317,24 +346,21 @@ export function GoalSheet({
  */
 export function useGoalSheet() {
   const plan = usePlan();
-  const { addGoal, updateGoal, removeGoal } = usePlanStore();
+  const { saveSavingsPot, removeGoal } = usePlanStore();
   const [draft, setDraft] = useState<Draft | null>(null);
   const openEdit = (id: string) => {
-    const g = plan.goals.find((x) => x.id === id);
+    const g = savingsPots(plan).find((x) => x.id === id);
     if (g) setDraft({ ...g });
   };
   const openNew = (kind?: GoalKind) => setDraft(blankGoal(kind));
   const close = () => setDraft(null);
   const save = () => {
     if (!draft) return;
-    if (draft.id) {
-      const { id, ...patch } = draft;
-      updateGoal(id, patch);
-    } else addGoal(draft);
+    saveSavingsPot(draft);
     setDraft(null);
   };
   const remove = () => {
-    if (draft?.id) removeGoal(draft.id);
+    if (draft?.goalId) removeGoal(draft.goalId);
     setDraft(null);
   };
   const sheet = <GoalSheet draft={draft} onChange={setDraft} onClose={close} onSave={save} onRemove={remove} />;

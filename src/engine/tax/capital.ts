@@ -78,10 +78,8 @@ export function grossReturnOf(a: Account): number {
   return (wrapperOf(a.kind) === 'cash' ? a.interestRate : a.expectedReturn) ?? 0;
 }
 
-/** Money put into the account each month: the linked goals' contributions, else the account's own figure. */
-export function monthlyDepositOf(a: Account, plan: Pick<FinancialPlan, 'goals'>): number {
-  const linked = plan.goals.filter((g) => g.linkedAccountId === a.id);
-  if (linked.length > 0) return linked.reduce((s, g) => s + Math.max(0, g.monthlyContribution || 0), 0);
+/** Money put into the account each month. */
+export function monthlyDepositOf(a: Account): number {
   return Math.max(0, a.monthlyDeposit ?? 0);
 }
 
@@ -170,7 +168,7 @@ export interface CapitalTaxSummary {
 
 /** Tax on every savings account for `year` (default: the year of `now`). */
 export function capitalTaxSummary(
-  plan: Pick<FinancialPlan, 'accounts' | 'goals'>,
+  plan: Pick<FinancialPlan, 'accounts'>,
   now: Date,
   gov?: GovBondRate,
   yearNumber: number = now.getFullYear(),
@@ -180,7 +178,7 @@ export function capitalTaxSummary(
 
   const rows = plan.accounts.map((a) => {
     const wrapper = wrapperOf(a.kind);
-    const deposit = monthlyDepositOf(a, plan);
+    const deposit = monthlyDepositOf(a);
     const q = quarterValues(a, yearNumber, now, deposit);
     const average = q.reduce((s, v) => s + v, 0) / 4;
     const gross = grossReturnOf(a);

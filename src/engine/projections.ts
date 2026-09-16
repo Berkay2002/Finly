@@ -6,6 +6,7 @@ import { isIrregular, monthsPerPeriod } from './frequency';
 import type { PlanMetrics } from './metrics';
 import { activeExpenses } from './metrics';
 import type { GovBondRate } from './rates';
+import { savingsPots } from './savings';
 import { capitalTaxSummary, monthlyRate } from './tax/capital';
 import { debtName, expenseName } from './taxonomy';
 import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
@@ -272,14 +273,14 @@ export function accountReturns(plan: FinancialPlan, now: Date, gov?: GovBondRate
   return new Map(summary.accounts.map((t) => [t.accountId, t.netReturn]));
 }
 
-/** The after-tax return a goal earns through its linked account, percent; 0 when it has none. */
+/** The after-tax return a goal or pot earns through its account, percent; 0 when it has none. */
 export function goalReturn(goal: SavingsGoal, returns: Map<string, number>): number {
   return goal.linkedAccountId ? (returns.get(goal.linkedAccountId) ?? 0) : 0;
 }
 
 export function allGoalProgress(plan: FinancialPlan, now: Date = new Date(), gov?: GovBondRate): GoalProgress[] {
   const returns = accountReturns(plan, now, gov);
-  return plan.goals.map((g) => goalProgress(g, now, goalReturn(g, returns)));
+  return savingsPots(plan).map((g) => goalProgress(g, now, goalReturn(g, returns)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -290,9 +291,9 @@ export interface ProjectionPoint {
   month: Date;
   /** Cumulative contributions since today. */
   added: number;
-  /** Total savings (goal balances) at that point. */
+  /** Total savings (savings accounts and goals) at that point. */
   balance: number;
-  /** `balance` plus the expected return after tax earned by goals linked to an account with a return. */
+  /** `balance` plus the expected return after tax earned by savings held in an account with a return. */
   withReturns: number;
 }
 
@@ -303,11 +304,12 @@ export function savingsProjection(
   horizonMonths = 12,
   opts: { includeUnallocated?: boolean; gov?: GovBondRate } = {},
 ): ProjectionPoint[] {
-  const start = plan.goals.reduce((acc, g) => acc + g.currentAmount, 0);
+  const pots = savingsPots(plan);
+  const start = pots.reduce((acc, g) => acc + g.currentAmount, 0);
   const extra = opts.includeUnallocated ? Math.max(0, metrics.breathingRoom) : 0;
   const perMonth = metrics.savings.total + extra;
   const returns = accountReturns(plan, now, opts.gov);
-  const growing = plan.goals.map((g) => ({
+  const growing = pots.map((g) => ({
     balance: g.currentAmount,
     contribution: Math.max(0, g.monthlyContribution),
     r: monthlyRate(goalReturn(g, returns)),

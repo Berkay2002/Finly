@@ -11,7 +11,7 @@ export default {
   loans: {
     title: 'Loans',
     description:
-      'CSN, bolån, billån and credit. Payments count as essential costs; the balance and rate show what the debt really costs you.',
+      'CSN, mortgages, car loans and credit. Payments count as essential costs; the balance and rate show what the debt really costs you.',
   },
   bankingInsurance: 'Banking and insurance',
   accuracyTip: 'Be as accurate as you can. You can always update this later.',

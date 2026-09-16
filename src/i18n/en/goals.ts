@@ -20,7 +20,7 @@ export default {
     mostlyPlanned: 'Most of your saving is for things you plan to spend on. That is a valid choice; long-term goals build resilience.',
     projectionTitle: '12-month savings projection',
     projectionWithReturns: (amount: string) =>
-      `Your monthly savings of ${amount}, plus expected returns after tax on goals linked to an account.`,
+      `Your monthly savings of ${amount}, plus expected returns after tax on money saved in an account.`,
     projectionPlain: (amount: string) => `Based on your current monthly savings of ${amount}.`,
     inclReturns: (amount: string) => `incl. ${amount} returns`,
     assumeUnallocated: 'Assume unallocated money is saved too',
@@ -47,6 +47,7 @@ export default {
   },
   sheet: {
     editGoal: 'Edit goal',
+    editSavings: 'Edit savings',
     newGoal: 'New savings goal',
     remove: 'Remove',
     cancel: 'Cancel',
@@ -67,7 +68,10 @@ export default {
     monthlyContribution: 'Monthly contribution',
     targetAmount: 'Target amount',
     targetDate: 'Target date',
-    linkedAccount: 'Linked account',
+    linkedAccount: 'Account',
+    syncedWith: (account: string) => `Same as the balance and monthly deposit of ${account}.`,
+    accountPotHint: (account: string) =>
+      `Saved in ${account}. Set a target to turn it into a goal; the account itself is managed on the Accounts page.`,
     none: 'None',
   },
 };

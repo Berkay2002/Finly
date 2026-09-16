@@ -12,6 +12,7 @@ import {
   interestBeforeRepayment,
   interestTaxReduction,
   isDeductible,
+  loanAssets,
   migrateLegacyDebts,
   nextCsnDueDate,
   repaymentOrder,
@@ -222,6 +223,23 @@ describe('amorteringskrav', () => {
   });
 });
 
+describe('what loans bought', () => {
+  it('counts the home once across mortgage parts, and cars and secured property in full', () => {
+    const assets = loanAssets([
+      debt({ id: 'a', kind: 'mortgage', balance: 1_000_000, propertyValue: 3_000_000 }),
+      debt({ id: 'b', kind: 'mortgage', balance: 800_000, propertyValue: 2_900_000 }),
+      debt({ id: 'car', kind: 'car', balance: 90_000, assetValue: 150_000 }),
+      debt({ id: 'boat', kind: 'other', secured: true, balance: 50_000, assetValue: 80_000 }),
+      debt({ id: 'loose', kind: 'other', balance: 20_000, assetValue: 30_000 }),
+    ]);
+    expect(assets).toEqual({ home: 3_000_000, other: 230_000 });
+  });
+
+  it('is nothing without values', () => {
+    expect(loanAssets([debt({ kind: 'csn', balance: 400_000 })])).toEqual({ home: 0, other: 0 });
+  });
+});
+
 describe('CSN', () => {
   it('sets a 1989–2001 studielån at 4 % of income', () => {
     expect(csnIncomeBasedYearly(400_000)).toBe(16_000);
@@ -324,7 +342,9 @@ describe('loans in the plan metrics', () => {
   it('puts the balance in net worth and the repayment in the future share of income', () => {
     const m = computeMetrics(plan(), NOW);
     expect(m.position.totalDebt).toBe(2_150_000);
-    expect(m.position.netWorth).toBe(100_000 - 2_150_000);
+    expect(m.position.home).toBe(2_600_000);
+    expect(m.position.netWorth).toBe(100_000 + 2_600_000 - 2_150_000);
+    expect(m.position.netWorthExcludingCsn).toBe(100_000 + 2_600_000 - 2_000_000);
     const csnInterest = (150_000 * 0.02135) / 12;
     expect(m.debt.principal).toBeCloseTo(3000 + 1500 - csnInterest, 5);
     expect(m.allocation.debtPaydown).toBeCloseTo(m.debt.principal / 50_000, 8);
@@ -340,6 +360,16 @@ describe('loans in the plan metrics', () => {
     const m = computeMetrics(plan(), NOW);
     expect(m.resilience.essentialRunwayMonths).toBeCloseTo(100_000 / 15_500, 5);
     expect(m.resilience.essentialRunwayCsnReducedMonths).toBeCloseTo(100_000 / 14_000, 5);
+  });
+
+  it('leaves a loan out of the month cost until its first payment period', () => {
+    const p = plan();
+    p.debts = p.debts!.map((d) => (d.id === 'csn' ? { ...d, nextDate: '2027-02-28' } : d));
+    const m = computeMetrics(p, NOW);
+    expect(m.debt.monthly).toBeCloseTo(6000 + 3000, 5);
+    expect(m.debt.csnMonthly).toBe(0);
+    expect(m.position.totalDebt).toBe(2_150_000);
+    expect(m.debt.lines.find((l) => l.id === 'csn')).toMatchObject({ monthly: 0, interest: 0, principal: 0 });
   });
 
   it('lists quarterly CSN payments as upcoming, on each month end', () => {

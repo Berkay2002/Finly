@@ -138,26 +138,29 @@ export function prdExamplePlan(): FinancialPlan {
   plan.accounts = [
     { id: 'a1', name: 'Salary account', kind: 'salary', balance: 18500 },
     { id: 'a2', name: 'Savings account', kind: 'savings', balance: 72000 },
-    { id: 'a3', name: 'Emergency fund', kind: 'emergency', balance: 40000 },
-    { id: 'a4', name: 'Investments', kind: 'investment', balance: 110000 },
+    { id: 'a3', name: 'Emergency fund', kind: 'emergency', balance: 40000, monthlyDeposit: 2000 },
+    { id: 'a4', name: 'Investments', kind: 'investment', balance: 110000, monthlyDeposit: 3000 },
   ];
+  // The emergency and investment goals are saved in their accounts, which hold the amounts.
   plan.goals = [
     {
       id: 'g1',
       name: 'Emergency fund',
       kind: 'emergency',
       purpose: 'long_term',
-      currentAmount: 40000,
-      monthlyContribution: 2000,
+      currentAmount: 0,
+      monthlyContribution: 0,
       targetAmount: 60000,
+      linkedAccountId: 'a3',
     },
     {
       id: 'g2',
       name: 'Investments',
       kind: 'investment',
       purpose: 'long_term',
-      currentAmount: 110000,
-      monthlyContribution: 3000,
+      currentAmount: 0,
+      monthlyContribution: 0,
+      linkedAccountId: 'a4',
     },
     {
       id: 'g3',

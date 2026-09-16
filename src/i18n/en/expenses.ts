@@ -85,8 +85,8 @@ export default {
     notSure: 'Not sure? Start from what a household like yours needs.',
     estimateFromHousehold: 'Estimate from household',
     calculateFromUsage: 'Calculate from usage and prices',
-    supplyFormula: 'kWh × (spot price + påslag) + månadsavgift',
-    gridFormula: 'kWh × (överföring + energiskatt) + abonnemang',
+    supplyFormula: 'kWh × (spot price + surcharge) + monthly fee',
+    gridFormula: 'kWh × (transfer fee + energy tax) + subscription fee',
     usualRange: 'Usual range',
     rangeQualifier: (frequency: Frequency | null) =>
       `(${frequency === null ? 'each time' : `per ${PERIOD[frequency]}`}, optional)`,
@@ -101,7 +101,7 @@ export default {
     rangeHelpEveryday: (frequency: Frequency) =>
       `For costs that move from ${PERIOD[frequency]} to ${PERIOD[frequency]}, like the grocery shop. Leave the typical amount empty to budget for the midpoint.`,
     rangeHelpBill:
-      'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.',
+      'For bills on a floating tariff, like electricity on a variable price. Leave the typical amount empty to budget for the midpoint.',
     billCovers: 'The bill covers',
     billCoversHint: '(so we ask for the right month)',
     expectedDate: 'Expected date',
@@ -152,19 +152,19 @@ export default {
     yearlyFigure: 'Your grid company shows the yearly figure as "Årsförbrukning" or "Estimated annual consumption".',
     electricityDeal: 'Your electricity deal',
     gridTariff: 'Your grid tariff',
-    inclVat: '(incl. moms)',
+    inclVat: '(incl. VAT)',
     spotPrice: 'Spot price',
-    transferFee: 'Överföringsavgift',
-    surcharge: 'Påslag',
-    energyTax: 'Energiskatt',
-    monthlyFee: 'Månadsavgift',
-    subscription: 'Abonnemang',
-    powerFeeHint: '(+ effektavgift)',
+    transferFee: 'Transfer fee',
+    surcharge: 'Surcharge',
+    energyTax: 'Energy tax',
+    monthlyFee: 'Monthly fee',
+    subscription: 'Subscription fee',
+    powerFeeHint: '(+ power fee)',
     perMonthUnit: (currency: string) => `${currency}/mo`,
     energyTaxIn: (kommun: string, ore: number, reduced: boolean) =>
-      `Energiskatt in ${kommun} is ${ore} öre/kWh in 2026${reduced ? ', with the northern Sweden deduction' : ''}.`,
+      `Energy tax (energiskatt) in ${kommun} is ${ore} öre/kWh in 2026${reduced ? ', with the northern Sweden deduction' : ''}.`,
     energyTaxGeneral: (ore: number, reducedOre: number) =>
-      `Energiskatt is ${ore} öre/kWh in 2026, ${reducedOre} öre in Norrbotten, Västerbotten, Jämtland and a few kommuner nearby.`,
+      `Energy tax (energiskatt) is ${ore} öre/kWh in 2026, ${reducedOre} öre in Norrbotten, Västerbotten, Jämtland and a few municipalities nearby.`,
     useOre: (ore: number) => `Use ${ore} öre`,
     enterUsage: 'Enter your usage and prices to calculate the bill.',
     /** After "kWh × öre + fee = total". */
@@ -173,11 +173,11 @@ export default {
   },
   spot: {
     loadError: 'Could not load spot prices.',
-    averageFor: (month: string, area: string) => `${month} average for ${area}, incl. moms.`,
+    averageFor: (month: string, area: string) => `${month} average for ${area}, incl. VAT.`,
     loading: 'Loading…',
     useAverage: (month: string) => `Use ${month} average`,
     nowUsing: (month: string, area: string) => `Now using the ${month} average for ${area}.`,
-    source: "Spot prices from elprisetjustnu.se. Add your supplier's påslag on top.",
+    source: "Spot prices from elprisetjustnu.se. Add your supplier's surcharge (påslag) on top.",
   },
   add: {
     title: (shortLabel: string) => `Add ${shortLabel.toLowerCase()} expense`,

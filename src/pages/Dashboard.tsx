@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatDate, formatMoney, formatMoneyRange, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
+import { savingsPots } from '@/engine/savings';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
@@ -73,8 +74,23 @@ export function Dashboard() {
   }));
   if (m.debt.monthly > 0) slices.push({ key: 'loans', label: d.loans, value: m.debt.monthly, accent: 'red' });
 
-  const goals = shown.goals.filter((g) => g.targetAmount).slice(0, 4);
+  const pots = savingsPots(shown);
+  const goals = pots.filter((g) => g.targetAmount).slice(0, 4);
   const name = plan.userName.trim();
+
+  const p = m.position;
+  const otherDebt = p.totalDebt - p.csnDebt;
+  const hasNetWorth = p.totalOwned !== p.totalAssets || p.totalDebt > 0;
+  const positionRows = [
+    { icon: 'account-everyday' as const, accent: 'blue' as const, label: d.position.everyday, value: p.everyday },
+    { icon: 'account-savings' as const, accent: 'purple' as const, label: d.position.savings, value: p.cashSavings },
+    { icon: 'account-emergency' as const, accent: 'yellow' as const, label: d.position.emergency, value: p.emergency },
+    { icon: 'account-investment' as const, accent: 'green' as const, label: d.position.investments, value: p.investments },
+    ...(p.home > 0 ? [{ icon: DEBT_ICON.mortgage, accent: 'lavender' as const, label: d.position.home, value: p.home }] : []),
+    ...(p.otherProperty > 0 ? [{ icon: DEBT_ICON.car, accent: DEBT_ACCENT.car, label: d.position.otherProperty, value: p.otherProperty }] : []),
+    ...(p.csnDebt > 0 ? [{ icon: DEBT_ICON.csn, accent: DEBT_ACCENT.csn, label: d.position.csn, value: -p.csnDebt }] : []),
+    ...(otherDebt > 0 ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: d.position.loans, value: -otherDebt }] : []),
+  ];
 
   return (
     <div>
@@ -168,7 +184,8 @@ export function Dashboard() {
 
       {/* Spending · Position · Goals */}
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
-        <Card>
+        {/* A column, so the donut can take the height the taller cards beside it leave. */}
+        <Card className="flex flex-col">
           <CardHeader
             title={d.spending.title}
             subtitle={
@@ -183,6 +200,7 @@ export function Dashboard() {
             <DonutBreakdown
               slices={slices}
               currency={currency}
+              grow
               center={
                 <>
                   <span className="tabular text-[16px] font-bold leading-tight text-ink">{formatMoney(m.lifestyleCost, '')}</span>
@@ -198,26 +216,23 @@ export function Dashboard() {
         <Card>
           <CardHeader title={d.position.title} action={d.position.viewAccounts} actionTo="/accounts" />
           <ul className="divide-y divide-line">
-            {[
-              { icon: 'account-everyday' as const, accent: 'blue' as const, label: d.position.everyday, value: m.position.everyday },
-              { icon: 'account-savings' as const, accent: 'purple' as const, label: d.position.savings, value: m.position.cashSavings },
-              { icon: 'account-emergency' as const, accent: 'yellow' as const, label: d.position.emergency, value: m.position.emergency },
-              { icon: 'account-investment' as const, accent: 'green' as const, label: d.position.investments, value: m.position.investments },
-              ...(m.position.totalDebt > 0
-                ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: d.position.loans, value: -m.position.totalDebt }]
-                : []),
-            ].map((r) => (
-              <li key={r.label} className={clsx('flex items-center gap-3', m.position.totalDebt > 0 ? 'py-2' : 'py-2.5')}>
+            {positionRows.map((r) => (
+              <li key={r.label} className={clsx('flex items-center gap-3', positionRows.length > 5 ? 'py-2' : 'py-2.5')}>
                 <IconTile icon={r.icon} accent={r.accent} size="sm" />
                 <span className="flex-1 text-[13.5px] text-ink-soft">{r.label}</span>
                 <span className="tabular text-[13.5px] font-medium text-ink">{money(r.value)}</span>
               </li>
             ))}
           </ul>
-          <div className="mt-2 flex items-center justify-between border-t border-line pt-3">
-            <span className="text-[14px] font-semibold text-ink">{m.position.totalDebt > 0 ? d.position.netWorth : d.position.totalAssets}</span>
-            <span className="tabular text-[16px] font-bold text-ink">
-              {money(m.position.totalDebt > 0 ? m.position.netWorth : m.position.totalAssets)}
+          <div className="mt-2 flex items-center justify-between gap-3 border-t border-line pt-3">
+            <div className="min-w-0">
+              <div className="text-[14px] font-semibold text-ink">{hasNetWorth ? d.position.netWorth : d.position.totalAssets}</div>
+              {m.position.csnDebt > 0 && (
+                <div className="text-[11.5px] text-muted">{d.position.excludingCsn(money(m.position.netWorthExcludingCsn))}</div>
+              )}
+            </div>
+            <span className="tabular shrink-0 text-[16px] font-bold text-ink">
+              {money(hasNetWorth ? m.position.netWorth : m.position.totalAssets)}
             </span>
           </div>
         </Card>
@@ -226,7 +241,7 @@ export function Dashboard() {
           <CardHeader icon={<IconTile icon="card-goals" accent="brand" size="sm" />} title={d.goals.title} action={d.goals.viewAll} actionTo="/savings" />
           {goals.length === 0 ? (
             <p className="text-[13px] text-muted">
-              {plan.goals.length > 0 ? d.goals.addTarget : d.goals.none}{' '}
+              {pots.length > 0 ? d.goals.addTarget : d.goals.none}{' '}
               <Link to="/savings" className="font-medium text-brand-700">
                 {d.goals.manage}
               </Link>

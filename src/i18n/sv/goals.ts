@@ -21,7 +21,7 @@ export default {
       'Det mesta av ditt sparande går till saker du planerar att köpa. Det är ett helt rimligt val, men långsiktiga mål gör dig mer motståndskraftig.',
     projectionTitle: 'Sparprognos för 12 månader',
     projectionWithReturns: (amount) =>
-      `Ditt månadssparande på ${amount}, plus förväntad avkastning efter skatt på mål som är kopplade till ett konto.`,
+      `Ditt månadssparande på ${amount}, plus förväntad avkastning efter skatt på pengar som sparas på ett konto.`,
     projectionPlain: (amount) => `Utifrån ditt nuvarande månadssparande på ${amount}.`,
     inclReturns: (amount) => `varav ${amount} i avkastning`,
     assumeUnallocated: 'Räkna med att ofördelade pengar också sparas',
@@ -48,6 +48,7 @@ export default {
   },
   sheet: {
     editGoal: 'Ändra mål',
+    editSavings: 'Ändra sparande',
     newGoal: 'Nytt sparmål',
     remove: 'Ta bort',
     cancel: 'Avbryt',
@@ -69,7 +70,10 @@ export default {
     monthlyContribution: 'Månadssparande',
     targetAmount: 'Målbelopp',
     targetDate: 'Måldatum',
-    linkedAccount: 'Kopplat konto',
+    linkedAccount: 'Konto',
+    syncedWith: (account) => `Samma som saldot och månadsinsättningen på ${account}.`,
+    accountPotHint: (account) =>
+      `Sparas på ${account}. Sätt ett mål för att göra det till ett sparmål; själva kontot hanteras på sidan Konton.`,
     none: 'Inget',
   },
 } satisfies Messages['goals'];

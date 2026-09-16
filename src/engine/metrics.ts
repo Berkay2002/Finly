@@ -3,8 +3,9 @@ import { amountSpread, monthlySpread } from './amounts';
 import { toMonthly } from './frequency';
 import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
-import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured } from './debts';
+import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, repaymentStart } from './debts';
 import type { GovBondRate } from './rates';
+import { savingsPots } from './savings';
 import { capitalTaxSummary, type CapitalTaxSummary } from './tax/capital';
 import { accountRole, debtName, expenseName, isEverydaySpend, type AccountRole } from './taxonomy';
 import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan, SpendGroup } from './types';
@@ -193,12 +194,26 @@ export interface PlanMetrics {
     investments: number;
     other: number;
     cashInBank: number;
+    /** Everything in accounts. */
     totalAssets: number;
     byRole: Record<AccountRole, number>;
+    /** Home value entered on the mortgage. */
+    home: number;
+    /** What cars and other property bought with a loan are worth. */
+    otherProperty: number;
+    /** totalAssets + home + otherProperty. */
+    totalOwned: number;
     /** Sum of loan balances. */
     totalDebt: number;
-    /** totalAssets − totalDebt. */
+    /** The CSN part of `totalDebt`. */
+    csnDebt: number;
+    /** totalOwned − totalDebt. */
     netWorth: number;
+    /**
+     * Net worth with CSN left out. CSN is cheap, repaid over up to 25 years, lowered when income drops and
+     * written off at death, so it weighs less than its balance suggests.
+     */
+    netWorthExcludingCsn: number;
     /** Net worth if everything were sold today: minus AF gains tax and this year's ISK/KF and fund tax still to pay. */
     netWorthAfterTax: number;
   };
@@ -363,7 +378,8 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   /* Loans */
   const debtLines: DebtLine[] = (plan.debts ?? [])
     .map((d) => {
-      const flow = debtFlow(d);
+      // Before the first payment period nothing is paid: the interest is added to the debt instead.
+      const flow = repaymentStart(d, now) ? { monthly: 0, interest: 0, principal: 0 } : debtFlow(d);
       const payoff = debtPayoff(d, now);
       return {
         id: d.id,
@@ -390,6 +406,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   const taxReduction = interestTaxReduction(deductibleInterest * 12) / 12;
   const csnMonthly = sum(debtLines.filter((l) => l.kind === 'csn').map((l) => l.monthly));
   const totalDebt = sum(debtLines.map((l) => l.balance));
+  const csnDebt = sum(debtLines.filter((l) => l.kind === 'csn').map((l) => l.balance));
   const essential = essentialSpend + debtMonthly;
 
   /* Ranges — best and worst normal month */
@@ -442,7 +459,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   });
 
   /* Savings */
-  const goals = plan.goals.filter((g) => g.monthlyContribution > 0);
+  const goals = savingsPots(plan).filter((g) => g.monthlyContribution > 0);
   const futureSpending = sum(
     goals.filter((g) => g.purpose === 'future_spending').map((g) => g.monthlyContribution),
   );
@@ -477,7 +494,9 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
   for (const a of plan.accounts) byRole[accountRole(a.kind)] += a.balance;
   const cashInBank = byRole.everyday + byRole.cash_savings;
   const totalAssets = sum(Object.values(byRole));
-  const netWorth = totalAssets - totalDebt;
+  const property = loanAssets(plan.debts ?? []);
+  const totalOwned = totalAssets + property.home + property.other;
+  const netWorth = totalOwned - totalDebt;
   const capitalTax = capitalTaxSummary(plan, now, gov);
   // Tax already taken (KF by the insurer, interest by the bank) is out of the balances; the rest is still owed.
   const taxStillOwed = sum(capitalTax.accounts.map((t) => Math.max(0, t.tax - t.withheld)));
@@ -574,8 +593,13 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?
       cashInBank,
       totalAssets,
       byRole,
+      home: property.home,
+      otherProperty: property.other,
+      totalOwned,
       totalDebt,
+      csnDebt,
       netWorth,
+      netWorthExcludingCsn: netWorth + csnDebt,
       netWorthAfterTax,
     },
     capitalTax,

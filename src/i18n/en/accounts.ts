@@ -4,7 +4,7 @@ export default {
   page: {
     title: 'Accounts & Financial Position',
     subtitle: 'All your accounts. One clear overview.',
-    totalAssets: 'Total tracked assets',
+    totalAssets: 'Total in accounts',
     allAccountsCombined: 'All accounts combined',
     cashInBank: 'Cash in bank',
     everydayPlusSavings: 'Everyday + savings accounts',
@@ -26,10 +26,19 @@ export default {
     investmentValue: 'Investment value',
     investmentValueHint: 'Tracked, not spendable',
     otherBalances: 'Other tracked balances',
+    home: 'Home',
+    homeHint: 'Value entered on the mortgage',
+    otherProperty: 'Car & other property',
+    otherPropertyHint: 'Value entered on the loan',
+    csn: 'CSN',
+    csnHint: 'Low interest, paid off over many years',
     loans: 'Loans',
-    loansHint: 'CSN, mortgage and other credit',
+    otherLoans: 'Other loans',
+    loansHint: 'Mortgage and other credit',
     netWorth: 'Net worth',
-    netWorthHint: 'Assets minus loans',
+    netWorthHint: 'What you own minus loans',
+    excludingCsn: 'Excluding CSN',
+    excludingCsnHint: 'Can be lowered if income drops, written off at death',
     ifSoldAfterTax: 'If sold today, after tax',
     ifSoldAfterTaxHint: 'Minus tax on AF gains and this year’s savings tax',
     allocation: 'Account allocation',
@@ -41,8 +50,8 @@ export default {
     noEmergencyBody: 'Marking an account as an emergency fund lets Finly show how many months of essentials it covers.',
     goodShapeTitle: 'Your accounts are in good shape.',
     goodShapeBody: (percent: string) => `${percent} of your assets are cash you can reach quickly.`,
-    goalsSeparate:
-      'Goal balances on the Savings page are tracked separately from account balances, so a goal can span several accounts.',
+    savingsAccountsShown:
+      'Savings and investment accounts show on the Savings page on their own, with the balance and monthly deposit you enter here.',
   },
   editor: {
     noAccounts: 'No accounts yet.',
@@ -64,11 +73,11 @@ export default {
     institutionPlaceholder: 'e.g. Swedbank, Avanza',
     currentBalance: 'Current balance',
     expectedReturn: 'Expected return',
-    yearlyBeforeTax: '(yearly, before tax)',
     interestRate: 'Interest rate',
     yearly: '(yearly)',
     monthlyDeposit: 'Monthly deposit',
-    fromGoals: (names: string) => `From ${names}`,
+    onSavings: 'Shown on the Savings page. Add a target there.',
+    goalOnSavings: (goal: string) => `Saved for the goal “${goal}” on the Savings page.`,
     costBasis: 'What you paid',
     costBasisHint: '(anskaffningsvärde, optional)',
     fundShare: 'Held in funds',
@@ -94,10 +103,10 @@ export default {
     details: 'Details',
     /** `prevYear` is left out while the rate is still preliminary. */
     sheetSubtitle: (schablon: string, slr: string, prevYear?: number) =>
-      `Schablonränta ${schablon}: statslåneränta ${slr}${prevYear === undefined ? ' today' : ` on 30 Nov ${prevYear}`} + 1`,
+      `Standard rate (schablonränta) ${schablon}: government borrowing rate (statslåneränta) ${slr}${prevYear === undefined ? ' today' : ` on 30 Nov ${prevYear}`} + 1`,
     taxFreeLevel: 'Tax-free level, shared by ISK and KF',
     underlagExplained:
-      'Measured on the kapitalunderlag: for an ISK the average of the values on 1 Jan, 1 Apr, 1 Jul and 1 Oct plus a quarter of the year’s deposits; for a KF the value on 1 Jan plus deposits (from July at half).',
+      'Measured on the tax base (kapitalunderlag): for an ISK the average of the values on 1 Jan, 1 Apr, 1 Jul and 1 Oct plus a quarter of the year’s deposits; for a KF the value on 1 Jan plus deposits (from July at half).',
     takenDuringYear: 'Taken during the year',
     byBankOrInsurer: 'by the bank or insurer',
     addedToFinalTax: 'Added to your final tax',
@@ -109,17 +118,17 @@ export default {
     finalTaxInterest:
       'Final tax above 30 000 kr gathers interest from 13 February. Paying the part above 30 000 kr to your tax account by 12 February avoids it.',
     /** `slr` is set when next year's rate is not locked yet. */
-    nextYear: (year: number, slr?: string) => `${year}${slr ? ` at today’s statslåneränta (${slr})` : ''}`,
+    nextYear: (year: number, slr?: string) => `${year}${slr ? ` at today’s government borrowing rate (${slr})` : ''}`,
     about: (amount: string) => `about ${amount}`,
     nextYearPreliminary: 'The rate is locked on 30 November. Balances grow by each account’s expected return and deposits.',
     nextYearLocked: (schablon: string) =>
-      `Schablonränta ${schablon}. Balances grow by each account’s expected return and deposits.`,
+      `Standard rate ${schablon}. Balances grow by each account’s expected return and deposits.`,
     footnote: (date?: string) =>
-      `An estimate from the balances you enter, for one person. Statslåneränta from Riksgälden${date ? `, ${date}` : ''}. Realized gains and losses on AF are not tracked.`,
-    iskRow: (underlag: string) => `Underlag ${underlag} · with your final tax next spring`,
+      `An estimate from the balances you enter, for one person. Government borrowing rate from Riksgälden${date ? `, ${date}` : ''}. Realized gains and losses on AF are not tracked.`,
+    iskRow: (underlag: string) => `Tax base ${underlag} · with your final tax next spring`,
     kfRowRefund: (underlag: string, withheld: string, back: string) =>
-      `Underlag ${underlag} · insurer takes ${withheld}, ${back} comes back`,
-    kfRow: (underlag: string) => `Underlag ${underlag} · taken by the insurer`,
+      `Tax base ${underlag} · insurer takes ${withheld}, ${back} comes back`,
+    kfRow: (underlag: string) => `Tax base ${underlag} · taken by the insurer`,
     afFunds: (amount: string) => `Funds ${amount} on 1 Jan`,
     afIfSold: (amount: string) => `${amount} if sold today`,
     afLoss: (amount: string) => `loss worth up to ${amount} if sold`,

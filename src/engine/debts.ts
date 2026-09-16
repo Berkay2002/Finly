@@ -330,6 +330,21 @@ export function amortizationRequirement(debts: Debt[]): AmortizationRequirement 
   return { ltv, percent, monthly, current, short: current + 0.5 < monthly };
 }
 
+/** Whether a loan's asset value is asked for: any car loan, and other loans with security. */
+export function hasAssetValue(d: Pick<Debt, 'kind' | 'secured'>): boolean {
+  return d.kind === 'car' || (d.kind === 'other' && !!d.secured);
+}
+
+/**
+ * What the loans bought, for net worth. Mortgage parts share one home, so its value is the highest entered
+ * (as in `amortizationRequirement`); cars and other secured property add up.
+ */
+export function loanAssets(debts: Debt[]): { home: number; other: number } {
+  const home = Math.max(0, ...debts.filter((d) => d.kind === 'mortgage').map((d) => pos(d.propertyValue)));
+  const other = debts.filter(hasAssetValue).reduce((a, d) => a + pos(d.assetValue), 0);
+  return { home, other };
+}
+
 /* ------------------------------------------------------------------ */
 /* CSN                                                                 */
 /* ------------------------------------------------------------------ */

@@ -169,6 +169,7 @@ export function runScenario(plan: FinancialPlan, scenario: Scenario, now: Date =
     const reducedPlan: FinancialPlan = {
       ...afterPlan,
       goals: afterPlan.goals.map((g) => ({ ...g, monthlyContribution: g.monthlyContribution * factor })),
+      accounts: afterPlan.accounts.map((a) => (a.monthlyDeposit ? { ...a, monthlyDeposit: a.monthlyDeposit * factor } : a)),
     };
     const goalsAfter = allGoalProgress(reducedPlan, now);
     goals = goalsBefore.map((b, i) => {

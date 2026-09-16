@@ -1,6 +1,7 @@
 import { endOfMonth, subMonths } from 'date-fns';
 import { computeMetrics, monthKeyOf } from './metrics';
 import { SPEND_GROUPS } from './everyday';
+import { savingsPots } from './savings';
 import type { FinancialPlan, SpendGroup } from './types';
 
 /**
@@ -141,7 +142,7 @@ export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = 
     byCategory: { ...m.expenses.byCategory },
     byAccount: Object.fromEntries(plan.accounts.map((a) => [a.id, a.balance])),
     byDebt: Object.fromEntries((plan.debts ?? []).map((d) => [d.id, d.balance])),
-    byGoal: Object.fromEntries(plan.goals.map((g) => [g.id, g.currentAmount])),
+    byGoal: Object.fromEntries(savingsPots(plan).map((g) => [g.id, g.currentAmount])),
     plan: freezePlan(plan, month),
   };
 }

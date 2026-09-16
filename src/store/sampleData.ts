@@ -42,6 +42,10 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     };
   };
 
+  // Accounts hold the money; the emergency and house goals are saved in the buffer and the ISK.
+  const emergencyAccount = 'acc_emergency';
+  const iskAccount = 'acc_isk';
+
   return {
     version: 1,
     currency: 'SEK',
@@ -132,9 +136,9 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       { id: id('acc'), name: t.accounts.everyday, institution: 'Swedbank', kind: 'everyday', balance: 14500 },
       { id: id('acc'), name: t.accounts.salary, institution: 'SEB', kind: 'salary', balance: 32000 },
       { id: id('acc'), name: t.accounts.savings, institution: 'Avanza', kind: 'savings', balance: 86000, interestRate: 2 },
-      { id: id('acc'), name: t.accounts.emergency, institution: 'Nordnet', kind: 'emergency', balance: 40000 },
+      { id: emergencyAccount, name: t.accounts.emergency, institution: 'Nordnet', kind: 'emergency', balance: 68000, interestRate: 2, monthlyDeposit: 1300 },
       { id: id('acc'), name: t.accounts.joint, institution: 'Swedbank', kind: 'joint', balance: 18000 },
-      { id: id('acc'), name: 'ISK', institution: 'Avanza', kind: 'isk', balance: 120000, expectedReturn: 6, monthlyDeposit: 1500 },
+      { id: iskAccount, name: 'ISK', institution: 'Avanza', kind: 'isk', balance: 120000, expectedReturn: 6, monthlyDeposit: 1800 },
     ],
     // Loans — 4,200 a month
     debts: [
@@ -180,9 +184,10 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
         description: t.goals.emergencyDescription,
         kind: 'emergency',
         purpose: 'long_term',
-        currentAmount: 68000,
-        monthlyContribution: 1300,
+        currentAmount: 0,
+        monthlyContribution: 0,
         targetAmount: 100000,
+        linkedAccountId: emergencyAccount,
         icon: 'shield',
       },
       {
@@ -191,9 +196,10 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
         description: t.goals.houseDescription,
         kind: 'general',
         purpose: 'long_term',
-        currentAmount: 120000,
-        monthlyContribution: 1800,
+        currentAmount: 0,
+        monthlyContribution: 0,
         targetAmount: 500000,
+        linkedAccountId: iskAccount,
         icon: 'home',
       },
       {

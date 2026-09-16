@@ -39,6 +39,9 @@ export default {
     securedCar:
       'De flesta billån via en bilhandlare har bilen som säkerhet (långivaren kan ta tillbaka den). Ett blancolån som du köpt bilen för har ingen säkerhet.',
     securedOther: 'Lån med säkerhet ger fortfarande ränteavdrag. Lån utan säkerhet ger inget ränteavdrag från 2026.',
+    carValue: 'Vad bilen är värd i dag',
+    propertyValue: 'Vad egendomen är värd i dag',
+    assetValueHint: '(räknas in i nettoförmögenheten)',
     aMonth: ' i månaden',
     split: (interest, principal) => `: ${interest} i ränta och ${principal} i amortering`,
     enterPayment: 'Fyll i betalningen så ser du vart pengarna går.',
@@ -91,8 +94,8 @@ export default {
     perMonth: '(per månad)',
     useRequirement: (amount) => `Följ amorteringskravet: ${amount}`,
     homeValue: 'Bostadens värde',
-    sameHome: '(samma bostad som din andra låndel)',
-    forRequirement: '(för amorteringskravet)',
+    sameHome: 'Samma bostad som din andra låndel',
+    forRequirement: 'För amorteringskravet och nettoförmögenheten',
     rate: 'Ränta',
     variableOption: 'Rörlig (3 mån)',
     fixedOption: 'Bunden',
@@ -127,8 +130,9 @@ export default {
     afterDeductionAmount: (amount) => `Efter ${amount} i ränteavdrag`,
     addBalanceAndRate: 'Fyll i skuld och ränta för alla lån',
     realCost: 'Vad det faktiskt kostar att låna',
-    netWorth: 'Nettoförmögenhet',
-    accountsMinusLoans: 'Konton minus lån',
+    repaidPerMonth: 'Amorteras per månad',
+    repaidPerYear: (amount) => `${amount} om året minskar din skuld`,
+    notRepayingYet: 'Återbetalningen har inte börjat',
     yourLoans: 'Dina lån',
     yourLoansSubtitle: 'Betalningarna räknas som nödvändiga kostnader varje månad. Uppdatera skulden när du får ett nytt besked från långivaren.',
     whereItGoes: 'Vart betalningarna går',
@@ -152,11 +156,11 @@ export default {
     meetsRequirement: (percent) => `Amorteringen uppfyller kravet på ${percent} %`,
     requirement: (ltv, percent, monthly, current, short) =>
       `Belåningsgrad ${ltv} % innebär att du ska amortera ${percent} % per år: ${monthly} i månaden. Du amorterar ${current}.${short ? ' Lån som togs före juni 2016 kan vara undantagna, fråga din bank.' : ''}`,
-    csnTitle: 'CSN är en klass för sig',
+    csnTitle: 'Ingen brådska att betala av CSN',
     csnBody: (decided, rate, year) =>
-      `Räntan ${year} är ${decided ? '' : 'ungefär '}${rate} och ger inget ränteavdrag, men du kan få betala mindre om inkomsten sjunker (nedsättning) och det som återstår skrivs av vid dödsfall. Extra pengar gör därför oftast mer nytta på annat håll.`,
+      `${decided ? '' : 'Ungefär '}${rate} i ränta ${year}. Du kan få sänkta betalningar om inkomsten sjunker, och det som återstår skrivs av vid dödsfall.`,
     csnRunway: (from, to) =>
-      ` Om din inkomst försvann skulle lägre CSN-betalningar göra att pengarna räcker till de nödvändiga kostnaderna i ${to} i stället för ${from}.`,
+      ` Om inkomsten försvann skulle sänkta betalningar få pengarna att räcka i ${to} i stället för ${from}.`,
     unsecuredTitle: 'Inget ränteavdrag för lån utan säkerhet',
     unsecured: (names) =>
       `Från inkomståret 2026 ger bara lån med säkerhet, som bolån eller billån med bilen som säkerhet, skattereduktion för räntan. ${names} kostar hela räntan.`,

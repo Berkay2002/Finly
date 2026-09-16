@@ -140,8 +140,8 @@ describe('goalProgress (§18.9)', () => {
     expect(p.monthsToTarget).toBe(0);
   });
 
-  it('maps all goals in a plan', () => {
-    expect(allGoalProgress(prdExamplePlan(), NOW)).toHaveLength(3);
+  it('maps all goals and savings accounts without a goal in a plan', () => {
+    expect(allGoalProgress(prdExamplePlan(), NOW)).toHaveLength(4);
   });
 });
 
@@ -152,7 +152,8 @@ describe('savingsProjection (§18.11)', () => {
     const proj = savingsProjection(plan, m, NOW);
     expect(proj).toHaveLength(12);
     expect(proj[11].added).toBe(72000);
-    expect(proj[11].balance).toBe(214000 + 72000);
+    // Goals 40 000 + 110 000 (from their accounts) + 64 000, and the savings account's 72 000.
+    expect(proj[11].balance).toBe(286000 + 72000);
   });
 
   it('optionally assumes unallocated money is also saved', () => {

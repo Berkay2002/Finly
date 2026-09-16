@@ -11,7 +11,7 @@ export default {
     giftsNote: 'Estimated average',
   },
   expenses: {
-    variablePrice: 'Rörligt pris',
+    variablePrice: 'Variable price',
     includedInRent: 'Included in rent',
     annualHomeInsurance: 'Annual home insurance',
   },

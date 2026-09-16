@@ -29,6 +29,26 @@ export function AccountsPage() {
   const investShare = m.position.totalAssets > 0 ? m.position.investments / m.position.totalAssets : 0;
   const emergencyMonths = m.resilience.emergencyMonths;
 
+  const p = m.position;
+  const otherDebt = p.totalDebt - p.csnDebt;
+  const hasNetWorth = p.totalOwned !== p.totalAssets || p.totalDebt > 0;
+  type Row = { label: string; value: number; hint?: string; strong?: boolean };
+  const positionRows: Row[] = [
+    { label: t.everydayMoney, value: p.everyday, hint: t.everydayMoneyHint },
+    { label: t.cashSavings, value: p.cashSavings, hint: t.cashSavingsHint },
+    { label: t.dedicatedEmergency, value: p.emergency, hint: t.dedicatedEmergencyHint },
+    { label: t.investmentValue, value: p.investments, hint: t.investmentValueHint },
+    ...(p.other > 0 ? [{ label: t.otherBalances, value: p.other }] : []),
+    { label: t.totalAssets, value: p.totalAssets, strong: !hasNetWorth },
+    ...(p.home > 0 ? [{ label: t.home, value: p.home, hint: t.homeHint }] : []),
+    ...(p.otherProperty > 0 ? [{ label: t.otherProperty, value: p.otherProperty, hint: t.otherPropertyHint }] : []),
+    ...(p.csnDebt > 0 ? [{ label: t.csn, value: -p.csnDebt, hint: t.csnHint }] : []),
+    ...(otherDebt > 0 ? [{ label: p.csnDebt > 0 ? t.otherLoans : t.loans, value: -otherDebt, hint: t.loansHint }] : []),
+    ...(hasNetWorth ? [{ label: t.netWorth, value: p.netWorth, hint: t.netWorthHint, strong: true }] : []),
+    ...(p.csnDebt > 0 ? [{ label: t.excludingCsn, value: p.netWorthExcludingCsn, hint: t.excludingCsnHint }] : []),
+    ...(p.netWorth - p.netWorthAfterTax >= 1 ? [{ label: t.ifSoldAfterTax, value: p.netWorthAfterTax, hint: t.ifSoldAfterTaxHint }] : []),
+  ];
+
   return (
     <div>
       <PageHeader title={t.title} subtitle={t.subtitle} />
@@ -86,30 +106,14 @@ export function AccountsPage() {
           <Card>
             <CardHeader icon={<IconTile icon="card-position" accent="blue" size="sm" />} title={t.position} subtitle={t.positionSubtitle} />
             <dl className="divide-y divide-line">
-              {[
-                [t.everydayMoney, m.position.everyday, t.everydayMoneyHint],
-                [t.cashSavings, m.position.cashSavings, t.cashSavingsHint],
-                [t.dedicatedEmergency, m.position.emergency, t.dedicatedEmergencyHint],
-                [t.investmentValue, m.position.investments, t.investmentValueHint],
-                ...(m.position.other > 0 ? [[t.otherBalances, m.position.other, '']] : []),
-                [t.totalAssets, m.position.totalAssets, ''],
-                ...(m.position.totalDebt > 0
-                  ? [
-                      [t.loans, -m.position.totalDebt, t.loansHint],
-                      [t.netWorth, m.position.netWorth, t.netWorthHint],
-                    ]
-                  : []),
-                ...(m.position.netWorth - m.position.netWorthAfterTax >= 1
-                  ? [[t.ifSoldAfterTax, m.position.netWorthAfterTax, t.ifSoldAfterTaxHint]]
-                  : []),
-              ].map(([label, value, sub], i, arr) => (
-                <div key={String(label)} className="flex items-center justify-between gap-3 py-2.5">
-                  <dt className={i === arr.length - 1 ? 'text-[13.5px] font-semibold text-ink' : 'text-[13.5px] text-ink-soft'}>
+              {positionRows.map(({ label, value, hint, strong }) => (
+                <div key={label} className="flex items-center justify-between gap-3 py-2.5">
+                  <dt className={strong ? 'text-[13.5px] font-semibold text-ink' : 'text-[13.5px] text-ink-soft'}>
                     {label}
-                    {sub ? <span className="block text-[11.5px] text-faint sm:ml-2 sm:inline">{sub}</span> : null}
+                    {hint ? <span className="block text-[11.5px] font-normal text-faint sm:ml-2 sm:inline">{hint}</span> : null}
                   </dt>
-                  <dd className={`tabular shrink-0 whitespace-nowrap text-[13.5px] ${i === arr.length - 1 ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
-                    {money(Number(value))}
+                  <dd className={`tabular shrink-0 whitespace-nowrap text-[13.5px] ${strong ? 'font-semibold text-ink' : 'font-medium text-ink'}`}>
+                    {money(value)}
                   </dd>
                 </div>
               ))}
@@ -153,7 +157,7 @@ export function AccountsPage() {
             )}
           </Card>
           <Callout tone="neutral" icon="goal-piggy">
-            {t.goalsSeparate}
+            {t.savingsAccountsShown}
           </Callout>
         </div>
       </div>

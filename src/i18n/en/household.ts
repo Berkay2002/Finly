@@ -1,6 +1,6 @@
 export default {
   home: {
-    kommun: 'Kommun',
+    kommun: 'Municipality',
     notSet: 'Not set',
     electricityArea: 'Electricity area',
     areaHint: '(elområde)',

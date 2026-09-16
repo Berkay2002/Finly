@@ -89,10 +89,9 @@ describe('capitalTaxSummary', () => {
     expect(isk.netReturn).toBeCloseTo(0 - 3.55 * 0.3 * 0.5, 6);
   });
 
-  it('is zero under the tax-free level, and counts linked goals’ contributions as deposits', () => {
-    const isk = account({ id: 'i', kind: 'isk', balance: 0, expectedReturn: 7 });
-    const goal = { id: 'g', name: 'g', kind: 'investment', purpose: 'long_term', currentAmount: 0, monthlyContribution: 1000, linkedAccountId: 'i' } as SavingsGoal;
-    const s = capitalTaxSummary(plan([isk], [goal]), NOW);
+  it('is zero under the tax-free level, and counts the monthly deposit', () => {
+    const isk = account({ id: 'i', kind: 'isk', balance: 0, expectedReturn: 7, monthlyDeposit: 1000 });
+    const s = capitalTaxSummary(plan([isk]), NOW);
     expect(s.schablonUnderlag).toBe(3000);
     expect(s.total).toBe(0);
     expect(s.accounts[0].netReturn).toBe(7);
@@ -176,11 +175,13 @@ describe('savings tax in the plan', () => {
     for (let i = 0; i < 24; i += 1) balance = balance * (1 + r) + dated.requiredMonthly!;
     expect(balance).toBeCloseTo(24_000, 6);
 
+    // Linked, the goal is the account: its balance and deposit.
     const p = withIsk();
-    p.goals = [{ ...goal, linkedAccountId: 'i' }];
+    p.accounts[0].monthlyDeposit = 1000;
+    p.goals = [{ ...goal, monthlyContribution: 0, linkedAccountId: 'i' }];
     const proj = savingsProjection(p, computeMetrics(p, NOW), NOW);
-    expect(proj[11].balance).toBe(12_000);
-    expect(proj[11].withReturns).toBeGreaterThan(12_000);
+    expect(proj[11].balance).toBe(712_000);
+    expect(proj[11].withReturns).toBeGreaterThan(712_000);
   });
 });
 

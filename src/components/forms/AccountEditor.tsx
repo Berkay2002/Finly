@@ -1,6 +1,7 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatMoney, formatNumber } from '@/engine/format';
+import { goalForAccount, isSavingsAccount } from '@/engine/savings';
 import { capitalTaxSummary, SUGGESTED_RETURN, wrapperOf } from '@/engine/tax/capital';
 import { ACCOUNT_KINDS, accountKindMeta } from '@/engine/taxonomy';
 import type { Account, AccountKind } from '@/engine/types';
@@ -146,13 +147,14 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
   const t = useT().accounts.editor;
   const wrapper = wrapperOf(draft.kind);
   const invests = wrapper !== 'cash';
-  const linked = draft.id ? plan.goals.filter((g) => g.linkedAccountId === draft.id) : [];
+  const goal = draft.id ? goalForAccount(plan, draft.id) : undefined;
+  const saves = isSavingsAccount(draft);
   const kinds = ACCOUNT_KINDS.filter((k) => !k.legacy || k.id === draft.kind);
 
   // The draft in place of the saved account, so the tax preview shares the tax-free level with the other accounts.
   const draftAccount: Account = { ...draft, id: draft.id ?? '__draft__' };
   const summary = capitalTaxSummary(
-    { goals: plan.goals, accounts: [...plan.accounts.filter((a) => a.id !== draft.id), draftAccount] },
+    { accounts: [...plan.accounts.filter((a) => a.id !== draft.id), draftAccount] },
     now,
     gov,
   );
@@ -191,12 +193,12 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
         onValueChange={(balance) => onChange({ ...draft, balance })}
       />
 
-      {(invests || INTEREST_KINDS.includes(draft.kind)) && (
+      {(invests || saves || INTEREST_KINDS.includes(draft.kind)) && (
         <div className="grid grid-cols-2 gap-3">
           {invests ? (
             <MoneyField
               label={t.expectedReturn}
-              hint={t.yearlyBeforeTax}
+              hint={t.yearly}
               currency="%"
               value={draft.expectedReturn ?? 0}
               onValueChange={(v) => onChange({ ...draft, expectedReturn: v > 0 ? v : undefined })}
@@ -210,24 +212,17 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
               onValueChange={(v) => onChange({ ...draft, interestRate: v > 0 ? v : undefined })}
             />
           )}
-          {linked.length === 0 ? (
-            <MoneyField
-              label={t.monthlyDeposit}
-              hint={t.optional}
-              currency={currency}
-              value={draft.monthlyDeposit ?? 0}
-              onValueChange={(v) => onChange({ ...draft, monthlyDeposit: v > 0 ? v : undefined })}
-            />
-          ) : (
-            <div>
-              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.monthlyDeposit}</div>
-              <div className="tabular flex h-10 items-center text-[13.5px] text-ink">
-                {money(linked.reduce((s, g) => s + g.monthlyContribution, 0))}
-              </div>
-              <p className="text-[11.5px] text-muted">{t.fromGoals(linked.map((g) => g.name).join(', '))}</p>
-            </div>
-          )}
+          <MoneyField
+            label={t.monthlyDeposit}
+            hint={t.optional}
+            currency={currency}
+            value={draft.monthlyDeposit ?? 0}
+            onValueChange={(v) => onChange({ ...draft, monthlyDeposit: v > 0 ? v : undefined })}
+          />
         </div>
+      )}
+      {saves && (
+        <p className="-mt-2 text-[12px] text-muted">{goal ? t.goalOnSavings(goal.name) : t.onSavings}</p>
       )}
 
       {wrapper === 'af' && (

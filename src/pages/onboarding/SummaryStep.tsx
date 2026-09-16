@@ -160,12 +160,17 @@ export function SummaryStep() {
           <Line label={t.position.emergency} value={money(m.position.emergency)} />
           <Line label={t.position.investments} value={money(m.position.investments)} />
           {m.position.other > 0 && <Line label={t.position.other} value={money(m.position.other)} />}
-          <Line label={t.position.totalAssets} value={money(m.position.totalAssets)} strong={m.position.totalDebt === 0} />
-          {m.position.totalDebt > 0 && (
-            <>
-              <Line label={t.position.loans} value={money(-m.position.totalDebt)} />
-              <Line label={t.position.netWorth} value={money(m.position.netWorth)} strong negative={m.position.netWorth < 0} />
-            </>
+          <Line label={t.position.totalAssets} value={money(m.position.totalAssets)} strong={m.position.totalOwned === m.position.totalAssets && m.position.totalDebt === 0} />
+          {m.position.home > 0 && <Line label={t.position.home} value={money(m.position.home)} />}
+          {m.position.otherProperty > 0 && <Line label={t.position.otherProperty} value={money(m.position.otherProperty)} />}
+          {m.position.totalDebt > 0 && <Line label={t.position.loans} value={money(-m.position.totalDebt)} />}
+          {(m.position.totalDebt > 0 || m.position.totalOwned !== m.position.totalAssets) && (
+            <Line
+              label={t.position.netWorth}
+              value={money(m.position.netWorth)}
+              sub={m.position.csnDebt > 0 ? t.position.excludingCsn(money(m.position.netWorthExcludingCsn)) : undefined}
+              strong
+            />
           )}
         </Section>
       </div>

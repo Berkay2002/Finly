@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyPlan } from '@/engine/types';
 import { monthKeyOf } from '@/engine/metrics';
+import { savingsPots } from '@/engine/savings';
 import { NOW, expense, prdExamplePlan } from '@/engine/__tests__/fixtures';
 
 const memory = vi.hoisted(() => {
@@ -234,6 +235,67 @@ describe('loans', () => {
     const s = fresh.usePlanStore.getState();
     expect(s.plan.debts).toHaveLength(2);
     expect(s.plan.expenses.find((e) => e.id === 'student_loan')).toBeUndefined();
+  });
+});
+
+describe('savings pots', () => {
+  const isk = () => usePlanStore.getState().addAccount({ name: 'Avanza ISK', kind: 'isk', balance: 278_000, monthlyDeposit: 5000 });
+
+  it('writes a linked goal’s amounts to its account', () => {
+    const accountId = isk();
+    usePlanStore.getState().saveSavingsPot({
+      name: 'Avanza',
+      kind: 'investment',
+      purpose: 'long_term',
+      currentAmount: 280_000,
+      monthlyContribution: 6000,
+      linkedAccountId: accountId,
+    });
+    const { plan } = usePlanStore.getState();
+    expect(plan.accounts[0]).toMatchObject({ balance: 280_000, monthlyDeposit: 6000 });
+    expect(plan.accounts[0].balances).toEqual({ [thisMonth]: 280_000 });
+    expect(plan.goals).toEqual([
+      expect.objectContaining({ name: 'Avanza', linkedAccountId: accountId, currentAmount: 0, monthlyContribution: 0 }),
+    ]);
+  });
+
+  it('updates a savings account with no goal, and makes it a goal once a target is set', () => {
+    const accountId = isk();
+    const pot = savingsPots(usePlanStore.getState().plan)[0];
+    usePlanStore.getState().saveSavingsPot({ ...pot, monthlyContribution: 4000 });
+    expect(usePlanStore.getState().plan.goals).toHaveLength(0);
+    expect(usePlanStore.getState().plan.accounts[0].monthlyDeposit).toBe(4000);
+
+    usePlanStore.getState().saveSavingsPot({ ...pot, targetAmount: 500_000 });
+    expect(usePlanStore.getState().plan.goals).toEqual([
+      expect.objectContaining({ name: 'Avanza ISK', linkedAccountId: accountId, targetAmount: 500_000 }),
+    ]);
+    expect(savingsPots(usePlanStore.getState().plan)).toHaveLength(1);
+  });
+
+  it('keeps the amounts on a goal whose account is unlinked or removed', () => {
+    const accountId = isk();
+    usePlanStore
+      .getState()
+      .addGoal({ name: 'Barn', kind: 'general', purpose: 'long_term', currentAmount: 0, monthlyContribution: 0, linkedAccountId: accountId });
+    usePlanStore.getState().removeAccount(accountId);
+    const g = usePlanStore.getState().plan.goals[0];
+    expect(g).toMatchObject({ currentAmount: 278_000, monthlyContribution: 5000 });
+    expect(g.linkedAccountId).toBeUndefined();
+  });
+
+  it('migrates persisted state from before accounts held the money', async () => {
+    const plan = prdExamplePlan();
+    plan.accounts = [{ id: 'isk', name: 'ISK', kind: 'isk', balance: 278_000 }];
+    plan.goals = [
+      { id: 'g', name: 'Avanza', kind: 'investment', purpose: 'long_term', currentAmount: 270_000, monthlyContribution: 5000, linkedAccountId: 'isk' },
+    ];
+    memory.setItem('finly.plan.v1', JSON.stringify({ state: { plan, snapshots: {} }, version: 3 }));
+    vi.resetModules();
+    const fresh = await import('../planStore');
+    const s = fresh.usePlanStore.getState().plan;
+    expect(s.accounts[0]).toMatchObject({ balance: 278_000, monthlyDeposit: 5000 });
+    expect(s.goals[0]).toMatchObject({ currentAmount: 0, monthlyContribution: 0, linkedAccountId: 'isk' });
   });
 });
 

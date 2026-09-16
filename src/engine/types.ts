@@ -219,8 +219,10 @@ export interface Debt {
   nextDate?: string;
   /** Mortgage: amortering per month. */
   amortization?: number;
-  /** Mortgage: market value of the home, for loan-to-value and the amortisation requirement. */
+  /** Mortgage: market value of the home, for loan-to-value, the amortisation requirement and net worth. */
   propertyValue?: number;
+  /** Car loans, and other loans with security: what the car or property is worth today, for net worth. */
+  assetValue?: number;
   /**
    * Mortgage: rörlig (follows the market, usually reset every three months) or bunden (fixed until
    * `rateFixedUntil`). Missing on mortgages saved before the choice existed: a date means bunden.
@@ -264,7 +266,7 @@ export interface Account {
   expectedReturn?: number;
   /** Cash accounts: yearly interest before tax, percent. */
   interestRate?: number;
-  /** Money put in each month. Only used when no savings goal is linked to the account. */
+  /** Money put in each month; a goal linked to the account reads its contribution from here. */
   monthlyDeposit?: number;
   /** AF: what the holdings cost (anskaffningsvärde), for the gain and the tax if sold. */
   costBasis?: number;
@@ -285,13 +287,16 @@ export interface SavingsGoal {
   description?: string;
   kind: GoalKind;
   purpose: SavingsPurpose;
+  /** Saved so far. 0 while linked to an account, whose balance is the amount (see `savingsPots`). */
   currentAmount: number;
   /** `currentAmount` as last entered in each month (YYYY-MM), so goal progress has a history. */
   balances?: Record<string, number>;
+  /** 0 while linked to an account, whose `monthlyDeposit` is the contribution. */
   monthlyContribution: number;
   targetAmount?: number;
   /** ISO date (YYYY-MM-DD). */
   targetDate?: string;
+  /** The account holding the money, at most one goal per account. */
   linkedAccountId?: string;
   icon?: string;
 }

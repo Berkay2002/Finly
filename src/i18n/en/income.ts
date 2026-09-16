@@ -62,7 +62,7 @@ export default {
     frequency: 'Frequency',
     notSure: (rate: string) => `Not sure (national average ${rate})`,
     kommunOption: (name: string, rate: string) => `${name} · ${rate}`,
-    kommun: 'Kommun',
+    kommun: 'Municipality',
     kommunHint: 'sets your municipal tax',
     church: 'Member of Svenska kyrkan',
     churchHint: 'Adds the church fee to your withholding.',

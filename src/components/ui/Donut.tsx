@@ -210,6 +210,8 @@ export function DonutBreakdown({
   center,
   size = 200,
   thickness = 30,
+  grow = false,
+  maxSize = 300,
   className,
 }: {
   slices: DonutSlice[];
@@ -218,6 +220,12 @@ export function DonutBreakdown({
   center?: ReactNode;
   size?: number;
   thickness?: number;
+  /**
+   * Fill the height a flex-column parent has left after the legend, from `size` up to `maxSize`.
+   * The ring never adds to the parent's height, so a legend that wraps to more rows shrinks it instead.
+   */
+  grow?: boolean;
+  maxSize?: number;
   className?: string;
 }) {
   const [activeKey, setActiveKey] = useState<string | null>(null);
@@ -225,29 +233,55 @@ export function DonutBreakdown({
   const active = activeKey ? slices.find((s) => s.key === activeKey) : undefined;
   const legend = slices.filter((s) => s.value > 0);
 
+  const areaRef = useRef<HTMLDivElement>(null);
+  const [fitted, setFitted] = useState(size);
+  useLayoutEffect(() => {
+    const el = areaRef.current;
+    if (!grow || !el) return;
+    const fit = () => {
+      const { width, height } = el.getBoundingClientRect();
+      setFitted(Math.floor(Math.min(maxSize, width, Math.max(size, height))));
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [grow, size, maxSize]);
+  const shown = grow ? fitted : size;
+
+  const donut = (
+    <Donut
+      slices={slices}
+      currency={currency}
+      size={shown}
+      thickness={Math.round((thickness * shown) / size)}
+      activeKey={activeKey}
+      onActiveKey={setActiveKey}
+      center={
+        active ? (
+          <>
+            <span className="text-[11px] leading-tight text-muted">{active.label}</span>
+            <span className="tabular mt-0.5 text-[16px] font-bold leading-tight text-ink">{formatMoney(active.value, '')}</span>
+            <span className="tabular text-[11px] text-muted">
+              {currency} · {sum > 0 ? formatPercent(active.value / sum) : '–'}
+            </span>
+          </>
+        ) : (
+          center
+        )
+      }
+    />
+  );
+
   return (
-    <div className={clsx('flex w-full flex-col items-center gap-4', className)}>
-      <Donut
-        slices={slices}
-        currency={currency}
-        size={size}
-        thickness={thickness}
-        activeKey={activeKey}
-        onActiveKey={setActiveKey}
-        center={
-          active ? (
-            <>
-              <span className="text-[11px] leading-tight text-muted">{active.label}</span>
-              <span className="tabular mt-0.5 text-[16px] font-bold leading-tight text-ink">{formatMoney(active.value, '')}</span>
-              <span className="tabular text-[11px] text-muted">
-                {currency} · {sum > 0 ? formatPercent(active.value / sum) : '–'}
-              </span>
-            </>
-          ) : (
-            center
-          )
-        }
-      />
+    <div className={clsx('flex w-full flex-col items-center gap-4', grow && 'flex-1', className)}>
+      {grow ? (
+        <div ref={areaRef} className="relative w-full flex-1" style={{ minHeight: size }}>
+          <div className="absolute inset-0 flex items-center justify-center">{donut}</div>
+        </div>
+      ) : (
+        donut
+      )}
       {legend.length > 0 && (
         <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
           {legend.map((s) => {

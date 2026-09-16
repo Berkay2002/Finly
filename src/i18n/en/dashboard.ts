@@ -44,8 +44,12 @@ export default {
     savings: 'Savings',
     emergency: 'Emergency fund',
     investments: 'Investments',
+    home: 'Home',
+    otherProperty: 'Car & other property',
+    csn: 'CSN',
     loans: 'Loans',
     netWorth: 'Net worth',
+    excludingCsn: (amount: string) => `${amount} excluding CSN`,
     totalAssets: 'Total assets',
   },
   goals: {

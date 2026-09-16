@@ -217,10 +217,10 @@ const accountKinds: Record<AccountKind, { label: string; description: string }> 
   emergency: { label: 'Emergency fund', description: 'Reserved for the unexpected' },
   isk: {
     label: 'ISK',
-    description: 'Investeringssparkonto. No tax on gains; a small yearly tax on the value, none on the first 300 000 kr',
+    description: 'Investment savings account. No tax on gains; a small yearly tax on the value, none on the first 300 000 kr',
   },
   kf: { label: 'Kapitalförsäkring (KF)', description: 'Taxed like an ISK, but the insurer takes the tax from the account' },
-  af: { label: 'Aktie- och fondkonto (AF)', description: 'Depå. 30 % tax on gains when you sell and on dividends' },
+  af: { label: 'Aktie- och fondkonto (AF)', description: 'Brokerage account. 30 % tax on gains when you sell and on dividends' },
   investment: { label: 'Investment account (type not set)', description: 'Pick ISK, KF or AF so Finly can work out the tax' },
   other: { label: 'Other account', description: 'Anything else you track' },
 };
@@ -233,23 +233,23 @@ const debtKinds: Record<DebtKind, { label: string; name: string; description: st
   },
   mortgage: {
     label: 'Mortgage (bolån)',
-    name: 'Bolån',
-    description: 'Secured by your home. Interest plus amortering; the interest gives ränteavdrag.',
+    name: 'Mortgage',
+    description: 'Secured by your home. Interest plus repayment; the interest gives a tax deduction (ränteavdrag).',
   },
   car: {
     label: 'Car loan (billån)',
-    name: 'Billån',
+    name: 'Car loan',
     description: 'Secured against the car, or an unsecured loan used to buy it.',
   },
   personal: {
     label: 'Personal loan (privatlån)',
-    name: 'Privatlån',
-    description: 'Unsecured, so usually expensive. No ränteavdrag from 2026.',
+    name: 'Personal loan',
+    description: 'Unsecured, so usually expensive. No interest deduction from 2026.',
   },
   credit_card: {
     label: 'Credit card or account credit',
     name: 'Credit card',
-    description: 'Usually the most expensive debt you have. No ränteavdrag from 2026.',
+    description: 'Usually the most expensive debt you have. No interest deduction from 2026.',
   },
   other: {
     label: 'Other loan',

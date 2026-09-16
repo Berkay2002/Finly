@@ -17,8 +17,9 @@ const FLAGS: Record<Language, string> = {
       '<path d="M30,0v30M0,15h60" stroke="#fff" stroke-width="10"/><path d="M30,0v30M0,15h60" stroke="#C8102E" stroke-width="6"/></g></svg>',
   ),
   sv: svg(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 10"><path fill="#006AA7" d="M0 0h16v10H0z"/>' +
-      '<path fill="#FECC00" d="M5 0h2v10H5zM0 4h16v2H0z"/></svg>',
+    // Square with the cross centred: the real 16:10 flag's offset cross looks misplaced once cropped to a circle.
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path fill="#006AA7" d="M0 0h10v10H0z"/>' +
+      '<path fill="#FECC00" d="M4 0h2v10H4zM0 4h10v2H0z"/></svg>',
   ),
 };
 

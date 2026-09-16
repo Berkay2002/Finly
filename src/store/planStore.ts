@@ -8,6 +8,7 @@ import { shareUsage, withTariffAmounts } from '@/engine/electricity';
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
+import { accountPot, migrateLinkedGoals, type SavingsPot } from '@/engine/savings';
 import type {
   Account,
   Commute,
@@ -35,6 +36,9 @@ export interface PlanData {
 }
 
 type Draft<T extends { id: string }> = Omit<T, 'id'> & { id?: string };
+
+/** A savings pot being edited: a new one has no id. */
+export type PotDraft = Draft<SavingsPot>;
 
 interface PlanState {
   plan: FinancialPlan;
@@ -80,6 +84,11 @@ interface PlanState {
   addGoal: (draft: Draft<SavingsGoal>) => string;
   updateGoal: (id: string, patch: Partial<SavingsGoal>) => void;
   removeGoal: (id: string) => void;
+  /**
+   * Save a pot from the Savings sheet: the balance and monthly deposit go to its account when it has
+   * one, the rest to its goal. A savings account with no goal gets one only when something goal-like was set.
+   */
+  saveSavingsPot: (draft: PotDraft) => void;
 
   completeStep: (step: OnboardingStep) => void;
   finishOnboarding: () => void;
@@ -210,7 +219,16 @@ export const usePlanStore = create<PlanState>()(
               return next;
             }),
           })),
-        removeAccount: (id) => mutate((p) => ({ ...p, accounts: p.accounts.filter((x) => x.id !== id) })),
+        // A goal saved in the account keeps the amounts it showed and stays on the Savings page.
+        removeAccount: (id) =>
+          mutate((p) => {
+            const a = p.accounts.find((x) => x.id === id);
+            return {
+              ...p,
+              accounts: p.accounts.filter((x) => x.id !== id),
+              goals: a ? p.goals.map((g) => (g.linkedAccountId === id ? unlinkGoal(g, a) : g)) : p.goals,
+            };
+          }),
 
         addDebt: (draft) => {
           const id = draft.id ?? newId('debt');
@@ -248,6 +266,7 @@ export const usePlanStore = create<PlanState>()(
             }),
           })),
         removeGoal: (id) => mutate((p) => ({ ...p, goals: p.goals.filter((x) => x.id !== id) })),
+        saveSavingsPot: (draft) => mutate((p) => applyPotDraft(p, draft, () => newId('goal'), monthKeyOf(new Date()))),
 
         completeStep: (step) =>
           mutate((p) =>
@@ -284,21 +303,24 @@ export const usePlanStore = create<PlanState>()(
         reset: () => set({ plan: emptyPlan(), snapshots: {} }),
         importPlan: (data) => {
           const { plan, snapshots } = 'plan' in data ? data : { plan: data, snapshots: {} };
-          set({ plan: touch(normalizePlan({ ...emptyPlan(), ...plan, isSample: undefined })), snapshots });
+          set({ plan: touch(normalizePlan({ ...emptyPlan(), ...plan, isSample: undefined })), snapshots: normalizeSnapshots(snapshots) });
         },
-        replaceAll: ({ plan, snapshots }) => set({ plan: normalizePlan(plan), snapshots }),
+        replaceAll: ({ plan, snapshots }) => set({ plan: normalizePlan(plan), snapshots: normalizeSnapshots(snapshots) }),
         setHydrated: () => set({ hydrated: true }),
       };
     },
     {
       name: 'finly.plan.v1',
-      version: 3,
+      version: 4,
       partialize: (s) => ({ plan: s.plan, snapshots: s.snapshots }),
       // v1–2 stored the same shape minus the optional history fields. v3 moved loan repayments out of
-      // expenses into `debts`; closed months keep their frozen plans as they were.
-      migrate: (persisted) => {
+      // expenses into `debts`; closed months keep their frozen plans as they were. v4 moved the amounts of
+      // goals linked to an account onto the account, and links goals that repeat an account's balance.
+      migrate: (persisted, version) => {
         const s = (persisted ?? {}) as Partial<PlanData>;
-        return { plan: s.plan ? normalizePlan({ ...emptyPlan(), ...s.plan }) : emptyPlan(), snapshots: s.snapshots ?? {} };
+        const autoLink = version < 4;
+        const plan = s.plan ? normalizePlan(migrateLinkedGoals({ ...emptyPlan(), ...s.plan }, { autoLink })) : emptyPlan();
+        return { plan, snapshots: normalizeSnapshots(s.snapshots ?? {}) };
       },
       onRehydrateStorage: () => (state) => {
         state?.setHydrated();
@@ -309,7 +331,90 @@ export const usePlanStore = create<PlanState>()(
 
 /** Brings a plan saved by an older version up to the current shape. Idempotent. */
 export function normalizePlan(plan: FinancialPlan): FinancialPlan {
-  return migrateLegacyDebts({ ...plan, debts: Array.isArray(plan.debts) ? plan.debts : [] });
+  return migrateLinkedGoals(migrateLegacyDebts({ ...plan, debts: Array.isArray(plan.debts) ? plan.debts : [] }));
+}
+
+/** Closed months' frozen plans get the linked-goal migration, so their savings read the same way. */
+function normalizeSnapshots(snapshots: SnapshotMap): SnapshotMap {
+  let changed = false;
+  const next: SnapshotMap = {};
+  for (const [key, snap] of Object.entries(snapshots)) {
+    const plan = snap.plan ? migrateLinkedGoals(snap.plan) : undefined;
+    if (plan !== snap.plan) changed = true;
+    next[key] = plan === snap.plan ? snap : { ...snap, plan };
+  }
+  return changed ? next : snapshots;
+}
+
+/** The goal on its own again, holding what its account showed. */
+function unlinkGoal(g: SavingsGoal, a: Account): SavingsGoal {
+  const { linkedAccountId: _l, ...rest } = g;
+  void _l;
+  return {
+    ...rest,
+    currentAmount: a.balance,
+    monthlyContribution: Math.max(0, a.monthlyDeposit ?? 0),
+    ...(a.balances ? { balances: a.balances } : {}),
+  };
+}
+
+const GOAL_FIELDS = ['name', 'description', 'kind', 'purpose', 'icon', 'targetAmount', 'targetDate'] as const;
+
+/** Applies a pot saved from the Savings sheet (see `saveSavingsPot`). */
+export function applyPotDraft(plan: FinancialPlan, draft: PotDraft, newGoalId: () => string, month: string): FinancialPlan {
+  const { id, goalId, accountId: _a, ...fields } = draft;
+  void _a;
+  const account = draft.linkedAccountId ? plan.accounts.find((a) => a.id === draft.linkedAccountId) : undefined;
+
+  if (!account) {
+    const { linkedAccountId: _l, ...goal } = fields;
+    void _l;
+    const saved: SavingsGoal = {
+      ...goal,
+      id: goalId ?? newGoalId(),
+      balances: withMonthValue(fields.balances, month, fields.currentAmount),
+    };
+    return {
+      ...plan,
+      goals: goalId ? plan.goals.map((g) => (g.id === goalId ? saved : g)) : [...plan.goals, saved],
+    };
+  }
+
+  const deposit = Math.max(0, fields.monthlyContribution);
+  const accounts = plan.accounts.map((a) => {
+    if (a.id !== account.id) return a;
+    const next: Account = { ...a, monthlyDeposit: deposit > 0 ? deposit : undefined };
+    if (fields.currentAmount !== a.balance) {
+      next.balance = fields.currentAmount;
+      next.balances = withMonthValue(a.balances, month, fields.currentAmount);
+    }
+    return next;
+  });
+
+  // A savings account opened as a pot only becomes a goal when something beyond its own details was set.
+  const plain = accountPot(account);
+  const isAccountPot = !goalId && id === account.id;
+  if (isAccountPot && GOAL_FIELDS.every((k) => (fields[k] || undefined) === (plain[k] || undefined))) {
+    return { ...plan, accounts };
+  }
+
+  const { balances: _b, ...goal } = fields;
+  void _b;
+  const saved: SavingsGoal = {
+    ...goal,
+    id: goalId ?? newGoalId(),
+    linkedAccountId: account.id,
+    currentAmount: 0,
+    monthlyContribution: 0,
+  };
+  const others = plan.goals.map((g) =>
+    g.id !== saved.id && g.linkedAccountId === account.id ? unlinkGoal(g, account) : g,
+  );
+  return {
+    ...plan,
+    accounts,
+    goals: goalId ? others.map((g) => (g.id === goalId ? saved : g)) : [...others, saved],
+  };
 }
 
 /** Normalises a parsed v1 plan object; throws when it is not one. */

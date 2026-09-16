@@ -46,8 +46,12 @@ export default {
     savings: 'Sparande',
     emergency: 'Buffert',
     investments: 'Investeringar',
+    home: 'Bostad',
+    otherProperty: 'Bil & annan egendom',
+    csn: 'CSN',
     loans: 'Lån',
     netWorth: 'Nettoförmögenhet',
+    excludingCsn: (amount) => `${amount} utan CSN`,
     totalAssets: 'Totala tillgångar',
   },
   goals: {
