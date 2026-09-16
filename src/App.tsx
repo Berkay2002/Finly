@@ -13,27 +13,31 @@ import { SavingsPage } from '@/pages/SavingsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { Welcome } from '@/pages/Welcome';
 import { OnboardingPage } from '@/pages/onboarding/OnboardingPage';
+import { ThemeController } from '@/store/themeStore';
 
 export default function App() {
   return (
-    <Routes>
-      <Route path="/welcome" element={<Welcome />} />
-      <Route element={<AppShell />}>
-        <Route index element={<Dashboard />} />
-        <Route path="onboarding" element={<Navigate to="/onboarding/income" replace />} />
-        <Route path="onboarding/:step" element={<OnboardingPage />} />
-        <Route path="income" element={<IncomePage />} />
-        {EXPENSE_CATEGORIES.map((c) => (
-          <Route key={c} path={CATEGORY_ROUTE[c].slice(1)} element={<ExpenseSectionPage category={c} />} />
-        ))}
-        <Route path="savings" element={<SavingsPage />} />
-        <Route path="accounts" element={<AccountsPage />} />
-        <Route path="loans" element={<LoansPage />} />
-        <Route path="planning" element={<PlanningPage />} />
-        <Route path="insights" element={<InsightsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route>
-    </Routes>
+    <>
+      <ThemeController />
+      <Routes>
+        <Route path="/welcome" element={<Welcome />} />
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="onboarding" element={<Navigate to="/onboarding/income" replace />} />
+          <Route path="onboarding/:step" element={<OnboardingPage />} />
+          <Route path="income" element={<IncomePage />} />
+          {EXPENSE_CATEGORIES.map((c) => (
+            <Route key={c} path={CATEGORY_ROUTE[c].slice(1)} element={<ExpenseSectionPage category={c} />} />
+          ))}
+          <Route path="savings" element={<SavingsPage />} />
+          <Route path="accounts" element={<AccountsPage />} />
+          <Route path="loans" element={<LoansPage />} />
+          <Route path="planning" element={<PlanningPage />} />
+          <Route path="insights" element={<InsightsPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
+      </Routes>
+    </>
   );
 }

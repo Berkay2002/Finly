@@ -1,17 +1,21 @@
 /**
- * GET /api/rates: the Riksbank policy rate, its monthly history and the latest forecast path, in the
- * shape of `RateOutlook` (src/engine/rates.ts).
+ * GET /api/rates: the Riksbank policy rate, its monthly history and the latest forecast path, plus
+ * Riksgälden's statslåneränta (which sets the ISK and KF tax), in the shape of `RateOutlook`
+ * (src/engine/rates.ts).
  *
  * The Riksbank APIs send no CORS headers, so the browser cannot call them directly. This function does,
  * and Vercel's CDN caches the answer for a day: the Riksbank only changes the data at policy meetings,
  * its anonymous API allows only a few calls a minute, and the Hobby plan counts invocations. Each
- * invocation makes two upstream calls. On failure the app falls back to the copy it ships with.
+ * invocation makes three upstream calls. On failure the app falls back to the copy it ships with; a
+ * Riksgälden failure alone only leaves out the statslåneränta.
  *
  * Kept free of imports so Vercel can run it as-is; the unit test lives in src/engine/__tests__.
  */
 
 const SWEA = 'https://api.riksbank.se/swea/v1/Observations/SECBREPOEFF';
 const FORECASTS = 'https://api.riksbank.se/monetary_policy_data/v1/forecasts?series=SEQRATENAYNA';
+/** Weekly statslåneränta since 1986, newest first: `2026-09-11;2,99;2,70` (date it took effect; rate; year average). */
+const GOV_BOND_CSV = 'https://www.riksgalden.se/globalassets/dokument_sve/statslaneranta/statslanerantor.csv';
 
 /** Fresh for a day at the edge, then served stale for up to a week while one request refreshes it. */
 const CACHE_OK = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800';
@@ -36,12 +40,45 @@ async function getJson<T>(url: string, fetcher: typeof fetch): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * The rate in force today and on 30 November each year. The rate is set on Thursdays and takes effect on the
+ * Friday, so the one in force on 30 November is the last dated 24–30 November; a year without one is left out.
+ */
+export function parseGovBondRate(csv: string) {
+  const rows = csv
+    .split('\n')
+    .map((line) => line.split(';'))
+    .filter((cells) => /^\d{4}-\d{2}-\d{2}$/.test(cells[0]?.trim() ?? ''))
+    .map((cells) => ({ date: cells[0].trim(), value: Number(cells[1]?.trim().replace(',', '.')) }))
+    .filter((r) => Number.isFinite(r.value))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const latest = rows[rows.length - 1];
+  if (!latest) throw new Error('No statslåneränta rows');
+  const nov30: Record<string, number> = {};
+  for (const r of rows) {
+    const [y, m, d] = r.date.split('-').map(Number);
+    if (m === 11 && d >= 24) nov30[String(y)] = r.value;
+  }
+  return { date: latest.date, value: latest.value, nov30 };
+}
+
+async function getGovBondRate(fetcher: typeof fetch) {
+  try {
+    const res = await fetcher(GOV_BOND_CSV, { headers: { accept: 'text/csv' } });
+    if (!res.ok) return undefined;
+    return parseGovBondRate(await res.text());
+  } catch {
+    return undefined;
+  }
+}
+
 export async function buildOutlook(now: Date = new Date(), fetcher: typeof fetch = fetch) {
   // November four years back covers CSN's three-year window for the last decided year.
   const from = `${now.getUTCFullYear() - 4}-11-01`;
-  const [observations, forecasts] = await Promise.all([
+  const [observations, forecasts, govBondRate] = await Promise.all([
     getJson<Observation[]>(`${SWEA}/${from}/${iso(now)}`, fetcher),
     getJson<{ data: { vintages: Vintage[] }[] }>(FORECASTS, fetcher),
+    getGovBondRate(fetcher),
   ]);
 
   const valid = observations.filter((o): o is { date: string; value: number } => typeof o.value === 'number');
@@ -78,6 +115,7 @@ export async function buildOutlook(now: Date = new Date(), fetcher: typeof fetch
       published: vintage.metadata.policy_round_end_dtm.slice(0, 10),
       path,
     },
+    ...(govBondRate ? { govBondRate } : {}),
   };
 }
 

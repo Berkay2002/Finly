@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { BUNDLED_OUTLOOK, type RateOutlook } from '@/engine/rates';
+import { BUNDLED_OUTLOOK, type GovBondRate, type RateOutlook } from '@/engine/rates';
 
 /**
  * The rate outlook from /api/rates, fetched at most once a day per browser. Until it arrives, or
@@ -37,9 +37,28 @@ function readStored(): RateOutlook | null {
   }
 }
 
-/** Keeps whichever copy has the newer policy rate date, so an old cache never replaces newer bundled data. */
+function isGovBondRate(v: unknown): v is GovBondRate {
+  const g = v as GovBondRate;
+  return (
+    !!g &&
+    typeof g.date === 'string' &&
+    Number.isFinite(g.value) &&
+    !!g.nov30 &&
+    typeof g.nov30 === 'object' &&
+    Object.values(g.nov30).every((n) => Number.isFinite(n))
+  );
+}
+
+/**
+ * Keeps whichever copy has the newer policy rate date, so an old cache never replaces newer bundled data. The
+ * statslåneränta is picked the same way on its own date: a fetch where only Riksgälden failed still has none.
+ */
 function newer(a: RateOutlook, b: RateOutlook): RateOutlook {
-  return a.policyRate.date >= b.policyRate.date ? a : b;
+  const base = a.policyRate.date >= b.policyRate.date ? a : b;
+  const gov = [a.govBondRate, b.govBondRate]
+    .filter(isGovBondRate)
+    .reduce<GovBondRate | undefined>((best, g) => (!best || g.date > best.date ? g : best), undefined);
+  return gov === base.govBondRate ? base : { ...base, govBondRate: gov };
 }
 
 function refresh(): Promise<void> {
@@ -55,7 +74,7 @@ function refresh(): Promise<void> {
       } catch {
         // Storage blocked: the in-memory copy still serves this session.
       }
-      current = newer(data, BUNDLED_OUTLOOK);
+      current = newer(data, current);
       listeners.forEach((l) => l());
     })
     .catch(() => {

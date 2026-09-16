@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import type { PlanData } from '@/store/planStore';
 
 /** What the encrypted blob holds. `payloadVersion` lets the shape change later. */
@@ -13,7 +14,7 @@ export function toPayload(data: PlanData): SyncPayload {
 export function fromPayload(raw: unknown): PlanData {
   const p = raw as Partial<SyncPayload> | null;
   if (!p || typeof p !== 'object' || p.payloadVersion !== 1 || !p.plan || typeof p.plan !== 'object') {
-    throw new Error('Unrecognised sync data');
+    throw new Error(messages().sync.errors.unrecognised);
   }
   return { plan: p.plan, snapshots: p.snapshots && typeof p.snapshots === 'object' ? p.snapshots : {} };
 }

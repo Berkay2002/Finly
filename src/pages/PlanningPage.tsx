@@ -8,10 +8,12 @@ import { formatCompact, formatDuration, formatMoney, formatMoneyRange, formatMon
 import { runScenario, type IncomeChangeScenario, type RecurringExpenseScenario, type ScenarioResult } from '@/engine/scenarios';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Frequency } from '@/engine/types';
+import { useT } from '@/i18n';
 import { useCurrency, useMetrics, useMonthOutlook, usePlan, useViewDate } from '@/store/selectors';
 import { customDraft, useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
 import { useLoanSheet } from '@/components/forms/LoanEditor';
+import { useSavingsTaxSheet } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -20,12 +22,13 @@ import { IconTile } from '@/components/ui/IconTile';
 import { MoneyField, SegmentedControl, SelectField, TextField, TogglePill } from '@/components/ui/fields';
 import { Button } from '@/components/ui/Button';
 
-const freqOptions = FREQUENCIES.filter((f) => f !== 'once').map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
+const freqOptions = () => FREQUENCIES.filter((f) => f !== 'once').map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
 
 export function PlanningPage() {
+  const t = useT();
   return (
     <div>
-      <PageHeader title="Planning Tools" subtitle="Test a decision before you make it. Finly shows the consequences; you decide." />
+      <PageHeader title={t.nav.planning} subtitle={t.planning.subtitle} />
       <div className="grid gap-5 xl:grid-cols-2">
         <AffordTool />
         <IncomeTool />
@@ -54,12 +57,14 @@ function AffordTool() {
   const [committed, setCommitted] = useState<'committed' | 'flexible'>('committed');
   const expenses = useExpenseSheet();
   const goalSheet = useGoalSheet();
+  const t = useT();
+  const a = t.planning.afford;
 
   const result = useMemo(() => {
     if (amount <= 0) return null;
     const scenario: RecurringExpenseScenario = {
       type: 'add_expense',
-      name: name || 'New expense',
+      name: name || t.planning.newExpense,
       amount,
       frequency,
       category,
@@ -67,26 +72,26 @@ function AffordTool() {
       committed: committed === 'committed',
     };
     return runScenario(plan, scenario, now);
-  }, [plan, now, name, amount, frequency, category, essential, committed]);
+  }, [plan, now, name, amount, frequency, category, essential, committed, t]);
 
   return (
     <Card>
-      <CardHeader icon={<IconTile icon="card-afford" accent="orange" size="sm" />} title="Can I afford this?" subtitle="Add a hypothetical recurring cost and see what it changes." />
+      <CardHeader icon={<IconTile icon="card-afford" accent="orange" size="sm" />} title={a.title} subtitle={a.subtitle} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label="What is it?" placeholder="e.g. Car payment" value={name} onChange={(e) => setName(e.target.value)} className="sm:col-span-2" />
-        <MoneyField label="Amount" currency={currency} value={amount} onValueChange={setAmount} />
-        <SelectField label="Frequency" value={frequency} onValueChange={setFrequency} options={freqOptions} />
+        <TextField label={a.whatIsIt} placeholder={a.namePlaceholder} value={name} onChange={(e) => setName(e.target.value)} className="sm:col-span-2" />
+        <MoneyField label={a.amount} currency={currency} value={amount} onValueChange={setAmount} />
+        <SelectField label={a.frequency} value={frequency} onValueChange={setFrequency} options={freqOptions()} />
         <SelectField
-          label="Category"
+          label={a.category}
           value={category}
           onValueChange={setCategory}
           options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].label }))}
         />
         <div className="flex flex-col gap-2">
-          <div className="text-[12.5px] font-medium text-ink-soft">Classification</div>
+          <div className="text-[12.5px] font-medium text-ink-soft">{a.classification}</div>
           <div className="flex flex-wrap gap-2">
-            <TogglePill value={essential} onChange={setEssential} options={[{ value: 'essential', label: 'Essential' }, { value: 'optional', label: 'Optional' }]} />
-            <TogglePill value={committed} onChange={setCommitted} options={[{ value: 'committed', label: 'Committed' }, { value: 'flexible', label: 'Flexible' }]} />
+            <TogglePill value={essential} onChange={setEssential} options={[{ value: 'essential', label: a.essential }, { value: 'optional', label: a.optional }]} />
+            <TogglePill value={committed} onChange={setCommitted} options={[{ value: 'committed', label: a.committed }, { value: 'flexible', label: a.flexible }]} />
           </div>
         </div>
       </div>
@@ -95,14 +100,14 @@ function AffordTool() {
           <>
             <ScenarioResults result={result} currency={currency} onEditGoal={goalSheet.openEdit} />
             <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-[12.5px] text-muted">Decided to go ahead? Add it to your plan without retyping.</p>
+              <p className="text-[12.5px] text-muted">{a.goAhead}</p>
               <Button
                 size="sm"
                 variant="soft"
                 icon={Plus}
                 onClick={() =>
                   expenses.openNew({
-                    ...customDraft(category, name || 'New expense'),
+                    ...customDraft(category, name || t.planning.newExpense),
                     amount,
                     frequency,
                     essential: essential === 'essential',
@@ -110,12 +115,12 @@ function AffordTool() {
                   })
                 }
               >
-                Add it to my plan
+                {a.addToPlan}
               </Button>
             </div>
           </>
         ) : (
-          <Callout tone="neutral">Enter an amount to see the effect.</Callout>
+          <Callout tone="neutral">{a.enterAmount}</Callout>
         )}
       </div>
       {expenses.sheet}
@@ -136,6 +141,8 @@ function IncomeTool() {
   const [mode, setMode] = useState<IncomeChangeScenario['mode']>('percent');
   const [value, setValue] = useState(10);
   const goalSheet = useGoalSheet();
+  const t = useT();
+  const it = t.planning.income;
 
   const result = useMemo(() => {
     if (plan.income.length === 0) return null;
@@ -145,42 +152,42 @@ function IncomeTool() {
   }, [plan, now, sourceId, mode, value]);
 
   const presets: { label: string; mode: IncomeChangeScenario['mode']; value: number; icon: typeof TrendingUp }[] = [
-    { label: '+10% raise', mode: 'percent', value: 10, icon: TrendingUp },
-    { label: '−20% (reduced hours)', mode: 'percent', value: -20, icon: TrendingDown },
-    { label: 'Lose this income', mode: 'remove', value: 0, icon: TrendingDown },
+    { label: it.presetRaise, mode: 'percent', value: 10, icon: TrendingUp },
+    { label: it.presetReduced, mode: 'percent', value: -20, icon: TrendingDown },
+    { label: it.presetLose, mode: 'remove', value: 0, icon: TrendingDown },
   ];
 
   return (
     <Card>
-      <CardHeader icon={<IconTile icon="card-income-change" accent="blue" size="sm" />} title="What if my income changes?" subtitle="A raise, fewer hours, more freelance work, or losing a source entirely." action="Manage income" actionTo="/income" />
+      <CardHeader icon={<IconTile icon="card-income-change" accent="blue" size="sm" />} title={it.title} subtitle={it.subtitle} action={it.manage} actionTo="/income" />
       {plan.income.length === 0 ? (
-        <Callout tone="neutral">Add income sources first.</Callout>
+        <Callout tone="neutral">{it.addFirst}</Callout>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2">
             <SelectField
-              label="Which income?"
+              label={it.whichIncome}
               value={sourceId}
               onValueChange={setSourceId}
-              options={[{ value: '', label: 'All baseline income' }, ...plan.income.map((i) => ({ value: i.id, label: i.name }))]}
+              options={[{ value: '', label: it.allBaseline }, ...plan.income.map((i) => ({ value: i.id, label: i.name }))]}
             />
             <div>
-              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">Change</div>
+              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{it.change}</div>
               <SegmentedControl
                 value={mode}
                 onChange={setMode}
                 options={[
                   { value: 'percent', label: '%' },
-                  { value: 'absolute', label: '± amount' },
-                  { value: 'set', label: 'Set to' },
-                  { value: 'remove', label: 'Remove' },
+                  { value: 'absolute', label: it.modeAbsolute },
+                  { value: 'set', label: it.modeSet },
+                  { value: 'remove', label: it.modeRemove },
                 ]}
               />
             </div>
             {mode === 'percent' && (
               <TextField
-                label="Percent change"
-                hint="negative for a decrease"
+                label={it.percentChange}
+                hint={it.negativeHint}
                 type="number"
                 inputMode="decimal"
                 value={value}
@@ -189,15 +196,15 @@ function IncomeTool() {
             )}
             {mode === 'absolute' && (
               <TextField
-                label="Monthly change"
-                hint="negative for a decrease"
+                label={it.monthlyChange}
+                hint={it.negativeHint}
                 type="number"
                 inputMode="decimal"
                 value={value}
                 onChange={(e) => setValue(Number(e.target.value) || 0)}
               />
             )}
-            {mode === 'set' && <MoneyField label="New monthly amount" currency={currency} value={value} onValueChange={setValue} />}
+            {mode === 'set' && <MoneyField label={it.newMonthlyAmount} currency={currency} value={value} onValueChange={setValue} />}
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {presets.map((p) => (
@@ -216,7 +223,7 @@ function IncomeTool() {
             ))}
           </div>
           <div className="mt-4">
-            {result ? <ScenarioResults result={result} currency={currency} onEditGoal={goalSheet.openEdit} /> : <Callout tone="neutral">Enter a change to see the effect.</Callout>}
+            {result ? <ScenarioResults result={result} currency={currency} onEditGoal={goalSheet.openEdit} /> : <Callout tone="neutral">{it.enterChange}</Callout>}
           </div>
         </>
       )}
@@ -230,6 +237,7 @@ function IncomeTool() {
 /* ------------------------------------------------------------------ */
 
 function ScenarioResults({ result, currency, onEditGoal }: { result: ScenarioResult; currency: string; onEditGoal: (id: string) => void }) {
+  const t = useT().planning.results;
   const money = (n: number) => formatMoney(n, currency);
   const br = result.deltas.find((d) => d.key === 'breathingRoom')!;
   const shown = result.deltas.filter((d) => ['safeToSpend', 'breathingRoom', 'flexible', 'savingsRate', 'essentialRunway', 'lifestyleRunway'].includes(d.key));
@@ -241,11 +249,11 @@ function ScenarioResults({ result, currency, onEditGoal }: { result: ScenarioRes
     <div className="space-y-3">
       <Callout tone={br.after < 0 ? 'warning' : br.delta < 0 ? 'info' : 'success'}>
         {br.delta < 0
-          ? `This would reduce your monthly breathing room from ${money(br.before)} to ${money(br.after)}.`
+          ? t.reduce(money(br.before), money(br.after))
           : br.delta > 0
-            ? `This would increase your monthly breathing room from ${money(br.before)} to ${money(br.after)}.`
-            : 'This does not change your monthly breathing room.'}
-        {br.after < 0 && ` You would be ${money(-br.after)} short each month unless something else changes.`}
+            ? t.increase(money(br.before), money(br.after))
+            : t.unchanged}
+        {br.after < 0 && t.short(money(-br.after))}
       </Callout>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {shown.map((d) => {
@@ -267,22 +275,22 @@ function ScenarioResults({ result, currency, onEditGoal }: { result: ScenarioRes
       </div>
       {result.savingsShortfall > 0 && (
         <div className="rounded-xl border border-line p-3">
-          <div className="text-[13px] font-medium text-ink">Effect on your goals</div>
+          <div className="text-[13px] font-medium text-ink">{t.goalsTitle}</div>
           <p className="mt-0.5 text-[12.5px] text-muted">
-            If the {money(result.savingsShortfall)} shortfall came out of your saving, goals would move back:
+            {t.goalsIntro(money(result.savingsShortfall))}
           </p>
           <ul className="mt-2 space-y-0.5">
             {delayed.map((g) => (
               <li key={g.goal.id}>
-                <EditableRow onClick={() => onEditGoal(g.goal.id)} title="Edit goal" className="justify-between py-1 text-[12.5px]">
+                <EditableRow onClick={() => onEditGoal(g.goal.id)} title={t.editGoal} className="justify-between py-1 text-[12.5px]">
                   <EditableTitle className="text-ink">{g.goal.name}</EditableTitle>
                   <span className="tabular shrink-0 text-warning">
-                    {Number.isFinite(g.delayMonths) ? `+${formatDuration(g.delayMonths)}` : 'never reached at this rate'}
+                    {Number.isFinite(g.delayMonths) ? `+${formatDuration(g.delayMonths)}` : t.neverReached}
                   </span>
                 </EditableRow>
               </li>
             ))}
-            {delayed.length === 0 && <li className="text-[12.5px] text-muted">No dated goals are affected.</li>}
+            {delayed.length === 0 && <li className="text-[12.5px] text-muted">{t.noGoalsAffected}</li>}
           </ul>
         </div>
       )}
@@ -298,6 +306,7 @@ function AllowanceCard() {
   const m = useMetrics();
   const currency = useCurrency();
   const [spent, setSpent] = useState(0);
+  const t = useT().planning.allowance;
   const money = (n: number) => formatMoney(n, currency);
   const remainingBudget = Math.max(0, m.daily.flexibleBudget - spent);
   const perDay = spent > 0 ? remainingBudget / m.daily.daysRemaining : m.daily.perDay;
@@ -313,73 +322,73 @@ function AllowanceCard() {
 
   return (
     <Card>
-      <CardHeader icon={<IconTile icon="card-per-day" accent="brand" size="sm" />} title="How much can I spend per day?" subtitle="Guidance based on flexible money and the days left this month. Not a rule." />
+      <CardHeader icon={<IconTile icon="card-per-day" accent="brand" size="sm" />} title={t.title} subtitle={t.subtitle} />
       <div className="grid grid-cols-3 gap-2">
         <div className="rounded-xl bg-page p-3">
-          <div className="text-[11.5px] text-muted">Per day</div>
+          <div className="text-[11.5px] text-muted">{t.perDay}</div>
           <div className="tabular text-[18px] font-semibold text-ink">{money(perDay)}</div>
         </div>
         <div className="rounded-xl bg-page p-3">
-          <div className="text-[11.5px] text-muted">Per week</div>
+          <div className="text-[11.5px] text-muted">{t.perWeek}</div>
           <div className="tabular text-[18px] font-semibold text-ink">{money(perWeek)}</div>
         </div>
         <div className="rounded-xl bg-page p-3">
-          <div className="text-[11.5px] text-muted">Days left</div>
+          <div className="text-[11.5px] text-muted">{t.daysLeft}</div>
           <div className="tabular text-[18px] font-semibold text-ink">{m.daily.daysRemaining}</div>
         </div>
       </div>
       <dl className="mt-3 divide-y divide-line text-[13px]">
         <div className="flex justify-between py-2">
-          <dt className="text-ink-soft">Flexible spending in your plan</dt>
+          <dt className="text-ink-soft">{t.flexibleInPlan}</dt>
           <dd className="tabular font-medium text-ink">{money(m.expenses.flexible)}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt className="text-ink-soft">Safe to spend on top</dt>
+          <dt className="text-ink-soft">{t.safeOnTop}</dt>
           <dd className="tabular font-medium text-ink">{money(m.safeToSpend)}</dd>
         </div>
         <div className="flex justify-between py-2">
-          <dt className="font-medium text-ink">Flexible money this month</dt>
+          <dt className="font-medium text-ink">{t.flexibleThisMonth}</dt>
           <dd className="tabular font-semibold text-ink">{money(m.daily.flexibleBudget)}</dd>
         </div>
       </dl>
       {groups.length > 0 && (
         <div className="mt-3 rounded-xl bg-page p-3 text-[12.5px]">
-          <div className="mb-1 text-[11.5px] font-medium text-muted">Of which</div>
+          <div className="mb-1 text-[11.5px] font-medium text-muted">{t.ofWhich}</div>
           {groups.map((g) => (
             <div key={g.id} className="mt-1 flex justify-between gap-3">
               <span className="text-ink-soft">{g.label}</span>
               <span className="tabular whitespace-nowrap text-ink">
-                {money(g.perDay)} a day · {money(g.perDay * 7)} a week
+                {t.dayWeek(money(g.perDay), money(g.perDay * 7))}
               </span>
             </div>
           ))}
           <div className="mt-1 flex justify-between gap-3">
-            <span className="text-ink-soft">Everything else</span>
+            <span className="text-ink-soft">{t.everythingElse}</span>
             <span className="tabular whitespace-nowrap text-ink">
-              {money(Math.max(0, perDay - groupsPerDay))} a day · {money(Math.max(0, perWeek - groupsPerDay * 7))} a week
+              {t.dayWeek(money(Math.max(0, perDay - groupsPerDay)), money(Math.max(0, perWeek - groupsPerDay * 7)))}
             </span>
           </div>
           <p className="mt-1.5 text-muted">
             {groups.some((g) => g.logged)
               ? groups
                   .filter((g) => g.logged)
-                  .map((g) => `${g.label} so far: ${money(g.summary.month.spent ?? 0)} of ${money(g.summary.monthly)}.`)
+                  .map((g) => t.soFar(g.label, money(g.summary.month.spent ?? 0), money(g.summary.monthly)))
                   .join(' ')
-              : 'Log what you have spent on the Living Costs, Transport and Leisure pages to see how the month is going.'}
+              : t.logHint}
           </p>
         </div>
       )}
       <MoneyField
         className="mt-3"
-        label="Spent on flexible things so far this month"
-        hint="(optional)"
+        label={t.spentSoFar}
+        hint={t.optional}
         currency={currency}
         value={spent}
         onValueChange={setSpent}
       />
       {spent > 0 && (
         <p className="tabular mt-2 text-[12.5px] text-muted">
-          {money(remainingBudget)} left for the remaining {m.daily.daysRemaining} days.
+          {t.leftFor(money(remainingBudget), m.daily.daysRemaining)}
         </p>
       )}
     </Card>
@@ -393,6 +402,7 @@ function AllowanceCard() {
 function OutlookCard() {
   const outlook = useMonthOutlook(12);
   const m = useMetrics();
+  const t = useT().planning.outlook;
   const currency = useCurrency();
   const money = (n: number) => formatMoney(n, currency);
   const data = outlook.map((o) => ({
@@ -405,18 +415,19 @@ function OutlookCard() {
   const expensive = outlook.filter((o) => o.aboveNormal > 0).sort((a, b) => b.aboveNormal - a.aboveNormal).slice(0, 4);
   const expenses = useExpenseSheet();
   const loans = useLoanSheet();
+  const taxSheet = useSavingsTaxSheet();
 
   return (
     <Card>
       <div id="outlook" />
-      <CardHeader icon={<IconTile icon="card-expensive-months" accent="orange" size="sm" />} title="Expensive months ahead" subtitle={`Expected spending per month vs your normal ${money(m.lifestyleCost)}.`} />
+      <CardHeader icon={<IconTile icon="card-expensive-months" accent="orange" size="sm" />} title={t.title} subtitle={t.subtitle(money(m.lifestyleCost))} />
       <div className="h-44 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7a90' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: '#6b7a90' }} axisLine={false} tickLine={false} tickFormatter={formatCompact} width={52} />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--color-muted)' }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--color-muted)' }} axisLine={false} tickLine={false} tickFormatter={formatCompact} width={52} />
             <Tooltip
-              cursor={{ fill: '#f5f7fa' }}
+              cursor={{ fill: 'var(--color-page)' }}
               content={({ active, payload }) => {
                 if (!active || !payload?.[0]) return null;
                 const p = payload[0].payload as (typeof data)[number];
@@ -426,7 +437,7 @@ function OutlookCard() {
                     <div className="tabular font-semibold text-ink">{money(p.expected)}</div>
                     <div className={clsx('tabular', p.above > 0 ? 'text-warning' : 'text-positive')}>
                       {p.above > 0 ? '+' : ''}
-                      {money(p.above)} vs normal
+                      {t.vsNormal(money(p.above))}
                     </div>
                     {p.items.slice(0, 4).map((it) => (
                       <div key={it.id} className="text-muted">
@@ -439,7 +450,7 @@ function OutlookCard() {
             />
             <Bar dataKey="expected" radius={[6, 6, 0, 0]} isAnimationActive={false}>
               {data.map((d) => (
-                <Cell key={d.full} fill={d.above > 0 ? '#f2994a' : '#a9dbc8'} />
+                <Cell key={d.full} fill={d.above > 0 ? 'var(--color-orange-500)' : 'var(--color-brand-200)'} />
               ))}
             </Bar>
           </BarChart>
@@ -456,8 +467,10 @@ function OutlookCard() {
                     <button
                       key={i.id}
                       type="button"
-                      onClick={() => (i.source === 'debt' ? loans.openEdit(i.expenseId) : expenses.openEdit(i.expenseId))}
-                      title={i.source === 'debt' ? 'Edit loan' : 'Edit expense'}
+                      onClick={() =>
+                        i.source === 'tax' ? taxSheet.open() : i.source === 'debt' ? loans.openEdit(i.expenseId) : expenses.openEdit(i.expenseId)
+                      }
+                      title={i.source === 'tax' ? t.seeSavingsTax : i.source === 'debt' ? t.editLoan : t.editExpense}
                       className="rounded-full border border-line bg-card px-2 py-0.5 text-[11.5px] text-ink-soft transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
                     >
                       {i.name}
@@ -465,15 +478,16 @@ function OutlookCard() {
                   ))}
                 </div>
               </div>
-              <div className="tabular shrink-0 font-semibold text-warning">+{money(o.aboveNormal)} above normal</div>
+              <div className="tabular shrink-0 font-semibold text-warning">{t.aboveNormal(money(o.aboveNormal))}</div>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-[13px] text-muted">No month stands out. Add due dates to yearly or one-off costs to see spikes.</p>
+        <p className="mt-3 text-[13px] text-muted">{t.none}</p>
       )}
       {expenses.sheet}
       {loans.sheet}
+      {taxSheet.sheet}
     </Card>
   );
 }

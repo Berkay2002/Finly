@@ -1,6 +1,7 @@
 import { useQuery } from 'convex/react';
 import { useEffect } from 'react';
 import { api } from '../../convex/_generated/api';
+import { messages } from '@/i18n';
 import { usePlanStore, type PlanData } from '@/store/planStore';
 import { convex } from './convexClient';
 import { decryptJson, deriveKey, encryptJson, fromHex, generateSecret, type Sealed } from './crypto';
@@ -22,7 +23,7 @@ let pushAgain = false;
 let keyCache: { syncId: string; key: CryptoKey } | null = null;
 
 function client() {
-  if (!convex) throw new Error('Sync is not configured in this build.');
+  if (!convex) throw new Error(messages().sync.errors.notConfigured);
   return convex;
 }
 
@@ -59,7 +60,7 @@ function raiseConflict(remote: PlanData, remoteVersion: number, remoteUpdatedAt:
 }
 
 function message(e: unknown): string {
-  return e instanceof Error ? e.message : 'Something went wrong while syncing.';
+  return e instanceof Error ? e.message : messages().sync.errors.generic;
 }
 
 async function push(): Promise<void> {
@@ -221,7 +222,7 @@ export function useSyncActions() {
         data = await decryptRemote(syncId, secretHex, remote);
       } catch (e) {
         useSyncStore.getState().disable();
-        throw new Error(`The cloud copy could not be read: ${message(e)}`);
+        throw new Error(messages().sync.errors.cloudUnreadable(message(e)));
       }
       if (isBlank(usePlanStore.getState().plan)) {
         applyRemote(data);

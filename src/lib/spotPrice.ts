@@ -1,4 +1,5 @@
 import { VAT_RATE } from '@/engine/electricity';
+import { messages } from '@/i18n';
 import type { PriceArea } from '@/engine/types';
 
 /**
@@ -106,12 +107,12 @@ async function load(area: PriceArea, month: string): Promise<SpotAverage> {
     const url = `${API}/${y}/${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}_${area}.json`;
     const res = await fetch(url);
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`Spot prices unavailable (${res.status}).`);
+    if (!res.ok) throw new Error(messages().household.spot.unavailable(res.status));
     return (await res.json()) as PricePoint[];
   });
 
   const prices = results.flatMap((day) => day ?? []).map((p) => p.SEK_per_kWh).filter(Number.isFinite);
-  if (prices.length === 0) throw new Error('No spot prices published for that month yet.');
+  if (prices.length === 0) throw new Error(messages().household.spot.noPrices);
   const avgSek = prices.reduce((a, b) => a + b, 0) / prices.length;
   return {
     area,

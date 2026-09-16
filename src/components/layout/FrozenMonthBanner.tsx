@@ -1,4 +1,5 @@
 import { formatDate, formatMonthKey } from '@/engine/format';
+import { useT } from '@/i18n';
 import { useFrozenMonth } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 import { Button } from '@/components/ui/Button';
@@ -11,20 +12,21 @@ import { Callout } from '@/components/ui/Callout';
 export function FrozenMonthBanner({ className }: { className?: string }) {
   const { key, frozen, snapshot } = useFrozenMonth();
   const resetMonth = useUiStore((s) => s.resetMonth);
+  const t = useT().layout.frozenMonth;
   if (!frozen || !snapshot) return null;
   return (
     <Callout
       tone="neutral"
       icon="card-upcoming"
       className={className}
-      title={`${formatMonthKey(key)} as it was closed on ${formatDate(snapshot.savedAt)}`}
+      title={t.title(formatMonthKey(key), formatDate(snapshot.savedAt))}
       action={
         <Button size="sm" variant="soft" onClick={resetMonth}>
-          Back to this month
+          {t.back}
         </Button>
       }
     >
-      Edits to income, costs and balances apply to your current plan. Bill amounts you enter here stay with this month.
+      {t.body}
     </Callout>
   );
 }

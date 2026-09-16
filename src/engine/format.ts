@@ -1,10 +1,29 @@
-const intFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+import { locale, messages } from '@/i18n';
 
-/** "34,200 SEK" — matches the design. Rounds to whole units. */
+/** Intl formatters are costly to build, so keep one per locale and options. */
+const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
+
+function numberFormat(options: Intl.NumberFormatOptions): Intl.NumberFormat {
+  const key = `n|${locale()}|${JSON.stringify(options)}`;
+  let f = cache.get(key) as Intl.NumberFormat | undefined;
+  if (!f) cache.set(key, (f = new Intl.NumberFormat(locale(), options)));
+  return f;
+}
+
+function dateFormat(options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `d|${locale()}|${JSON.stringify(options)}`;
+  let f = cache.get(key) as Intl.DateTimeFormat | undefined;
+  if (!f) cache.set(key, (f = new Intl.DateTimeFormat(locale(), options)));
+  return f;
+}
+
+const int = () => numberFormat({ maximumFractionDigits: 0 });
+
+/** "34,200 SEK" in English, "34 200 SEK" in Swedish. Rounds to whole units. */
 export function formatMoney(amount: number, currency = 'SEK', opts: { sign?: boolean } = {}): string {
   const safe = Number.isFinite(amount) ? amount : 0;
   const rounded = Math.round(safe);
-  const body = intFormatter.format(Math.abs(rounded));
+  const body = int().format(Math.abs(rounded));
   const sign = rounded < 0 ? '-' : opts.sign && rounded > 0 ? '+' : '';
   return `${sign}${body} ${currency}`;
 }
@@ -14,70 +33,75 @@ export function formatMoneyRange(low: number, high: number, currency = 'SEK'): s
   const a = Math.round(Number.isFinite(low) ? low : 0);
   const b = Math.round(Number.isFinite(high) ? high : 0);
   if (a === b) return formatMoney(a, currency);
-  return `${intFormatter.format(Math.min(a, b))}–${intFormatter.format(Math.max(a, b))} ${currency}`;
+  return `${int().format(Math.min(a, b))}–${int().format(Math.max(a, b))} ${currency}`;
 }
 
 /** "34,200" without the currency code. */
 export function formatAmount(amount: number): string {
   const safe = Number.isFinite(amount) ? amount : 0;
-  return intFormatter.format(Math.round(safe));
+  return int().format(Math.round(safe));
 }
 
+/** A plain number with up to `digits` decimals in the current locale: "6.95" or "6,95". */
+export function formatNumber(value: number, digits = 2): string {
+  if (!Number.isFinite(value)) return '–';
+  return numberFormat({ maximumFractionDigits: digits }).format(value);
+}
+
+/** "12%" in English, "12 %" in Swedish. */
 export function formatPercent(fraction: number, digits = 0): string {
   if (!Number.isFinite(fraction)) return '–';
-  return `${(fraction * 100).toFixed(digits)}%`;
+  return numberFormat({ style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(fraction);
 }
 
 export function formatMonths(months: number): string {
+  const t = messages().format;
   if (!Number.isFinite(months)) return '∞';
-  if (months >= 120) return '10+ years';
-  if (months < 1) return `${months.toFixed(1)} months`;
+  if (months >= 120) return t.tenPlusYears;
+  if (months < 1) return t.months(numberFormat({ minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(months), months);
   const rounded = Math.round(months * 10) / 10;
-  return `${rounded} month${rounded === 1 ? '' : 's'}`;
+  return t.months(numberFormat({ maximumFractionDigits: 1 }).format(rounded), rounded);
 }
 
 /** "1 year, 4 months" style duration. */
 export function formatDuration(months: number): string {
-  if (!Number.isFinite(months)) return 'Never at this rate';
-  if (months <= 0) return 'Reached';
+  const t = messages().format;
+  if (!Number.isFinite(months)) return t.never;
+  if (months <= 0) return t.reached;
   const whole = Math.ceil(months);
   const years = Math.floor(whole / 12);
   const rest = whole % 12;
   const parts: string[] = [];
-  if (years > 0) parts.push(`${years} year${years === 1 ? '' : 's'}`);
-  if (rest > 0) parts.push(`${rest} month${rest === 1 ? '' : 's'}`);
+  if (years > 0) parts.push(t.years(years));
+  if (rest > 0) parts.push(t.months(String(rest), rest));
   return parts.join(', ');
 }
 
-const monthYear = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' });
-const shortMonthYear = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' });
-const dayMonthYear = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const shortMonth = new Intl.DateTimeFormat('en-GB', { month: 'short' });
-
 export function formatMonthYear(date: Date): string {
-  return monthYear.format(date);
+  return dateFormat({ month: 'long', year: 'numeric' }).format(date);
 }
 /** "January 2026" from a YYYY-MM key. */
 export function formatMonthKey(key: string): string {
   const [y, m] = key.split('-').map(Number);
   if (!y || !m) return key;
-  return monthYear.format(new Date(y, m - 1, 1));
+  return formatMonthYear(new Date(y, m - 1, 1));
 }
 export function formatShortMonthYear(date: Date): string {
-  return shortMonthYear.format(date);
+  return dateFormat({ month: 'short', year: 'numeric' }).format(date);
 }
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  return dayMonthYear.format(d);
+  return dateFormat({ day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
 export function formatShortMonth(date: Date): string {
-  return shortMonth.format(date);
+  return dateFormat({ month: 'short' }).format(date);
 }
 
-/** Compact "273.6k" for chart axes. */
+/** Compact "274K" for chart axes. */
 export function formatCompact(amount: number): string {
+  const t = messages().format;
   const abs = Math.abs(amount);
-  if (abs >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${Math.round(amount / 1_000)}K`;
+  if (abs >= 1_000_000) return `${formatNumber(amount / 1_000_000, 1)}${t.million}`;
+  if (abs >= 1_000) return `${Math.round(amount / 1_000)}${t.thousand}`;
   return `${Math.round(amount)}`;
 }

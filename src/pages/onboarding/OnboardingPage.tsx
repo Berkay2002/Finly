@@ -11,8 +11,11 @@ import { GoalEditor } from '@/components/forms/GoalEditor';
 import { BirthYearField } from '@/components/forms/BirthYearField';
 import { HomeFields } from '@/components/forms/HomeFields';
 import { IncomeEditor } from '@/components/forms/IncomeEditor';
-import { MonthSelector, Avatar, NotificationsButton } from '@/components/layout/PageHeader';
+import { MonthSelector, Avatar, NotificationsButton, ThemeToggleButton } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
+import { Label } from '@/components/ui/fields';
+import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
+import { useT } from '@/i18n';
 import { STEP_ICON } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -29,6 +32,7 @@ export function OnboardingPage() {
   const navigate = useNavigate();
   const plan = usePlan();
   const { completeStep, finishOnboarding } = usePlanStore();
+  const t = useT();
 
   if (!isStep(step)) return <Navigate to="/onboarding/income" replace />;
 
@@ -58,10 +62,12 @@ export function OnboardingPage() {
       return (
         <div className="space-y-6">
           <div className="rounded-xl border border-line bg-page/60 p-3 sm:p-4">
-            <h3 className="text-[15px] font-semibold text-ink">About you</h3>
-            <p className="mb-3 mt-0.5 text-[12.5px] text-muted">
-              Where you live sets your net salary and electricity costs. Your birth year sets how long you pay CSN.
-            </p>
+            <h3 className="text-[15px] font-semibold text-ink">{t.onboarding.aboutYou.title}</h3>
+            <p className="mb-3 mt-0.5 text-[12.5px] text-muted">{t.onboarding.aboutYou.description}</p>
+            <div className="mb-3 sm:max-w-[320px]">
+              <Label hint={t.onboarding.aboutYou.languageHint}>{t.common.language}</Label>
+              <LanguageSwitch />
+            </div>
             <BirthYearField className="mb-3 sm:max-w-[240px]" />
             <HomeFields />
           </div>
@@ -75,15 +81,12 @@ export function OnboardingPage() {
       return (
         <div className="space-y-6">
           <div>
-            <h3 className="mb-1 text-[14px] font-semibold text-ink">Loans</h3>
-            <p className="mb-3 text-[12.5px] text-muted">
-              CSN, bolån, billån and credit. Payments count as essential costs; the balance and rate show what the debt really
-              costs you.
-            </p>
+            <h3 className="mb-1 text-[14px] font-semibold text-ink">{t.onboarding.loans.title}</h3>
+            <p className="mb-3 text-[12.5px] text-muted">{t.onboarding.loans.description}</p>
             <LoanEditor />
           </div>
           <div>
-            <h3 className="mb-3 text-[14px] font-semibold text-ink">Banking and insurance</h3>
+            <h3 className="mb-3 text-[14px] font-semibold text-ink">{t.onboarding.bankingInsurance}</h3>
             <ExpenseEditor category={meta.category!} />
           </div>
         </div>
@@ -97,24 +100,26 @@ export function OnboardingPage() {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-bold leading-tight tracking-tight text-ink sm:text-[26px]">
-            Let's plan your financial life
+            {t.onboarding.title}
           </h1>
-          <p className="mt-1 text-[14px] text-muted">A few simple steps to get a clear picture and a personalised plan.</p>
+          <p className="mt-1 text-[14px] text-muted">{t.onboarding.subtitle}</p>
         </div>
         <div className="hidden items-center gap-2 lg:flex">
           <MonthSelector />
+          <LanguageSwitch variant="compact" />
+          <ThemeToggleButton />
           <NotificationsButton />
           <Avatar />
         </div>
         <Link to="/" className="shrink-0 whitespace-nowrap text-[13px] font-medium text-brand-700 underline-offset-2 hover:underline lg:hidden">
-          Skip for now
+          {t.onboarding.skipForNow}
         </Link>
       </div>
 
       {/* Steppers */}
       <div className="mb-3 flex items-center justify-between md:hidden">
         <span className="text-[12.5px] font-medium text-ink-soft">
-          Step {idx + 1} of {ONBOARDING_STEPS.length}
+          {t.onboarding.stepOf(idx + 1, ONBOARDING_STEPS.length)}
         </span>
         <StepDots current={step} />
       </div>
@@ -137,7 +142,7 @@ export function OnboardingPage() {
               {!isSummary && (
                 <div className="flex shrink-0 items-start gap-2 rounded-xl bg-brand-50 px-3 py-2 text-[12px] text-brand-800 sm:max-w-[220px]">
                   <Lightbulb size={14} className="mt-0.5 shrink-0" />
-                  <span>Be as accurate as you can. You can always update this later.</span>
+                  <span>{t.onboarding.accuracyTip}</span>
                 </div>
               )}
             </div>
@@ -147,7 +152,7 @@ export function OnboardingPage() {
           <div className="mt-4 flex items-center justify-between gap-3">
             {prev ? (
               <Button variant="secondary" icon={ArrowLeft} onClick={() => navigate(`/onboarding/${prev}`)}>
-                Back
+                {t.onboarding.back}
               </Button>
             ) : (
               <span />
@@ -155,11 +160,11 @@ export function OnboardingPage() {
             <div className="flex items-center gap-3">
               {!isSummary && (
                 <button type="button" onClick={skip} className="text-[13px] font-medium text-muted hover:text-ink">
-                  I'll add this later
+                  {t.onboarding.addLater}
                 </button>
               )}
               <Button size="lg" iconRight={isSummary ? Check : ArrowRight} onClick={continueTo}>
-                {isSummary ? 'Confirm plan & open dashboard' : `Continue to ${STEP_META[next!].shortLabel}`}
+                {isSummary ? t.onboarding.confirm : t.onboarding.continueTo(STEP_META[next!].shortLabel)}
               </Button>
             </div>
           </div>
@@ -168,13 +173,13 @@ export function OnboardingPage() {
             <IconTile icon="card-goals" accent="brand" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between text-[13px]">
-                <span className="font-medium text-ink">Your planning progress</span>
+                <span className="font-medium text-ink">{t.onboarding.progress}</span>
                 <span className="text-muted">
-                  {completedCount} of {ONBOARDING_STEPS.length - 1}
+                  {t.onboarding.progressCount(completedCount, ONBOARDING_STEPS.length - 1)}
                 </span>
               </div>
               <ProgressBar value={completedCount / (ONBOARDING_STEPS.length - 1)} className="mt-1.5" />
-              <div className="mt-1 text-[12px] text-muted">You're on your way to a clearer tomorrow.</div>
+              <div className="mt-1 text-[12px] text-muted">{t.onboarding.progressNote}</div>
             </div>
           </div>
         </div>

@@ -8,10 +8,10 @@ type Tone = 'success' | 'info' | 'warning' | 'tip' | 'neutral';
 
 const tones: Record<Tone, { wrap: string; icon: string; Icon: IconSource }> = {
   success: { wrap: 'bg-brand-50 text-brand-800', icon: 'bg-brand-100 text-brand-600', Icon: 'state-success' },
-  info: { wrap: 'bg-purple-100 text-indigo-500', icon: 'bg-white text-purple-500', Icon: Info },
-  warning: { wrap: 'bg-orange-100 text-orange-800', icon: 'bg-white text-orange-500', Icon: 'state-warning' },
-  tip: { wrap: 'bg-brand-50 text-brand-800', icon: 'bg-white text-brand-600', Icon: 'state-tip' },
-  neutral: { wrap: 'bg-page text-ink-soft', icon: 'bg-white text-muted', Icon: Info },
+  info: { wrap: 'bg-purple-100 text-indigo-500', icon: 'bg-card text-purple-500', Icon: Info },
+  warning: { wrap: 'bg-orange-100 text-orange-800', icon: 'bg-card text-orange-500', Icon: 'state-warning' },
+  tip: { wrap: 'bg-brand-50 text-brand-800', icon: 'bg-card text-brand-600', Icon: 'state-tip' },
+  neutral: { wrap: 'bg-page text-ink-soft', icon: 'bg-card text-muted', Icon: Info },
 };
 
 export function Callout({

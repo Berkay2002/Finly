@@ -1,9 +1,12 @@
+import { allMessages, messages } from '@/i18n';
 import { frequencyForOccurrences } from './frequency';
 import type {
   AccountKind,
+  Debt,
   DebtFrequency,
   DebtKind,
   ExpenseCategory,
+  ExpenseItem,
   ExpenseTag,
   Frequency,
   GoalKind,
@@ -14,62 +17,46 @@ import type {
   SavingsPurpose,
 } from './types';
 
+/*
+ * Labels and descriptions are getters that read the current language's dictionary (src/i18n), so the
+ * shapes below stay plain data for callers while the text follows the language.
+ */
+const tx = () => messages().taxonomy;
+
 /* ------------------------------------------------------------------ */
 /* Categories                                                          */
 /* ------------------------------------------------------------------ */
 
 export interface CategoryMeta {
   id: ExpenseCategory;
-  label: string;
-  shortLabel: string;
-  description: string;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly description: string;
   /** Accent used for icon tiles and chart slices. */
   accent: 'blue' | 'green' | 'orange' | 'yellow' | 'purple' | 'lavender' | 'red' | 'indigo';
 }
 
+const category = (id: ExpenseCategory, accent: CategoryMeta['accent']): CategoryMeta => ({
+  id,
+  accent,
+  get label() {
+    return tx().categories[id].label;
+  },
+  get shortLabel() {
+    return tx().categories[id].shortLabel;
+  },
+  get description() {
+    return tx().categories[id].description;
+  },
+});
+
 export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
-  home: {
-    id: 'home',
-    label: 'Home & Bills',
-    shortLabel: 'Home',
-    description: 'Rent, mortgage, utilities and everything that keeps a roof over your head.',
-    accent: 'blue',
-  },
-  living: {
-    id: 'living',
-    label: 'Living Costs',
-    shortLabel: 'Living costs',
-    description: 'Food, household, clothing, health and personal care.',
-    accent: 'green',
-  },
-  transport: {
-    id: 'transport',
-    label: 'Transport',
-    shortLabel: 'Transport',
-    description: 'Car ownership, public transport and travel.',
-    accent: 'orange',
-  },
-  finance: {
-    id: 'finance',
-    label: 'Finance & Insurance',
-    shortLabel: 'Finance & insurance',
-    description: 'Banking fees, insurance policies and other financial commitments. Loans have their own page.',
-    accent: 'yellow',
-  },
-  leisure: {
-    id: 'leisure',
-    label: 'Leisure',
-    shortLabel: 'Leisure',
-    description: 'Entertainment, subscriptions, hobbies and fitness.',
-    accent: 'purple',
-  },
-  planned: {
-    id: 'planned',
-    label: 'Planned Spending',
-    shortLabel: 'Planned',
-    description: 'Irregular and one-off costs, spread into a monthly equivalent.',
-    accent: 'lavender',
-  },
+  home: category('home', 'blue'),
+  living: category('living', 'green'),
+  transport: category('transport', 'orange'),
+  finance: category('finance', 'yellow'),
+  leisure: category('leisure', 'purple'),
+  planned: category('planned', 'lavender'),
 };
 
 /* ------------------------------------------------------------------ */
@@ -78,15 +65,17 @@ export const CATEGORY_META: Record<ExpenseCategory, CategoryMeta> = {
 
 export interface ExpenseSuggestion {
   slug: string;
-  name: string;
+  /** In the current language. */
+  readonly name: string;
   category: ExpenseCategory;
+  /** Stable group id (English); show it with `groupLabel`. */
   group: string;
   frequency: Frequency;
   fixed: boolean;
   essential: boolean;
   committed: boolean;
   tags?: ExpenseTag[];
-  hint?: string;
+  readonly hint?: string;
   /** Months the bill trails the period it covers. See `ExpenseItem.billingLag`. */
   billingLag?: number;
   /** Starts out priced per purchase. */
@@ -103,14 +92,12 @@ const s = (
   category: ExpenseCategory,
   group: string,
   slug: string,
-  name: string,
   flags: {
     f?: boolean;
     e?: boolean;
     c?: boolean;
     freq?: Frequency;
     tags?: ExpenseTag[];
-    hint?: string;
     lag?: number;
     /** Everyday purchase; see `ExpenseSuggestion.everyday`. */
     ev?: boolean;
@@ -119,7 +106,9 @@ const s = (
   } = {},
 ): ExpenseSuggestion => ({
   slug,
-  name,
+  get name() {
+    return (tx().expenses as Record<string, string>)[slug] ?? slug;
+  },
   category,
   group,
   frequency: flags.occ ? frequencyForOccurrences({ times: flags.occ[0], per: flags.occ[1] }) : (flags.freq ?? 'monthly'),
@@ -127,7 +116,9 @@ const s = (
   essential: flags.e ?? true,
   committed: flags.c ?? flags.f ?? true,
   tags: flags.tags,
-  hint: flags.hint,
+  get hint() {
+    return (tx().hints as Record<string, string | undefined>)[slug];
+  },
   billingLag: flags.lag,
   occurrences: flags.occ ? { times: flags.occ[0], per: flags.occ[1] } : undefined,
   everyday: flags.ev || (!!flags.occ && flags.occ[1] !== 'year') || undefined,
@@ -135,120 +126,118 @@ const s = (
 
 export const EXPENSE_SUGGESTIONS: ExpenseSuggestion[] = [
   // Home
-  s('home', 'Housing', 'rent', 'Rent'),
-  s('home', 'Housing', 'hoa_fees', 'Housing association fees'),
-  s('home', 'Housing', 'property_charges', 'Property charges'),
-  s('home', 'Housing', 'home_insurance', 'Home insurance', { tags: ['insurance'] }),
-  s('home', 'Utilities', 'electricity', 'Electricity', {
+  s('home', 'Housing', 'rent'),
+  s('home', 'Housing', 'hoa_fees'),
+  s('home', 'Housing', 'property_charges'),
+  s('home', 'Housing', 'home_insurance', { tags: ['insurance'] }),
+  s('home', 'Utilities', 'electricity', {
     f: false,
     c: true,
     tags: ['utility'],
     lag: 1,
-    hint: 'Usage is billed the month after',
   }),
-  s('home', 'Utilities', 'grid_fee', 'Elnät (grid fee)', {
+  s('home', 'Utilities', 'grid_fee', {
     f: false,
     c: true,
     tags: ['utility'],
     lag: 1,
-    hint: 'E.ON, Vattenfall, Ellevio…',
   }),
-  s('home', 'Utilities', 'gas', 'Gas', { f: false, c: true, tags: ['utility'], lag: 1 }),
-  s('home', 'Utilities', 'heating', 'Heating', { f: false, c: true, tags: ['utility'], lag: 1 }),
-  s('home', 'Utilities', 'water', 'Water', { f: false, c: true, tags: ['utility'], lag: 1 }),
-  s('home', 'Utilities', 'internet', 'Internet', { tags: ['utility', 'subscription'], lag: 1 }),
-  s('home', 'Utilities', 'waste', 'Waste collection', { tags: ['utility'] }),
-  s('home', 'Other', 'home_parking', 'Parking at home'),
-  s('home', 'Other', 'maintenance', 'Maintenance', { f: false, e: false, c: false }),
-  s('home', 'Other', 'other_housing', 'Other housing costs', { f: false, c: false }),
+  s('home', 'Utilities', 'gas', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'heating', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'water', { f: false, c: true, tags: ['utility'], lag: 1 }),
+  s('home', 'Utilities', 'internet', { tags: ['utility', 'subscription'], lag: 1 }),
+  s('home', 'Utilities', 'waste', { tags: ['utility'] }),
+  s('home', 'Other', 'home_parking'),
+  s('home', 'Other', 'maintenance', { f: false, e: false, c: false }),
+  s('home', 'Other', 'other_housing', { f: false, c: false }),
 
   // Living
-  s('living', 'Food & drink', 'groceries', 'Groceries', { freq: 'weekly', f: false, c: false, ev: true, hint: 'One week of food shopping' }),
-  s('living', 'Food & drink', 'restaurants', 'Restaurants', { occ: [2, 'month'], f: false, e: false, c: false, hint: 'One visit' }),
-  s('living', 'Food & drink', 'takeaway', 'Takeaway', { occ: [1, 'week'], f: false, e: false, c: false, hint: 'One order' }),
-  s('living', 'Food & drink', 'cafes', 'Cafés', { occ: [3, 'week'], f: false, e: false, c: false, hint: 'One coffee or fika' }),
-  s('living', 'Food & drink', 'work_lunches', 'Work lunches', { occ: [5, 'week'], f: false, e: false, c: false, hint: 'One lunch' }),
-  s('living', 'Food & drink', 'alcohol', 'Alcohol at home', { freq: 'weekly', f: false, e: false, c: false, ev: true }),
-  s('living', 'Household', 'cleaning', 'Cleaning products', { f: false, c: false, ev: true }),
-  s('living', 'Household', 'household_supplies', 'Household supplies', { f: false, c: false, ev: true }),
-  s('living', 'Household', 'furniture', 'Furniture & small purchases', { f: false, e: false, c: false }),
-  s('living', 'Clothing', 'clothes', 'Clothes', { f: false, e: false, c: false }),
-  s('living', 'Clothing', 'shoes', 'Shoes', { f: false, e: false, c: false }),
-  s('living', 'Clothing', 'accessories', 'Accessories', { f: false, e: false, c: false }),
-  s('living', 'Health & personal care', 'haircuts', 'Haircuts', { f: false, e: false, c: false, occ: [6, 'year'], hint: 'One haircut' }),
-  s('living', 'Health & personal care', 'dental', 'Dental care', { f: false, c: false, occ: [1, 'year'], hint: 'One visit' }),
-  s('living', 'Health & personal care', 'medicine', 'Medicine', { f: false, c: false }),
-  s('living', 'Health & personal care', 'personal_care', 'Personal care & beauty', { f: false, e: false, c: false }),
-  s('living', 'Work-related', 'union_fees', 'Union fees'),
-  s('living', 'Work-related', 'professional_memberships', 'Professional memberships', { e: false }),
-  s('living', 'Work-related', 'work_clothing', 'Work clothing', { f: false, c: false }),
+  s('living', 'Food & drink', 'groceries', { freq: 'weekly', f: false, c: false, ev: true }),
+  s('living', 'Food & drink', 'restaurants', { occ: [2, 'month'], f: false, e: false, c: false }),
+  s('living', 'Food & drink', 'takeaway', { occ: [1, 'week'], f: false, e: false, c: false }),
+  s('living', 'Food & drink', 'cafes', { occ: [3, 'week'], f: false, e: false, c: false }),
+  s('living', 'Food & drink', 'work_lunches', { occ: [5, 'week'], f: false, e: false, c: false }),
+  s('living', 'Food & drink', 'alcohol', { freq: 'weekly', f: false, e: false, c: false, ev: true }),
+  s('living', 'Household', 'cleaning', { f: false, c: false, ev: true }),
+  s('living', 'Household', 'household_supplies', { f: false, c: false, ev: true }),
+  s('living', 'Household', 'furniture', { f: false, e: false, c: false }),
+  s('living', 'Clothing', 'clothes', { f: false, e: false, c: false }),
+  s('living', 'Clothing', 'shoes', { f: false, e: false, c: false }),
+  s('living', 'Clothing', 'accessories', { f: false, e: false, c: false }),
+  s('living', 'Health & personal care', 'haircuts', { f: false, e: false, c: false, occ: [6, 'year'] }),
+  s('living', 'Health & personal care', 'dental', { f: false, c: false, occ: [1, 'year'] }),
+  s('living', 'Health & personal care', 'medicine', { f: false, c: false }),
+  s('living', 'Health & personal care', 'personal_care', { f: false, e: false, c: false }),
+  s('living', 'Work-related', 'union_fees'),
+  s('living', 'Work-related', 'professional_memberships', { e: false }),
+  s('living', 'Work-related', 'work_clothing', { f: false, c: false }),
 
   // Transport
-  s('transport', 'Car', 'car_lease', 'Car lease', { tags: ['car'] }),
-  s('transport', 'Car', 'fuel', 'Fuel', { f: false, c: false, tags: ['car'], ev: true }),
-  s('transport', 'Car', 'ev_charging', 'Electric charging', { f: false, c: false, tags: ['car'], ev: true }),
-  s('transport', 'Car', 'car_insurance', 'Car insurance', { tags: ['car', 'insurance'] }),
-  s('transport', 'Car', 'vehicle_tax', 'Vehicle tax', { freq: 'yearly', tags: ['car'] }),
-  s('transport', 'Car', 'car_maintenance', 'Maintenance provision', { f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'car_service', 'Servicing', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'car_repairs', 'Repairs', { f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'tyres', 'Tyres', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
-  s('transport', 'Car', 'car_parking', 'Parking', { f: false, c: false, tags: ['car'], ev: true }),
-  s('transport', 'Car', 'congestion', 'Congestion charges', { f: false, c: false, tags: ['car'], occ: [10, 'week'], hint: 'One passage' }),
-  s('transport', 'Car', 'tolls', 'Tolls & road charges', { f: false, c: false, tags: ['car'], occ: [2, 'month'], hint: 'One passage' }),
-  s('transport', 'Car', 'car_wash', 'Car washing', { f: false, e: false, c: false, tags: ['car'], occ: [1, 'month'], hint: 'One wash' }),
-  s('transport', 'Public transport', 'travel_card', 'Monthly travel card', { tags: ['public_transport'] }),
-  s('transport', 'Public transport', 'public_transport', 'Bus, tram, metro, train', { f: false, c: false, tags: ['public_transport'], occ: [4, 'week'], hint: 'One ticket' }),
-  s('transport', 'Public transport', 'taxi', 'Taxi & ride sharing', { f: false, e: false, c: false, occ: [2, 'month'], hint: 'One ride' }),
-  s('transport', 'Other travel', 'flights', 'Flights', { f: false, e: false, c: false, occ: [2, 'year'], hint: 'One trip, everyone travelling' }),
-  s('transport', 'Other travel', 'long_distance', 'Long-distance rail & ferry', { f: false, e: false, c: false, occ: [2, 'year'], hint: 'One trip, everyone travelling' }),
-  s('transport', 'Other travel', 'rental_cars', 'Rental cars', { f: false, e: false, c: false, occ: [1, 'year'], hint: 'One rental' }),
+  s('transport', 'Car', 'car_lease', { tags: ['car'] }),
+  s('transport', 'Car', 'fuel', { f: false, c: false, tags: ['car'], ev: true }),
+  s('transport', 'Car', 'ev_charging', { f: false, c: false, tags: ['car'], ev: true }),
+  s('transport', 'Car', 'car_insurance', { tags: ['car', 'insurance'] }),
+  s('transport', 'Car', 'vehicle_tax', { freq: 'yearly', tags: ['car'] }),
+  s('transport', 'Car', 'car_maintenance', { f: false, c: false, tags: ['car'] }),
+  s('transport', 'Car', 'car_service', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
+  s('transport', 'Car', 'car_repairs', { f: false, c: false, tags: ['car'] }),
+  s('transport', 'Car', 'tyres', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
+  s('transport', 'Car', 'car_parking', { f: false, c: false, tags: ['car'], ev: true }),
+  s('transport', 'Car', 'congestion', { f: false, c: false, tags: ['car'], occ: [10, 'week'] }),
+  s('transport', 'Car', 'tolls', { f: false, c: false, tags: ['car'], occ: [2, 'month'] }),
+  s('transport', 'Car', 'car_wash', { f: false, e: false, c: false, tags: ['car'], occ: [1, 'month'] }),
+  s('transport', 'Public transport', 'travel_card', { tags: ['public_transport'] }),
+  s('transport', 'Public transport', 'public_transport', { f: false, c: false, tags: ['public_transport'], occ: [4, 'week'] }),
+  s('transport', 'Public transport', 'taxi', { f: false, e: false, c: false, occ: [2, 'month'] }),
+  s('transport', 'Other travel', 'flights', { f: false, e: false, c: false, occ: [2, 'year'] }),
+  s('transport', 'Other travel', 'long_distance', { f: false, e: false, c: false, occ: [2, 'year'] }),
+  s('transport', 'Other travel', 'rental_cars', { f: false, e: false, c: false, occ: [1, 'year'] }),
 
   // Finance
-  s('finance', 'Banking', 'bank_fees', 'Banking fees'),
-  s('finance', 'Insurance', 'life_insurance', 'Life insurance', { tags: ['insurance'] }),
-  s('finance', 'Insurance', 'health_insurance', 'Health insurance', { tags: ['insurance'] }),
-  s('finance', 'Insurance', 'dental_insurance', 'Dental insurance', { tags: ['insurance'] }),
-  s('finance', 'Insurance', 'income_insurance', 'Income insurance', { tags: ['insurance'] }),
-  s('finance', 'Insurance', 'loan_insurance', 'Loan insurance', { tags: ['insurance'] }),
-  s('finance', 'Other', 'other_financial', 'Other financial commitments'),
+  s('finance', 'Banking', 'bank_fees'),
+  s('finance', 'Insurance', 'life_insurance', { tags: ['insurance'] }),
+  s('finance', 'Insurance', 'health_insurance', { tags: ['insurance'] }),
+  s('finance', 'Insurance', 'dental_insurance', { tags: ['insurance'] }),
+  s('finance', 'Insurance', 'income_insurance', { tags: ['insurance'] }),
+  s('finance', 'Insurance', 'loan_insurance', { tags: ['insurance'] }),
+  s('finance', 'Other', 'other_financial'),
 
   // Leisure
-  s('leisure', 'Entertainment', 'cinema', 'Cinema', { f: false, e: false, c: false, occ: [1, 'month'], hint: 'One visit' }),
-  s('leisure', 'Entertainment', 'events', 'Events & concerts', { f: false, e: false, c: false, occ: [4, 'year'], hint: 'One ticket' }),
-  s('leisure', 'Entertainment', 'nights_out', 'Nights out', { f: false, e: false, c: false, occ: [2, 'month'], hint: 'One night out' }),
-  s('leisure', 'Media & subscriptions', 'streaming', 'Streaming services', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Media & subscriptions', 'music', 'Music subscription', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Media & subscriptions', 'gaming_sub', 'Gaming subscription', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Media & subscriptions', 'software', 'Software subscriptions', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Media & subscriptions', 'news', 'News subscription', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Media & subscriptions', 'mobile', 'Mobile phone plan', { tags: ['subscription'] }),
-  s('leisure', 'Hobbies', 'gaming', 'Gaming', { f: false, e: false, c: false }),
-  s('leisure', 'Hobbies', 'books', 'Books', { f: false, e: false, c: false, occ: [1, 'month'], hint: 'One book' }),
-  s('leisure', 'Hobbies', 'sports', 'Sports', { f: false, e: false, c: false }),
-  s('leisure', 'Hobbies', 'creative', 'Creative hobbies', { f: false, e: false, c: false }),
-  s('leisure', 'Hobbies', 'other_hobbies', 'Other hobbies', { f: false, e: false, c: false }),
-  s('leisure', 'Health & fitness', 'gym', 'Gym membership', { e: false, c: false, tags: ['subscription'] }),
-  s('leisure', 'Health & fitness', 'fitness_classes', 'Fitness classes', { f: false, e: false, c: false, occ: [1, 'week'], hint: 'One class' }),
-  s('leisure', 'Health & fitness', 'sports_equipment', 'Training equipment', { f: false, e: false, c: false }),
-  s('leisure', 'Other leisure', 'lottery', 'Lottery & games', { f: false, e: false, c: false, occ: [1, 'week'], hint: 'One ticket or bet' }),
-  s('leisure', 'Other leisure', 'social', 'Social spending', { f: false, e: false, c: false, ev: true }),
-  s('leisure', 'Other leisure', 'misc_leisure', 'Miscellaneous leisure', { f: false, e: false, c: false }),
+  s('leisure', 'Entertainment', 'cinema', { f: false, e: false, c: false, occ: [1, 'month'] }),
+  s('leisure', 'Entertainment', 'events', { f: false, e: false, c: false, occ: [4, 'year'] }),
+  s('leisure', 'Entertainment', 'nights_out', { f: false, e: false, c: false, occ: [2, 'month'] }),
+  s('leisure', 'Media & subscriptions', 'streaming', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Media & subscriptions', 'music', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Media & subscriptions', 'gaming_sub', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Media & subscriptions', 'software', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Media & subscriptions', 'news', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Media & subscriptions', 'mobile', { tags: ['subscription'] }),
+  s('leisure', 'Hobbies', 'gaming', { f: false, e: false, c: false }),
+  s('leisure', 'Hobbies', 'books', { f: false, e: false, c: false, occ: [1, 'month'] }),
+  s('leisure', 'Hobbies', 'sports', { f: false, e: false, c: false }),
+  s('leisure', 'Hobbies', 'creative', { f: false, e: false, c: false }),
+  s('leisure', 'Hobbies', 'other_hobbies', { f: false, e: false, c: false }),
+  s('leisure', 'Health & fitness', 'gym', { e: false, c: false, tags: ['subscription'] }),
+  s('leisure', 'Health & fitness', 'fitness_classes', { f: false, e: false, c: false, occ: [1, 'week'] }),
+  s('leisure', 'Health & fitness', 'sports_equipment', { f: false, e: false, c: false }),
+  s('leisure', 'Other leisure', 'lottery', { f: false, e: false, c: false, occ: [1, 'week'] }),
+  s('leisure', 'Other leisure', 'social', { f: false, e: false, c: false, ev: true }),
+  s('leisure', 'Other leisure', 'misc_leisure', { f: false, e: false, c: false }),
 
   // Planned / irregular
-  s('planned', 'Holidays & events', 'holidays', 'Holidays', { freq: 'yearly', f: false, e: false, c: false, hint: 'Expected annual total' }),
-  s('planned', 'Holidays & events', 'christmas', 'Christmas', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Holidays & events', 'birthdays', 'Birthdays', { f: false, e: false, c: false, occ: [4, 'year'], hint: 'One birthday' }),
-  s('planned', 'Holidays & events', 'gifts', 'Gifts', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Holidays & events', 'planned_events', 'Events', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Purchases', 'electronics', 'Electronics', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Purchases', 'planned_furniture', 'Furniture', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Purchases', 'clothing_purchases', 'Seasonal clothing', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Purchases', 'home_purchases', 'Home purchases', { freq: 'yearly', f: false, e: false, c: false }),
-  s('planned', 'Purchases', 'large_one_off', 'Large one-off purchase', { freq: 'once', f: true, e: false, c: false }),
-  s('planned', 'Annual bills', 'annual_subscriptions', 'Annual subscriptions', { freq: 'yearly', tags: ['subscription'], e: false }),
-  s('planned', 'Annual bills', 'annual_insurance', 'Annual insurance', { freq: 'yearly', tags: ['insurance'] }),
-  s('planned', 'Annual bills', 'annual_car_service', 'Annual car service', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
+  s('planned', 'Holidays & events', 'holidays', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Holidays & events', 'christmas', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Holidays & events', 'birthdays', { f: false, e: false, c: false, occ: [4, 'year'] }),
+  s('planned', 'Holidays & events', 'gifts', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Holidays & events', 'planned_events', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Purchases', 'electronics', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Purchases', 'planned_furniture', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Purchases', 'clothing_purchases', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Purchases', 'home_purchases', { freq: 'yearly', f: false, e: false, c: false }),
+  s('planned', 'Purchases', 'large_one_off', { freq: 'once', f: true, e: false, c: false }),
+  s('planned', 'Annual bills', 'annual_subscriptions', { freq: 'yearly', tags: ['subscription'], e: false }),
+  s('planned', 'Annual bills', 'annual_insurance', { freq: 'yearly', tags: ['insurance'] }),
+  s('planned', 'Annual bills', 'annual_car_service', { freq: 'yearly', f: false, c: false, tags: ['car'] }),
 ];
 
 export function suggestionsFor(category: ExpenseCategory): ExpenseSuggestion[] {
@@ -263,6 +252,20 @@ export function suggestionBySlug(slug: string): ExpenseSuggestion | undefined {
 export function isEverydaySpend(e: { subcategory: string; occurrences?: Occurrences }): boolean {
   if (e.occurrences) return e.occurrences.per !== 'year';
   return !!suggestionBySlug(e.subcategory)?.everyday;
+}
+
+/** A suggestion group's name in the current language. */
+export function groupLabel(group: string): string {
+  return (tx().groups as Record<string, string>)[group] ?? group;
+}
+
+/**
+ * An expense's name for display. A suggested item still carrying its default name, in any language,
+ * shows the default in the current language; a name the person typed is shown as is.
+ */
+export function expenseName(item: Pick<ExpenseItem, 'name' | 'subcategory'>): string {
+  const names = allMessages().map((m) => (m.taxonomy.expenses as Record<string, string>)[item.subcategory]);
+  return names.includes(item.name) ? (suggestionBySlug(item.subcategory)?.name ?? item.name) : item.name;
 }
 
 /** Groups in display order for a category. */
@@ -280,26 +283,35 @@ export function groupsFor(category: ExpenseCategory): string[] {
 
 export interface IncomeKindMeta {
   id: IncomeKind;
-  label: string;
+  readonly label: string;
   reliability: Reliability;
   frequency: Frequency;
 }
 
+const income = (id: IncomeKind, reliability: Reliability, frequency: Frequency): IncomeKindMeta => ({
+  id,
+  reliability,
+  frequency,
+  get label() {
+    return tx().incomeKinds[id];
+  },
+});
+
 export const INCOME_KINDS: IncomeKindMeta[] = [
-  { id: 'salary', label: 'Salary', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'pension', label: 'Pension', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'benefits', label: 'Benefits', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'tax_credit', label: 'Tax credits', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'government', label: 'Government payments', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'other_recurring', label: 'Other recurring income', reliability: 'reliable', frequency: 'monthly' },
-  { id: 'self_employment', label: 'Self-employment', reliability: 'variable', frequency: 'monthly' },
-  { id: 'freelance', label: 'Freelancing', reliability: 'variable', frequency: 'monthly' },
-  { id: 'side_job', label: 'Side job', reliability: 'variable', frequency: 'monthly' },
-  { id: 'overtime', label: 'Overtime', reliability: 'variable', frequency: 'monthly' },
-  { id: 'bonus', label: 'Bonus', reliability: 'variable', frequency: 'yearly' },
-  { id: 'commission', label: 'Commission', reliability: 'variable', frequency: 'monthly' },
-  { id: 'investment_income', label: 'Investment income', reliability: 'variable', frequency: 'yearly' },
-  { id: 'other_irregular', label: 'Other irregular income', reliability: 'variable', frequency: 'yearly' },
+  income('salary', 'reliable', 'monthly'),
+  income('pension', 'reliable', 'monthly'),
+  income('benefits', 'reliable', 'monthly'),
+  income('tax_credit', 'reliable', 'monthly'),
+  income('government', 'reliable', 'monthly'),
+  income('other_recurring', 'reliable', 'monthly'),
+  income('self_employment', 'variable', 'monthly'),
+  income('freelance', 'variable', 'monthly'),
+  income('side_job', 'variable', 'monthly'),
+  income('overtime', 'variable', 'monthly'),
+  income('bonus', 'variable', 'yearly'),
+  income('commission', 'variable', 'monthly'),
+  income('investment_income', 'variable', 'yearly'),
+  income('other_irregular', 'variable', 'yearly'),
 ];
 
 export function incomeKindMeta(kind: IncomeKind): IncomeKindMeta {
@@ -314,20 +326,37 @@ export type AccountRole = 'everyday' | 'cash_savings' | 'emergency' | 'investmen
 
 export interface AccountKindMeta {
   id: AccountKind;
-  label: string;
+  readonly label: string;
   role: AccountRole;
-  description: string;
+  readonly description: string;
+  /** Kept for accounts saved before the tax wrappers existed; not offered for new accounts. */
+  legacy?: boolean;
 }
 
+const account = (id: AccountKind, role: AccountRole, legacy?: boolean): AccountKindMeta => ({
+  id,
+  role,
+  ...(legacy ? { legacy } : {}),
+  get label() {
+    return tx().accountKinds[id].label;
+  },
+  get description() {
+    return tx().accountKinds[id].description;
+  },
+});
+
 export const ACCOUNT_KINDS: AccountKindMeta[] = [
-  { id: 'everyday', label: 'Everyday account', role: 'everyday', description: 'Day-to-day spending money' },
-  { id: 'salary', label: 'Salary account', role: 'everyday', description: 'Where income lands' },
-  { id: 'joint', label: 'Joint account', role: 'everyday', description: 'Shared spending account' },
-  { id: 'savings', label: 'Savings account', role: 'cash_savings', description: 'Cash set aside' },
-  { id: 'cash', label: 'Cash savings', role: 'cash_savings', description: 'Physical cash or similar' },
-  { id: 'emergency', label: 'Emergency fund', role: 'emergency', description: 'Reserved for the unexpected' },
-  { id: 'investment', label: 'Investment account', role: 'investment', description: 'Funds, shares, ISK' },
-  { id: 'other', label: 'Other account', role: 'other', description: 'Anything else you track' },
+  account('everyday', 'everyday'),
+  account('salary', 'everyday'),
+  account('joint', 'everyday'),
+  account('savings', 'cash_savings'),
+  account('cash', 'cash_savings'),
+  account('emergency', 'emergency'),
+  account('isk', 'investment'),
+  account('kf', 'investment'),
+  account('af', 'investment'),
+  account('investment', 'investment', true),
+  account('other', 'other'),
 ];
 
 export function accountRole(kind: AccountKind): AccountRole {
@@ -344,68 +373,47 @@ export function accountKindMeta(kind: AccountKind): AccountKindMeta {
 
 export interface DebtKindMeta {
   id: DebtKind;
-  label: string;
+  readonly label: string;
   /** Default name for a new loan of this kind. */
-  name: string;
-  description: string;
+  readonly name: string;
+  readonly description: string;
   frequency: DebtFrequency;
   /** Default for car and other loans; mortgages are always secured, the rest never. */
   secured: boolean;
 }
 
+const debt = (id: DebtKind, frequency: DebtFrequency, secured: boolean): DebtKindMeta => ({
+  id,
+  frequency,
+  secured,
+  get label() {
+    return tx().debtKinds[id].label;
+  },
+  get name() {
+    return tx().debtKinds[id].name;
+  },
+  get description() {
+    return tx().debtKinds[id].description;
+  },
+});
+
 export const DEBT_KINDS: DebtKindMeta[] = [
-  {
-    id: 'csn',
-    label: 'CSN student loan',
-    name: 'CSN',
-    description: 'Its own rules: low rate, lower payments if your income drops, written off at death.',
-    frequency: 'quarterly',
-    secured: false,
-  },
-  {
-    id: 'mortgage',
-    label: 'Mortgage (bolån)',
-    name: 'Bolån',
-    description: 'Secured by your home. Interest plus amortering; the interest gives ränteavdrag.',
-    frequency: 'monthly',
-    secured: true,
-  },
-  {
-    id: 'car',
-    label: 'Car loan (billån)',
-    name: 'Billån',
-    description: 'Secured against the car, or an unsecured loan used to buy it.',
-    frequency: 'monthly',
-    secured: true,
-  },
-  {
-    id: 'personal',
-    label: 'Personal loan (privatlån)',
-    name: 'Privatlån',
-    description: 'Unsecured, so usually expensive. No ränteavdrag from 2026.',
-    frequency: 'monthly',
-    secured: false,
-  },
-  {
-    id: 'credit_card',
-    label: 'Credit card or account credit',
-    name: 'Credit card',
-    description: 'Usually the most expensive debt you have. No ränteavdrag from 2026.',
-    frequency: 'monthly',
-    secured: false,
-  },
-  {
-    id: 'other',
-    label: 'Other loan',
-    name: 'Loan',
-    description: 'Anything else you are paying back.',
-    frequency: 'monthly',
-    secured: false,
-  },
+  debt('csn', 'quarterly', false),
+  debt('mortgage', 'monthly', true),
+  debt('car', 'monthly', true),
+  debt('personal', 'monthly', false),
+  debt('credit_card', 'monthly', false),
+  debt('other', 'monthly', false),
 ];
 
 export function debtKindMeta(kind: DebtKind): DebtKindMeta {
   return DEBT_KINDS.find((k) => k.id === kind) ?? DEBT_KINDS[DEBT_KINDS.length - 1];
+}
+
+/** A loan's name for display: a default name saved in any language shows in the current one. */
+export function debtName(d: Pick<Debt, 'name' | 'kind'>): string {
+  const names = allMessages().map((m) => m.taxonomy.debtKinds[d.kind].name);
+  return names.includes(d.name) ? debtKindMeta(d.kind).name : d.name;
 }
 
 /* ------------------------------------------------------------------ */
@@ -414,18 +422,29 @@ export function debtKindMeta(kind: DebtKind): DebtKindMeta {
 
 export interface GoalKindMeta {
   id: GoalKind;
-  label: string;
+  readonly label: string;
   purpose: SavingsPurpose;
-  description: string;
+  readonly description: string;
 }
 
+const goal = (id: GoalKind, purpose: SavingsPurpose): GoalKindMeta => ({
+  id,
+  purpose,
+  get label() {
+    return tx().goalKinds[id].label;
+  },
+  get description() {
+    return tx().goalKinds[id].description;
+  },
+});
+
 export const GOAL_KINDS: GoalKindMeta[] = [
-  { id: 'emergency', label: 'Emergency savings', purpose: 'long_term', description: 'Cash for unexpected situations' },
-  { id: 'general', label: 'General savings', purpose: 'long_term', description: 'No specific purpose yet' },
-  { id: 'investment', label: 'Investments', purpose: 'long_term', description: 'Funds, shares, long-term growth' },
-  { id: 'pension', label: 'Pension / retirement', purpose: 'long_term', description: 'Private retirement savings' },
-  { id: 'purchase', label: 'Saving for a purchase', purpose: 'future_spending', description: 'Holiday, car, electronics, wedding…' },
-  { id: 'custom', label: 'Custom goal', purpose: 'future_spending', description: 'Anything else' },
+  goal('emergency', 'long_term'),
+  goal('general', 'long_term'),
+  goal('investment', 'long_term'),
+  goal('pension', 'long_term'),
+  goal('purchase', 'future_spending'),
+  goal('custom', 'future_spending'),
 ];
 
 export function goalKindMeta(kind: GoalKind): GoalKindMeta {
@@ -438,88 +457,39 @@ export function goalKindMeta(kind: GoalKind): GoalKindMeta {
 
 export interface StepMeta {
   id: OnboardingStep;
-  label: string;
-  shortLabel: string;
-  title: string;
-  description: string;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly title: string;
+  readonly description: string;
   category?: ExpenseCategory;
 }
 
+const step = (id: OnboardingStep, category?: ExpenseCategory): StepMeta => ({
+  id,
+  ...(category ? { category } : {}),
+  get label() {
+    return tx().steps[id].label;
+  },
+  get shortLabel() {
+    return tx().steps[id].shortLabel;
+  },
+  get title() {
+    return tx().steps[id].title;
+  },
+  get description() {
+    return tx().steps[id].description;
+  },
+});
+
 export const STEP_META: Record<OnboardingStep, StepMeta> = {
-  income: {
-    id: 'income',
-    label: 'Income',
-    shortLabel: 'Income',
-    title: 'Your income',
-    description: 'Add your regular income and any variable income. This helps us understand how much you have to work with each month.',
-  },
-  home: {
-    id: 'home',
-    label: 'Home',
-    shortLabel: 'Home',
-    title: 'Home & bills',
-    description: 'Rent or mortgage, utilities and other costs of keeping your home running.',
-    category: 'home',
-  },
-  living: {
-    id: 'living',
-    label: 'Living Costs',
-    shortLabel: 'Living',
-    title: 'Living costs',
-    description: 'Food, household, clothing, health and everyday personal spending.',
-    category: 'living',
-  },
-  transport: {
-    id: 'transport',
-    label: 'Transport',
-    shortLabel: 'Transport',
-    title: 'Transport',
-    description: 'Car ownership costs, public transport and travel.',
-    category: 'transport',
-  },
-  finance: {
-    id: 'finance',
-    label: 'Finance & Insurance',
-    shortLabel: 'Finance',
-    title: 'Finance & insurance',
-    description: 'Your loans (CSN, mortgage, car, credit), then banking fees and insurance.',
-    category: 'finance',
-  },
-  leisure: {
-    id: 'leisure',
-    label: 'Leisure',
-    shortLabel: 'Leisure',
-    title: 'Lifestyle & leisure',
-    description: 'Entertainment, subscriptions, hobbies and fitness. Everything that makes life enjoyable.',
-    category: 'leisure',
-  },
-  planned: {
-    id: 'planned',
-    label: 'Planned Spending',
-    shortLabel: 'Planned',
-    title: 'Irregular & planned spending',
-    description: 'Costs that do not happen every month. We spread them into a monthly equivalent so they never surprise you.',
-    category: 'planned',
-  },
-  savings: {
-    id: 'savings',
-    label: 'Savings & Investments',
-    shortLabel: 'Savings',
-    title: 'Savings & investments',
-    description: 'What you are saving for, how much you already have and what you put aside each month.',
-  },
-  accounts: {
-    id: 'accounts',
-    label: 'Accounts',
-    shortLabel: 'Accounts',
-    title: 'Current money & accounts',
-    description: 'Where your money is right now. Balances stay separate so spending money is never confused with savings.',
-  },
-  summary: {
-    id: 'summary',
-    label: 'Summary',
-    shortLabel: 'Summary',
-    title: 'Your financial summary',
-    description: 'Here is how we understand your finances. Review and correct anything before continuing.',
-  },
+  income: step('income'),
+  home: step('home', 'home'),
+  living: step('living', 'living'),
+  transport: step('transport', 'transport'),
+  finance: step('finance', 'finance'),
+  leisure: step('leisure', 'leisure'),
+  planned: step('planned', 'planned'),
+  savings: step('savings'),
+  accounts: step('accounts'),
+  summary: step('summary'),
 };

@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { useState } from 'react';
+import { dateLocale, useT } from '@/i18n';
 import { useSyncActions } from '@/sync/useSync';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
@@ -11,11 +12,12 @@ import { Callout } from '@/components/ui/Callout';
 export function SyncBanner({ className }: { className?: string }) {
   const sync = useSyncActions();
   const [busy, setBusy] = useState(false);
+  const t = useT().sync.banner;
 
   if (!sync.configured || sync.status !== 'conflict' || !sync.conflict) return null;
 
   const { newer, remoteUpdatedAt } = sync.conflict;
-  const when = formatDistanceToNow(new Date(remoteUpdatedAt), { addSuffix: true });
+  const when = formatDistanceToNow(new Date(remoteUpdatedAt), { addSuffix: true, locale: dateLocale() });
   const choose = async (keep: 'local' | 'remote') => {
     setBusy(true);
     try {
@@ -29,21 +31,19 @@ export function SyncBanner({ className }: { className?: string }) {
     <Callout
       tone="warning"
       className={className}
-      title="Another device changed this plan"
+      title={t.title}
       action={
         <div className="flex gap-2">
           <Button size="sm" variant={newer === 'local' ? 'primary' : 'secondary'} disabled={busy} onClick={() => choose('local')}>
-            Keep mine
+            {t.keepMine}
           </Button>
           <Button size="sm" variant={newer === 'remote' ? 'primary' : 'secondary'} disabled={busy} onClick={() => choose('remote')}>
-            Use theirs
+            {t.useTheirs}
           </Button>
         </div>
       }
     >
-      The cloud copy was saved {when} and this device has edits it has not sent yet.{' '}
-      {newer === 'remote' ? 'The cloud copy is newer.' : 'This device’s copy is newer.'} Closed months from both are kept
-      either way.
+      {t.body(when, newer === 'remote')}
     </Callout>
   );
 }

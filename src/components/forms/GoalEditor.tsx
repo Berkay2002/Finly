@@ -1,12 +1,13 @@
 import { ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { formatDuration, formatMoney, formatPercent } from '@/engine/format';
-import { goalProgress } from '@/engine/projections';
+import { formatDuration, formatMoney, formatNumber, formatPercent } from '@/engine/format';
+import { goalProgress, goalReturn } from '@/engine/projections';
 import { GOAL_KINDS, goalKindMeta } from '@/engine/taxonomy';
 import type { GoalKind, SavingsGoal, SavingsPurpose } from '@/engine/types';
+import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
-import { useCurrency, usePlan, useViewDate } from '@/store/selectors';
+import { useAccountReturns, useCurrency, usePlan, useViewDate } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { Delta } from '@/components/ui/Delta';
@@ -45,8 +46,10 @@ export function GoalEditor({
   const plan = usePlan();
   const currency = useCurrency();
   const now = useViewDate();
+  const returns = useAccountReturns();
   const { addGoal, updateGoal, removeGoal } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
+  const t = useT().goals.editor;
 
   useEffect(() => {
     if (autoOpenAdd) setEditing(blankGoal());
@@ -66,17 +69,17 @@ export function GoalEditor({
       {!compact && (
         <div className="flex items-center justify-between gap-3">
           <p className="text-[12.5px] text-muted">
-            {plan.goals.length === 0 ? 'No goals yet.' : `${plan.goals.length} goal${plan.goals.length === 1 ? '' : 's'}`}
+            {plan.goals.length === 0 ? t.noGoals : t.goalCount(plan.goals.length)}
           </p>
           <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing(blankGoal())}>
-            Add new goal
+            {t.addNewGoal}
           </Button>
         </div>
       )}
 
       <div className="space-y-2.5">
         {plan.goals.map((g) => {
-          const p = goalProgress(g, now);
+          const p = goalProgress(g, now, goalReturn(g, returns));
           const Icon = goalIcon(g.icon, g.kind);
           return (
             <button
@@ -88,9 +91,9 @@ export function GoalEditor({
               <IconTile icon={Icon} accent={goalAccent(g.icon, g.kind)} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <span className="text-[14px] font-semibold text-ink">{g.name || 'Untitled goal'}</span>
+                  <span className="text-[14px] font-semibold text-ink">{g.name || t.untitled}</span>
                   <Chip tone={g.purpose === 'long_term' ? 'brand' : 'blue'}>
-                    {g.purpose === 'long_term' ? 'Long-term' : 'Planned spending'}
+                    {g.purpose === 'long_term' ? t.longTerm : t.plannedSpending}
                   </Chip>
                 </div>
                 {g.description && <div className="truncate text-[12.5px] text-muted">{g.description}</div>}
@@ -103,22 +106,27 @@ export function GoalEditor({
                 <div className="tabular mt-1 flex flex-wrap items-center gap-x-2 text-[12px] text-muted">
                   <span>
                     {g.targetAmount
-                      ? `${formatMoney(g.currentAmount, currency)} / ${formatMoney(g.targetAmount, currency)}`
-                      : `${formatMoney(g.currentAmount, currency)} saved`}
+                      ? t.progress(formatMoney(g.currentAmount, currency), formatMoney(g.targetAmount, currency))
+                      : t.saved(formatMoney(g.currentAmount, currency))}
                   </span>
                   {previous && <Delta before={previous[g.id]} after={g.currentAmount} />}
                 </div>
               </div>
               <div className="hidden shrink-0 border-l border-line pl-4 text-right sm:block">
-                <div className="text-[11.5px] text-muted">Monthly</div>
+                <div className="text-[11.5px] text-muted">{t.monthly}</div>
                 <div className="tabular text-[13.5px] font-semibold text-ink">{formatMoney(g.monthlyContribution, currency)}</div>
               </div>
               {g.targetAmount ? (
                 <div className="hidden shrink-0 border-l border-line pl-4 text-right md:block">
-                  <div className="text-[11.5px] text-muted">Est. completion</div>
+                  <div className="text-[11.5px] text-muted">{t.estCompletion}</div>
                   <div className={clsx('text-[13.5px] font-semibold', p.onTrack === false ? 'text-warning' : 'text-ink')}>
                     {formatDuration(p.monthsToTarget)}
                   </div>
+                  {goalReturn(g, returns) > 0 && (
+                    <div className="text-[11px] text-muted">
+                      {t.atAfterTax(formatNumber(goalReturn(g, returns), 1))}
+                    </div>
+                  )}
                 </div>
               ) : null}
               <ChevronRight size={16} className="shrink-0 text-faint" />
@@ -131,7 +139,7 @@ export function GoalEditor({
             onClick={() => setEditing(blankGoal())}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-page/60 px-3 py-5 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
           >
-            <Plus size={14} /> Add your first savings goal
+            <Plus size={14} /> {t.addFirst}
           </button>
         )}
       </div>
@@ -169,26 +177,27 @@ export function GoalSheet({
 }) {
   const plan = usePlan();
   const currency = useCurrency();
+  const t = useT().goals.sheet;
   return (
     <Sheet
       open={draft !== null}
       onClose={onClose}
-      title={draft?.id ? 'Edit goal' : 'New savings goal'}
+      title={draft?.id ? t.editGoal : t.newGoal}
       footer={
         <div className="flex items-center justify-between gap-2">
           {draft?.id && onRemove ? (
             <Button variant="danger" onClick={onRemove}>
-              Remove
+              {t.remove}
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button onClick={onSave} disabled={!draft?.name.trim()}>
-              {draft?.id ? 'Save' : 'Add goal'}
+              {draft?.id ? t.save : t.addGoal}
             </Button>
           </div>
         </div>
@@ -197,7 +206,7 @@ export function GoalSheet({
       {draft && (
           <div className="space-y-4">
             <SelectField
-              label="Type"
+              label={t.type}
               value={draft.kind}
               onValueChange={(kind: GoalKind) => {
                 const meta = goalKindMeta(kind);
@@ -212,36 +221,36 @@ export function GoalSheet({
               options={GOAL_KINDS.map((k) => ({ value: k.id, label: k.label }))}
             />
             <TextField
-              label="Name"
-              placeholder="e.g. House deposit, Holiday, New laptop"
+              label={t.name}
+              placeholder={t.namePlaceholder}
               value={draft.name}
               onChange={(e) => onChange({ ...draft, name: e.target.value })}
               autoFocus={!draft.id}
             />
             <TextField
-              label="Description"
-              hint="(optional)"
-              placeholder="Why does this matter to you?"
+              label={t.description}
+              hint={t.optional}
+              placeholder={t.descriptionPlaceholder}
               value={draft.description ?? ''}
               onChange={(e) => onChange({ ...draft, description: e.target.value })}
             />
             <div>
-              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">Purpose</div>
+              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.purpose}</div>
               <TogglePill
                 size="md"
                 value={draft.purpose}
                 onChange={(purpose: SavingsPurpose) => onChange({ ...draft, purpose })}
                 options={[
-                  { value: 'future_spending', label: 'Planned future spending' },
-                  { value: 'long_term', label: 'Long-term wealth' },
+                  { value: 'future_spending', label: t.plannedFutureSpending },
+                  { value: 'long_term', label: t.longTermWealth },
                 ]}
               />
               <p className="mt-1 text-[12px] text-muted">
-                Planned spending will eventually be spent (holiday, car). Long-term wealth is security or growth.
+                {t.purposeHint}
               </p>
             </div>
             <div>
-              <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">Icon</div>
+              <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">{t.icon}</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(GOAL_ICONS).map(([key, picture]) => (
                   <button
@@ -260,13 +269,13 @@ export function GoalSheet({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MoneyField
-                label="Saved so far"
+                label={t.savedSoFar}
                 currency={currency}
                 value={draft.currentAmount}
                 onValueChange={(currentAmount) => onChange({ ...draft, currentAmount })}
               />
               <MoneyField
-                label="Monthly contribution"
+                label={t.monthlyContribution}
                 currency={currency}
                 value={draft.monthlyContribution}
                 onValueChange={(monthlyContribution) => onChange({ ...draft, monthlyContribution })}
@@ -274,26 +283,26 @@ export function GoalSheet({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MoneyField
-                label="Target amount"
-                hint="(optional)"
+                label={t.targetAmount}
+                hint={t.optional}
                 currency={currency}
                 value={draft.targetAmount ?? 0}
                 onValueChange={(v) => onChange({ ...draft, targetAmount: v > 0 ? v : undefined })}
               />
               <DateField
-                label="Target date"
-                hint="(optional)"
+                label={t.targetDate}
+                hint={t.optional}
                 value={draft.targetDate ?? ''}
                 onChange={(e) => onChange({ ...draft, targetDate: e.target.value || undefined })}
               />
             </div>
             {plan.accounts.length > 0 && (
               <SelectField
-                label="Linked account"
-                hint="(optional)"
+                label={t.linkedAccount}
+                hint={t.optional}
                 value={draft.linkedAccountId ?? ''}
                 onValueChange={(v) => onChange({ ...draft, linkedAccountId: v || undefined })}
-                options={[{ value: '', label: 'None' }, ...plan.accounts.map((a) => ({ value: a.id, label: a.name }))]}
+                options={[{ value: '', label: t.none }, ...plan.accounts.map((a) => ({ value: a.id, label: a.name }))]}
               />
             )}
           </div>

@@ -418,7 +418,7 @@ export function Switch({
         onClick={() => onChange(!checked)}
         className={clsx(
           'relative h-6 w-11 shrink-0 rounded-full transition',
-          checked ? 'bg-brand-600' : 'bg-line-strong',
+          checked ? 'bg-brand-solid' : 'bg-line-strong',
         )}
       >
         <span

@@ -1,6 +1,7 @@
 import { MoreVertical, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { useT } from '@/i18n';
 
 export interface MenuItem {
   label: string;
@@ -10,6 +11,7 @@ export interface MenuItem {
 }
 
 export function KebabMenu({ items, className }: { items: MenuItem[]; className?: string }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -26,7 +28,7 @@ export function KebabMenu({ items, className }: { items: MenuItem[]; className?:
     <div ref={ref} className={clsx('relative', className)}>
       <button
         type="button"
-        aria-label="More options"
+        aria-label={t.ui.menu.moreOptions}
         onClick={() => setOpen((o) => !o)}
         className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted hover:bg-page hover:text-ink"
       >

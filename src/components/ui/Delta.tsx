@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import { formatPercent } from '@/engine/format';
+import { useT } from '@/i18n';
 
 function change(before: number | undefined, after: number): number | null {
   if (before === undefined || !Number.isFinite(before) || before === 0) return null;
@@ -17,7 +18,7 @@ export function Delta({
   before,
   after,
   invert = false,
-  suffix = 'vs last month',
+  suffix,
   className,
 }: {
   before: number | undefined;
@@ -26,6 +27,7 @@ export function Delta({
   suffix?: string;
   className?: string;
 }) {
+  const t = useT();
   const c = change(before, after);
   if (c === null) return null;
   const up = c >= 0;
@@ -38,7 +40,7 @@ export function Delta({
         {up ? '+' : '-'}
         {formatPercent(Math.abs(c))}
       </span>
-      <span className="text-muted">{suffix}</span>
+      <span className="text-muted">{suffix ?? t.ui.delta.vsLastMonth}</span>
     </span>
   );
 }

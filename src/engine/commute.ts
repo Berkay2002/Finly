@@ -1,3 +1,4 @@
+import { allMessages, messages } from '@/i18n';
 import { amountSpread, monthlySpread } from './amounts';
 import { frequencyForOccurrences, occurrencesPerMonth } from './frequency';
 import { suggestionBySlug } from './taxonomy';
@@ -49,17 +50,27 @@ export interface CommuteLineMeta {
   /** Expense item the count goes to. */
   slug: string;
   /** "One lunch", for the price field. */
-  priceLabel: string;
+  readonly priceLabel: string;
   per: 'week' | 'month';
   count: (c: CommuteCounts) => number;
 }
 
+const line = (key: CommutePrice, slug: string, per: 'week' | 'month', count: (c: CommuteCounts) => number): CommuteLineMeta => ({
+  key,
+  slug,
+  get priceLabel() {
+    return messages().everyday.commute.prices[key];
+  },
+  per,
+  count,
+});
+
 export const COMMUTE_LINES: CommuteLineMeta[] = [
-  { key: 'lunch', slug: 'work_lunches', priceLabel: 'One lunch', per: 'week', count: (c) => c.lunches },
-  { key: 'ticket', slug: 'public_transport', priceLabel: 'One single ticket', per: 'week', count: (c) => c.tickets },
-  { key: 'card', slug: 'travel_card', priceLabel: 'One period card (30 days)', per: 'month', count: (c) => c.cards },
-  { key: 'parking', slug: 'car_parking', priceLabel: 'One day of parking', per: 'week', count: (c) => c.parking },
-  { key: 'passage', slug: 'congestion', priceLabel: 'One passage', per: 'week', count: (c) => c.passages },
+  line('lunch', 'work_lunches', 'week', (c) => c.lunches),
+  line('ticket', 'public_transport', 'week', (c) => c.tickets),
+  line('card', 'travel_card', 'month', (c) => c.cards),
+  line('parking', 'car_parking', 'week', (c) => c.parking),
+  line('passage', 'congestion', 'week', (c) => c.passages),
 ];
 
 /** The item a commute line writes to: the first one in the plan with that slug. */
@@ -211,12 +222,29 @@ export function applyCommute(
 }
 
 export function newCommuter(id: string, index: number): Commuter {
+  const t = messages().everyday.commute;
   return {
     id,
-    name: index === 0 ? 'You' : index === 1 ? 'Partner' : `Person ${index + 1}`,
+    name: index === 0 ? t.you : index === 1 ? t.partner : t.person(index + 1),
     days: 5,
     mode: 'public',
     ticket: 'card',
     buysLunch: false,
   };
+}
+
+/**
+ * A commuter's name for display. A default name ("You", "Partner", "Person 3") saved in any language
+ * shows the default in the current language; a name the person typed is shown as is.
+ */
+export function commuterName(name: string): string {
+  const t = messages().everyday.commute;
+  const n = Number(name.match(/\d+$/)?.[0]);
+  for (const m of allMessages()) {
+    const c = m.everyday.commute;
+    if (name === c.you) return t.you;
+    if (name === c.partner) return t.partner;
+    if (Number.isInteger(n) && name === c.person(n)) return t.person(n);
+  }
+  return name;
 }

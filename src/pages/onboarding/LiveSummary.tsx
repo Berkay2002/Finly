@@ -1,5 +1,6 @@
 import clsx from 'clsx';
 import { formatMoney, formatMoneyRange } from '@/engine/format';
+import { useT } from '@/i18n';
 import { useCurrency, useMetrics } from '@/store/selectors';
 import type { Accent } from '@/components/ui/accent';
 import { Callout } from '@/components/ui/Callout';
@@ -21,6 +22,7 @@ function Row({
   value: string;
   negative?: boolean;
 }) {
+  const t = useT().summary.live;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-line bg-card px-3 py-3">
       <IconTile icon={icon} accent={accent} size="sm" />
@@ -30,7 +32,7 @@ function Row({
       </div>
       <div className="text-right">
         <div className={clsx('tabular text-[14px] font-semibold', negative ? 'text-negative' : 'text-ink')}>{value}</div>
-        <div className="text-[11px] text-muted">per month</div>
+        <div className="text-[11px] text-muted">{t.perMonth}</div>
       </div>
     </div>
   );
@@ -40,68 +42,69 @@ export function LiveSummary({ className }: { className?: string }) {
   const m = useMetrics();
   const currency = useCurrency();
   const money = (n: number) => formatMoney(n, currency);
+  const t = useT().summary.live;
   const stepsFilled = [m.hasIncome, m.hasExpenses, m.hasGoals, m.hasAccounts].filter(Boolean).length;
 
   return (
     <aside className={clsx('card p-4 sm:p-5', className)}>
-      <h2 className="text-[17px] font-semibold text-ink">Your financial overview</h2>
-      <p className="mb-4 text-[12.5px] text-muted">Live summary as you build your plan.</p>
+      <h2 className="text-[17px] font-semibold text-ink">{t.title}</h2>
+      <p className="mb-4 text-[12.5px] text-muted">{t.subtitle}</p>
       <div className="space-y-2">
         <Row
           icon="stat-income"
           accent="brand"
-          label="Reliable income"
-          sub={m.income.reliable > 0 ? 'From confirmed sources' : 'Not added yet'}
+          label={t.reliableIncome}
+          sub={m.income.reliable > 0 ? t.fromConfirmed : t.notAdded}
           value={money(m.income.reliable)}
         />
         <Row
           icon="card-income-change"
           accent="purple"
-          label="Variable income"
-          sub={m.income.variable > 0 ? 'Estimated average' : 'Not added yet'}
+          label={t.variableIncome}
+          sub={m.income.variable > 0 ? t.estimatedAverage : t.notAdded}
           value={money(m.income.variable)}
         />
         <Row
           icon="stat-cost"
           accent="red"
-          label="Normal lifestyle cost"
+          label={t.lifestyleCost}
           sub={
             !m.hasExpenses
-              ? 'Not added yet'
+              ? t.notAdded
               : m.range.hasRanges
-                ? `Usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
-                : 'All expenses, monthly equivalent'
+                ? t.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
+                : t.allExpenses
           }
           value={money(m.lifestyleCost)}
         />
         <Row
           icon="stat-saving"
           accent="green"
-          label="Planned saving"
-          sub={m.savings.total > 0 ? 'Saving and investing' : 'Not added yet'}
+          label={t.plannedSaving}
+          sub={m.savings.total > 0 ? t.savingAndInvesting : t.notAdded}
           value={money(m.savings.total)}
         />
         <Row
           icon="stat-safe-to-spend"
           accent="blue"
-          label="Unallocated money"
-          sub="Income left after costs & savings"
+          label={t.unallocated}
+          sub={t.unallocatedSub}
           value={money(m.breathingRoom)}
           negative={m.breathingRoom < 0}
         />
       </div>
       <div className="mt-4">
         {m.breathingRoom < 0 ? (
-          <Callout tone="warning" title="Your plan costs more than your income">
-            That is fine to see now. The dashboard will show what is driving it and what is flexible.
+          <Callout tone="warning" title={t.overTitle}>
+            {t.overBody}
           </Callout>
         ) : stepsFilled >= 3 ? (
-          <Callout tone="success" icon="goal-target" title="Looking good">
-            Your picture is taking shape. Finish the remaining steps to unlock the full dashboard.
+          <Callout tone="success" icon="goal-target" title={t.goodTitle}>
+            {t.goodBody}
           </Callout>
         ) : (
-          <Callout tone="tip" icon="goal-target" title="You're on your way!">
-            Complete the next steps to get a full picture of your finances and see personalised insights.
+          <Callout tone="tip" icon="goal-target" title={t.startTitle}>
+            {t.startBody}
           </Callout>
         )}
       </div>

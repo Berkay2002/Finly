@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { newId } from '@/lib/id';
@@ -315,7 +316,7 @@ export function normalizePlan(plan: FinancialPlan): FinancialPlan {
 export function parsePlan(input: unknown): FinancialPlan {
   const raw = input as Partial<FinancialPlan> | null;
   if (!raw || typeof raw !== 'object' || raw.version !== 1 || !Array.isArray(raw.income)) {
-    throw new Error('Not a Finly plan file');
+    throw new Error(messages().settings.notPlanFile);
   }
   const base = emptyPlan();
   return {

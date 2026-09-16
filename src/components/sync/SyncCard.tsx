@@ -2,11 +2,12 @@ import { formatDistanceToNow } from 'date-fns';
 import { Check, Cloud, CloudOff, Copy, Eye, KeyRound, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import clsx from 'clsx';
-import { PhraseError, describePhraseError, normalizePhrase } from '@/sync/phrase';
+import { dateLocale, useT } from '@/i18n';
+import { PHRASE_WORDS, PhraseError, describePhraseError, normalizePhrase } from '@/sync/phrase';
 import { useSyncActions, type JoinOutcome } from '@/sync/useSync';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
-import { Card, CardHeader } from '@/components/ui/Card';
+import { CardHeader } from '@/components/ui/Card';
 import { Sheet } from '@/components/ui/Sheet';
 
 type Mode = 'closed' | 'new' | 'join' | 'show';
@@ -14,18 +15,20 @@ type Mode = 'closed' | 'new' | 'join' | 'show';
 /**
  * Sync without an account: a 12-word phrase is the whole identity. The phrase never leaves the
  * device; the server stores one encrypted blob under an id derived from it.
+ * Renders as a section; the caller supplies the surrounding card.
  */
 export function SyncCard({ onMessage }: { onMessage: (tone: 'success' | 'warning', text: string) => void }) {
   const sync = useSyncActions();
   const [mode, setMode] = useState<Mode>('closed');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+  const t = useT().sync.card;
 
   if (!sync.configured) {
     return (
-      <Card>
-        <CardHeader title="Sync between devices" subtitle="Sync is not configured in this build. Your data stays in this browser." />
-      </Card>
+      <div>
+        <CardHeader title={t.title} subtitle={t.notConfigured} />
+      </div>
     );
   }
 
@@ -36,32 +39,32 @@ export function SyncCard({ onMessage }: { onMessage: (tone: 'success' | 'warning
     try {
       await fn();
     } catch (e) {
-      onMessage('warning', e instanceof Error ? e.message : 'Something went wrong.');
+      onMessage('warning', e instanceof Error ? e.message : t.somethingWentWrong);
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Card>
+    <div>
       <CardHeader
-        title="Sync between devices"
-        subtitle="No account. A 12-word phrase links your devices; everything is encrypted before it leaves this one."
+        title={t.title}
+        subtitle={t.subtitle}
       />
       {on ? (
         <div className="space-y-3">
           <StatusLine status={sync.status} error={sync.error} lastSyncedAt={sync.lastSyncedAt} />
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={Eye} onClick={() => setMode('show')}>
-              Show phrase
+              {t.showPhrase}
             </Button>
             {sync.status === 'error' && (
               <Button variant="secondary" icon={RefreshCw} onClick={sync.retry}>
-                Try again
+                {t.tryAgain}
               </Button>
             )}
             <Button variant="secondary" icon={CloudOff} onClick={sync.turnOff}>
-              Turn off sync
+              {t.turnOff}
             </Button>
             {confirmDelete ? (
               <>
@@ -73,34 +76,33 @@ export function SyncCard({ onMessage }: { onMessage: (tone: 'success' | 'warning
                     run(async () => {
                       await sync.deleteCloud();
                       setConfirmDelete(false);
-                      onMessage('success', 'The cloud copy was deleted. Your data is still here.');
+                      onMessage('success', t.deleted);
                     })
                   }
                 >
-                  Yes, delete the cloud copy
+                  {t.confirmDelete}
                 </Button>
                 <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
-                  Cancel
+                  {t.cancel}
                 </Button>
               </>
             ) : (
               <Button variant="danger" icon={Trash2} onClick={() => setConfirmDelete(true)}>
-                Delete cloud copy
+                {t.deleteCloud}
               </Button>
             )}
           </div>
           <p className="text-[12px] text-muted">
-            Turning sync off keeps your data here and in the cloud. Deleting the cloud copy removes it for every device; each
-            device keeps its own local data.
+            {t.offExplainer}
           </p>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">
           <Button icon={Cloud} onClick={() => setMode('new')}>
-            Turn on sync
+            {t.turnOn}
           </Button>
           <Button variant="secondary" icon={KeyRound} onClick={() => setMode('join')}>
-            I have a phrase
+            {t.havePhrase}
           </Button>
         </div>
       )}
@@ -110,7 +112,7 @@ export function SyncCard({ onMessage }: { onMessage: (tone: 'success' | 'warning
         onClose={() => setMode('closed')}
         onDone={() => {
           setMode('closed');
-          onMessage('success', 'Sync is on. Use the same phrase on your other devices.');
+          onMessage('success', t.turnedOn);
         }}
       />
       <JoinSheet
@@ -118,28 +120,29 @@ export function SyncCard({ onMessage }: { onMessage: (tone: 'success' | 'warning
         onClose={() => setMode('closed')}
         onDone={(outcome) => {
           setMode('closed');
-          if (outcome === 'downloaded') onMessage('success', 'Your plan was downloaded from the cloud.');
-          else if (outcome === 'uploaded') onMessage('success', 'No cloud copy existed for that phrase yet, so this device’s plan was uploaded.');
-          else onMessage('warning', 'This device and the cloud both have a plan. Choose which one to keep at the top of the page.');
+          if (outcome === 'downloaded') onMessage('success', t.downloaded);
+          else if (outcome === 'uploaded') onMessage('success', t.uploaded);
+          else onMessage('warning', t.conflict);
         }}
       />
       <ShowPhraseSheet open={mode === 'show'} onClose={() => setMode('closed')} />
-    </Card>
+    </div>
   );
 }
 
 function StatusLine({ status, error, lastSyncedAt }: { status: string; error?: string; lastSyncedAt?: string }) {
+  const t = useT().sync.status;
   const dot = { idle: 'bg-positive', syncing: 'bg-blue-500 animate-pulse', conflict: 'bg-orange-500', error: 'bg-negative' }[status] ?? 'bg-faint';
   const text =
     status === 'syncing'
-      ? 'Syncing…'
+      ? t.syncing
       : status === 'conflict'
-        ? 'Needs your decision'
+        ? t.needsDecision
         : status === 'error'
-          ? `Could not sync: ${error ?? 'unknown error'}`
+          ? t.couldNotSync(error ?? t.unknownError)
           : lastSyncedAt
-            ? `Synced ${formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true })}`
-            : 'Waiting for the first sync';
+            ? t.synced(formatDistanceToNow(new Date(lastSyncedAt), { addSuffix: true, locale: dateLocale() }))
+            : t.waiting;
   return (
     <div className="flex items-center gap-2 text-[13px] text-ink">
       <span className={clsx('inline-block h-2 w-2 rounded-full', dot)} />
@@ -163,6 +166,7 @@ function PhraseGrid({ words }: { words: string[] }) {
 
 function CopyButton({ words }: { words: string[] }) {
   const [copied, setCopied] = useState(false);
+  const t = useT().sync.copy;
   return (
     <Button
       variant="secondary"
@@ -178,7 +182,7 @@ function CopyButton({ words }: { words: string[] }) {
         }
       }}
     >
-      {copied ? 'Copied' : 'Copy phrase'}
+      {copied ? t.copied : t.copyPhrase}
     </Button>
   );
 }
@@ -190,6 +194,7 @@ function NewPhraseSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const current = open ? draft : null;
+  const t = useT().sync;
 
   // A fresh phrase each time the sheet opens; it only becomes real once the button is pressed.
   useEffect(() => {
@@ -207,12 +212,12 @@ function NewPhraseSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
     <Sheet
       open={open}
       onClose={close}
-      title="Your sync phrase"
-      subtitle="Write these 12 words down or put them in a password manager. They are the only way to read your cloud copy, and they cannot be recovered."
+      title={t.newPhrase.title}
+      subtitle={t.newPhrase.subtitle}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={close}>
-            Cancel
+            {t.card.cancel}
           </Button>
           <Button
             disabled={!saved || busy}
@@ -225,13 +230,13 @@ function NewPhraseSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
                 close();
                 onDone();
               } catch (e) {
-                setError(e instanceof Error ? e.message : 'Could not turn on sync.');
+                setError(e instanceof Error ? e.message : t.newPhrase.couldNotTurnOn);
               } finally {
                 setBusy(false);
               }
             }}
           >
-            Turn on sync
+            {t.card.turnOn}
           </Button>
         </div>
       }
@@ -244,7 +249,7 @@ function NewPhraseSheet({ open, onClose, onDone }: { open: boolean; onClose: () 
           </div>
           <label className="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
             <input type="checkbox" className="mt-0.5" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
-            <span>I have saved my phrase somewhere safe.</span>
+            <span>{t.newPhrase.saved}</span>
           </label>
           {error && <Callout tone="warning">{error}</Callout>}
         </div>
@@ -259,6 +264,7 @@ function JoinSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const words = normalizePhrase(text);
+  const t = useT().sync;
 
   const close = () => {
     setText('');
@@ -270,12 +276,12 @@ function JoinSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
     <Sheet
       open={open}
       onClose={close}
-      title="Enter your sync phrase"
-      subtitle="The 12 words shown when sync was turned on on your other device."
+      title={t.join.title}
+      subtitle={t.join.subtitle}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={close}>
-            Cancel
+            {t.card.cancel}
           </Button>
           <Button
             disabled={words.length === 0 || busy}
@@ -293,7 +299,7 @@ function JoinSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
               }
             }}
           >
-            Connect
+            {t.join.connect}
           </Button>
         </div>
       }
@@ -306,11 +312,11 @@ function JoinSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
-          placeholder="word word word …"
+          placeholder={t.join.placeholder}
           className="w-full rounded-xl border border-line bg-card px-3 py-2 text-[14px] text-ink outline-none focus:border-brand-400"
         />
         <p className="text-[12px] text-muted">
-          {words.length === 0 ? 'Paste or type the words, in order.' : `${words.length} of 12 words`}
+          {words.length === 0 ? t.join.pasteHint : t.join.wordCount(words.length, PHRASE_WORDS)}
         </p>
         {error && <Callout tone="warning">{error}</Callout>}
       </div>
@@ -321,15 +327,16 @@ function JoinSheet({ open, onClose, onDone }: { open: boolean; onClose: () => vo
 function ShowPhraseSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const sync = useSyncActions();
   const words = open ? sync.phrase() : null;
+  const t = useT().sync.show;
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title="Your sync phrase"
-      subtitle="Enter these words on another device to sync it with this one."
+      title={t.title}
+      subtitle={t.subtitle}
       footer={
         <div className="flex justify-end">
-          <Button onClick={onClose}>Done</Button>
+          <Button onClick={onClose}>{t.done}</Button>
         </div>
       }
     >

@@ -4,11 +4,14 @@ import { BrowserRouter } from 'react-router-dom';
 import { ConvexProvider } from 'convex/react';
 import { convex } from './sync/convexClient';
 import App from './App';
+import { LanguageRoot } from './i18n/LanguageRoot';
 import './styles/index.css';
 
 const app = (
   <BrowserRouter>
-    <App />
+    <LanguageRoot>
+      <App />
+    </LanguageRoot>
   </BrowserRouter>
 );
 

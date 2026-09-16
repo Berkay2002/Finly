@@ -5,6 +5,7 @@ import type { Accent } from '@/components/ui/accent';
 import { IconTile } from '@/components/ui/IconTile';
 import type { IconSource } from '@/components/ui/Icon';
 import { KebabMenu, type MenuItem } from '@/components/ui/Menu';
+import { useT } from '@/i18n';
 
 /**
  * One editable line item: icon, name/meta on the left, fields in the middle, menu on the right.
@@ -29,6 +30,7 @@ export function ItemRow({
   className?: string;
   onClick?: () => void;
 }) {
+  const t = useT();
   return (
     <div
       className={clsx(
@@ -43,7 +45,7 @@ export function ItemRow({
         onClick={onClick}
         data-edit={onClick ? '' : undefined}
         disabled={!onClick}
-        title={onClick ? 'Edit details' : undefined}
+        title={onClick ? t.expenses.row.editDetails : undefined}
         className={clsx(
           'group/edit order-1 -my-1 -ml-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 pl-1.5 pr-2 text-left',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200',

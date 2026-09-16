@@ -1,0 +1,42 @@
+export default {
+  home: {
+    kommun: 'Kommun',
+    notSet: 'Not set',
+    electricityArea: 'Electricity area',
+    areaHint: '(elområde)',
+    fromKommun: (area: string, kommun: string) => `${area} (from ${kommun})`,
+    notSure: 'Not sure (SE3)',
+    splitKommun: (kommun: string) => `${kommun} can be in more than one area. Check "Elområde" on your electricity bill.`,
+  },
+  food: {
+    ageGroups: {
+      '0': 'Under 1',
+      '1-3': '1–3 years',
+      '4-6': '4–6 years',
+      '7-10': '7–10 years',
+      '11-14': '11–14 years',
+      '15-17': '15–17 years',
+      '18-24': '18–24 years',
+      '25-50': '25–50 years',
+      '51-70': '51–70 years',
+      '71+': '71 or older',
+    },
+    whoFor: 'Who do you buy food for?',
+    lunchAtHome: 'Lunch at home',
+    lunchOut: 'Lunch out',
+    removePerson: 'Remove person',
+    addPerson: 'Add a person',
+    lunchOutNote: '"Lunch out" means weekday lunch at school, or bought at work. A packed lunch from home counts as home.',
+    source: (year: number) => `Konsumentverket ${year}`,
+    aMonth: 'a month',
+    aWeek: (amount: string) => `≈ ${amount} a week`,
+    disclaimer:
+      'A reasonable level when cooking at home from their menu, not what households actually spend. Treat it as a starting point and adjust once you see your real months.',
+    workLunches: ' Lunches bought at work are not included: add them as Work lunches.',
+    cancel: 'Cancel',
+  },
+  spot: {
+    unavailable: (status: number) => `Spot prices unavailable (${status}).`,
+    noPrices: 'No spot prices published for that month yet.',
+  },
+};

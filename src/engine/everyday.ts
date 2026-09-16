@@ -1,4 +1,5 @@
 import { getDaysInMonth } from 'date-fns';
+import { messages } from '@/i18n';
 import { amountSpread, monthlySpread } from './amounts';
 import { monthlyToDaily, monthlyToWeekly, occurrencesPerMonth, periodsPerMonth } from './frequency';
 import { isEverydaySpend, suggestionBySlug } from './taxonomy';
@@ -10,28 +11,26 @@ import type { ExpenseCategory, ExpenseItem, Occurrences, SpendEntry, SpendGroup 
 
 export const SPEND_GROUPS: SpendGroup[] = ['food', 'transport', 'leisure'];
 
+const group = (id: SpendGroup, category: ExpenseCategory) => ({
+  category,
+  get label() {
+    return messages().everyday.groups[id].label;
+  },
+  get noun() {
+    return messages().everyday.groups[id].noun;
+  },
+  get bankHint() {
+    return messages().everyday.groups[id].bankHint;
+  },
+});
+
 export const SPEND_GROUP_META: Record<
   SpendGroup,
-  { label: string; /** Lower-case, for "What did you spend on … in August?" */ noun: string; bankHint: string; category: ExpenseCategory }
+  { readonly label: string; /** Lower-case, for "What did you spend on … in August?" */ readonly noun: string; readonly bankHint: string; category: ExpenseCategory }
 > = {
-  food: {
-    label: 'Food & drink',
-    noun: 'food',
-    bankHint: 'Most bank apps total this under a food or groceries category.',
-    category: 'living',
-  },
-  transport: {
-    label: 'Getting around',
-    noun: 'getting around',
-    bankHint: 'Fuel, charging, parking, tickets and taxis. Most bank apps total these under transport.',
-    category: 'transport',
-  },
-  leisure: {
-    label: 'Fun & leisure',
-    noun: 'fun and leisure',
-    bankHint: 'Nights out, cinema, events and hobbies. Often under entertainment or leisure in the bank app.',
-    category: 'leisure',
-  },
+  food: group('food', 'living'),
+  transport: group('transport', 'transport'),
+  leisure: group('leisure', 'leisure'),
 };
 
 export function isFoodItem(e: Pick<ExpenseItem, 'subcategory'>): boolean {

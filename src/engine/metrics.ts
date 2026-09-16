@@ -4,7 +4,9 @@ import { toMonthly } from './frequency';
 import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured } from './debts';
-import { accountRole, isEverydaySpend, type AccountRole } from './taxonomy';
+import type { GovBondRate } from './rates';
+import { capitalTaxSummary, type CapitalTaxSummary } from './tax/capital';
+import { accountRole, debtName, expenseName, isEverydaySpend, type AccountRole } from './taxonomy';
 import type { DebtKind, ExpenseCategory, ExpenseItem, ExpenseTag, FinancialPlan, SpendGroup } from './types';
 import { EXPENSE_CATEGORIES } from './types';
 
@@ -197,7 +199,11 @@ export interface PlanMetrics {
     totalDebt: number;
     /** totalAssets − totalDebt. */
     netWorth: number;
+    /** Net worth if everything were sold today: minus AF gains tax and this year's ISK/KF and fund tax still to pay. */
+    netWorthAfterTax: number;
   };
+  /** Tax on savings accounts this year: ISK/KF schablonskatt, AF, and interest on cash. See tax/capital.ts. */
+  capitalTax: CapitalTaxSummary;
   /** PRD §18.25 / §18.26 / §18.14 */
   resilience: {
     emergencyMonths: number;
@@ -262,7 +268,7 @@ export function toCostLine(e: ExpenseItem): CostLine {
   const s = monthlySpread(e);
   return {
     id: e.id,
-    name: e.name,
+    name: expenseName(e),
     category: e.category,
     monthly: s.typical,
     annual: s.typical * 12,
@@ -331,7 +337,8 @@ function isDatedInMonth(iso: string | undefined, now: Date): boolean {
 /* Main                                                                */
 /* ------------------------------------------------------------------ */
 
-export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): PlanMetrics {
+/** `gov`: the live statslåneränta, which only matters for a year whose 30 November rate is not in the tables yet. */
+export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?: GovBondRate): PlanMetrics {
   /* Income */
   const baseline = plan.income.filter((i) => i.includeInBaseline && i.amount > 0);
   const reliable = sum(baseline.filter((i) => i.reliability === 'reliable').map(monthlyOf));
@@ -360,7 +367,7 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       const payoff = debtPayoff(d, now);
       return {
         id: d.id,
-        name: d.name,
+        name: debtName(d),
         kind: d.kind,
         balance: Math.max(0, d.balance || 0),
         monthly: flow.monthly,
@@ -471,6 +478,10 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
   const cashInBank = byRole.everyday + byRole.cash_savings;
   const totalAssets = sum(Object.values(byRole));
   const netWorth = totalAssets - totalDebt;
+  const capitalTax = capitalTaxSummary(plan, now, gov);
+  // Tax already taken (KF by the insurer, interest by the bank) is out of the balances; the rest is still owed.
+  const taxStillOwed = sum(capitalTax.accounts.map((t) => Math.max(0, t.tax - t.withheld)));
+  const netWorthAfterTax = netWorth - capitalTax.taxIfSold - taxStillOwed;
 
   /* Resilience */
   const availableForRunway = cashInBank + byRole.emergency;
@@ -565,7 +576,9 @@ export function computeMetrics(plan: FinancialPlan, now: Date = new Date()): Pla
       byRole,
       totalDebt,
       netWorth,
+      netWorthAfterTax,
     },
+    capitalTax,
     resilience: {
       emergencyMonths: safeDiv(byRole.emergency, essential),
       essentialRunwayMonths: safeDiv(availableForRunway, essential),

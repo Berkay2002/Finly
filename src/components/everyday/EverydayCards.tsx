@@ -2,9 +2,11 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { monthlySpread } from '@/engine/amounts';
 import { amountForMonthly, gapTarget, SPEND_GROUP_META, spendEntryFor, spendHistory, type SpendNudge, type SpendSummary } from '@/engine/everyday';
-import { formatDate, formatMoney, formatMonthKey } from '@/engine/format';
+import { formatDate, formatMoney, formatMonthKey, formatNumber } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
-import type { SpendGroup } from '@/engine/types';
+import { expenseName } from '@/engine/taxonomy';
+import type { ExpenseItem, SpendGroup } from '@/engine/types';
+import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, useFrozenMonth, useMetrics, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
@@ -21,16 +23,22 @@ const GROUP_LOOK: Record<SpendGroup, { icon: PictureName; accent: Accent }> = {
   leisure: { icon: 'nav-leisure', accent: 'purple' },
 };
 
+function nudgeName(n: SpendNudge, expenses: ExpenseItem[]): string {
+  const item = expenses.find((e) => e.id === n.id);
+  return item ? expenseName(item) : n.name;
+}
+
 /** Per month, week and day, and the normal spread. */
 export function SpendTiles({ summary, currency }: { summary: SpendSummary; currency: string }) {
+  const t = useT().everyday.tiles;
   const money = (n: number) => formatMoney(n, currency);
   return (
     <>
       <div className="grid grid-cols-3 gap-2">
         {[
-          { label: 'Per month', value: summary.monthly },
-          { label: 'Per week', value: summary.weekly },
-          { label: 'Per day', value: summary.daily },
+          { label: t.perMonth, value: summary.monthly },
+          { label: t.perWeek, value: summary.weekly },
+          { label: t.perDay, value: summary.daily },
         ].map((t) => (
           <div key={t.label} className="min-w-0 rounded-xl bg-page px-2.5 py-2">
             <div className="text-[11.5px] text-muted">{t.label}</div>
@@ -40,7 +48,7 @@ export function SpendTiles({ summary, currency }: { summary: SpendSummary; curre
       </div>
       {summary.high > summary.low && (
         <p className="tabular mt-2 text-[12px] text-muted">
-          A normal month lands between {money(summary.low)} and {money(summary.high)}.
+          {t.normalRange(money(summary.low), money(summary.high))}
         </p>
       )}
     </>
@@ -51,20 +59,21 @@ export function SpendTiles({ summary, currency }: { summary: SpendSummary; curre
 export function SpendNudges({ nudges, currency }: { nudges: SpendNudge[]; currency: string }) {
   const plan = usePlan();
   const updateExpense = usePlanStore((s) => s.updateExpense);
+  const t = useT().everyday.nudges;
   const money = (n: number) => formatMoney(n, currency);
   if (nudges.length === 0) return null;
   return (
     <div className="mt-4">
-      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">Small changes</div>
+      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.title}</div>
       <ul className="divide-y divide-line">
         {nudges.slice(0, 3).map((n) => (
           <li key={n.id} className="flex items-center gap-3 py-2 text-[13px]">
             <div className="min-w-0 flex-1">
               <div className="text-ink">
-                {n.name}: one fewer a {n.per}
+                {t.oneFewer(nudgeName(n, plan.expenses), n.per)}
               </div>
               <div className="tabular text-[12px] text-muted">
-                saves {money(n.monthly)} a month · {money(n.monthly * 12)} a year
+                {t.saves(money(n.monthly), money(n.monthly * 12))}
               </div>
             </div>
             <Button
@@ -74,9 +83,9 @@ export function SpendNudges({ nudges, currency }: { nudges: SpendNudge[]; curren
                 const e = plan.expenses.find((x) => x.id === n.id);
                 if (e?.occurrences) updateExpense(n.id, { occurrences: { ...e.occurrences, times: Math.max(0, e.occurrences.times - 1) } });
               }}
-              title={`Plan for ${n.times - 1} a ${n.per} instead of ${n.times}`}
+              title={t.planFor(formatNumber(n.times - 1), n.per, formatNumber(n.times))}
             >
-              {n.times - 1 > 0 ? `${n.times - 1}× a ${n.per}` : 'Drop it'}
+              {n.times - 1 > 0 ? t.timesPer(formatNumber(n.times - 1), n.per) : t.dropIt}
             </Button>
           </li>
         ))}
@@ -116,6 +125,7 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
   const meta = SPEND_GROUP_META[group];
   const look = GROUP_LOOK[group];
   const money = (n: number) => formatMoney(n, currency);
+  const t = useT().everyday.month;
 
   const today = new Date();
   const todayKey = monthKeyOf(today);
@@ -133,23 +143,23 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
 
   const isoToday = `${todayKey}-${String(today.getDate()).padStart(2, '0')}`;
   const over = (sm.spent ?? 0) > sm.expectedByNow;
-  const title = group === 'food' ? 'Food' : meta.label;
+  const title = group === 'food' ? t.food : meta.label;
 
   return (
     <Card>
       <CardHeader
         icon={<IconTile icon={group === 'food' ? 'card-per-day' : look.icon} accent={look.accent} size="sm" />}
-        title={running ? `${title} this month` : `${title} in ${formatMonthKey(key)}`}
+        title={running ? t.titleThisMonth(title) : t.titleIn(title, formatMonthKey(key))}
         subtitle={
           running
-            ? `Now and then, type in what your bank app says you have spent on ${meta.noun} so far.`
-            : 'The total for the month, from your bank app.'
+            ? t.subtitleRunning(meta.noun)
+            : t.subtitleClosed
         }
       />
 
       <MoneyField
-        label={running ? 'Spent so far' : 'Spent in total'}
-        hint={running && sm.spent !== undefined && sm.day < today.getDate() ? `(updated ${formatDate(`${key}-${String(sm.day).padStart(2, '0')}`)})` : undefined}
+        label={running ? t.spentSoFar : t.spentInTotal}
+        hint={running && sm.spent !== undefined && sm.day < today.getDate() ? t.updated(formatDate(`${key}-${String(sm.day).padStart(2, '0')}`)) : undefined}
         currency={currency}
         value={sm.spent ?? 0}
         onValueChange={(amount) =>
@@ -164,18 +174,18 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
             {!sm.complete && (
               <div className="flex justify-between gap-3">
                 <dt className="text-muted">
-                  Day {sm.day} of {sm.daysInMonth}, expected by now
+                  {t.dayOf(sm.day, sm.daysInMonth)}
                 </dt>
                 <dd className="tabular text-ink">{money(sm.expectedByNow)}</dd>
               </div>
             )}
             <div className="flex justify-between gap-3">
-              <dt className="text-muted">{sm.complete ? 'Planned' : 'Planned for the month'}</dt>
+              <dt className="text-muted">{sm.complete ? t.planned : t.plannedForMonth}</dt>
               <dd className="tabular text-ink">{money(g.monthly)}</dd>
             </div>
             {sm.projected !== undefined && sm.variance !== undefined && (
               <div className="flex justify-between gap-3">
-                <dt className="font-medium text-ink">{sm.complete ? 'Against plan' : 'At this pace'}</dt>
+                <dt className="font-medium text-ink">{sm.complete ? t.againstPlan : t.atThisPace}</dt>
                 <dd className={clsx('tabular font-semibold', sm.variance > 0 ? 'text-warning' : 'text-positive')}>
                   {!sm.complete && `${money(sm.projected)} · `}
                   {formatMoney(sm.variance, currency, { sign: true })}
@@ -186,12 +196,12 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
           {!sm.complete && sm.left !== undefined && (
             <p className="tabular mt-2 text-[12.5px] text-muted">
               {sm.left > 0
-                ? `${money(sm.left)} left: ${money(sm.leftPerDay ?? 0)} a day for the ${sm.daysInMonth - sm.day} days to go.`
-                : `${money(-sm.left)} over the month's plan already.`}
+                ? t.left(money(sm.left), money(sm.leftPerDay ?? 0), sm.daysInMonth - sm.day)
+                : t.over(money(-sm.left))}
             </p>
           )}
           {sm.complete && frozen && (
-            <p className="mt-2 text-[12px] text-muted">The closed month now runs on this figure instead of the estimates.</p>
+            <p className="mt-2 text-[12px] text-muted">{t.frozen}</p>
           )}
         </div>
       )}
@@ -210,10 +220,10 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
       {history.months.length > 0 && (
         <div className="mt-4 border-t border-line pt-3">
           <div className="mb-1.5 flex items-center justify-between text-[12px]">
-            <span className="font-medium text-ink-soft">Your months</span>
+            <span className="font-medium text-ink-soft">{t.yourMonths}</span>
             {history.basedOn >= 2 && (
               <span className="tabular text-muted">
-                avg {money(history.average)} over {history.basedOn}
+                {t.average(money(history.average), history.basedOn)}
               </span>
             )}
           </div>
@@ -227,8 +237,8 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
           {history.gap !== null && (
             <div className="mt-2.5 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
               <p>
-                Your last {history.basedOn} months averaged <span className="tabular font-semibold">{money(history.average)}</span>; the plan
-                says <span className="tabular font-semibold">{money(g.monthly)}</span>.
+                {t.gapBefore(history.basedOn)}<span className="tabular font-semibold">{money(history.average)}</span>{t.gapMiddle}
+                <span className="tabular font-semibold">{money(g.monthly)}</span>{t.gapAfter}
               </p>
               {target && (
                 <Button
@@ -240,7 +250,9 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
                     updateExpense(target.id, { amount: amountForMonthly(target, Math.max(0, current + history.gap!)) });
                   }}
                 >
-                  {history.gap > 0 ? 'Add' : 'Take'} {money(Math.abs(history.gap))} a month {history.gap > 0 ? 'to' : 'off'} {target.name.toLowerCase()}
+                  {history.gap > 0
+                    ? t.gapAdd(money(Math.abs(history.gap)), expenseName(target).toLowerCase())
+                    : t.gapTake(money(Math.abs(history.gap)), expenseName(target).toLowerCase())}
                 </Button>
               )}
             </div>
@@ -267,6 +279,7 @@ function PreviousMonthPrompt({
   onSave: (amount: number) => void;
 }) {
   const [value, setValue] = useState(0);
+  const t = useT().everyday.previous;
   return (
     <form
       className="mt-4 rounded-xl border border-dashed border-line bg-page/40 p-3"
@@ -276,15 +289,15 @@ function PreviousMonthPrompt({
       }}
     >
       <div className="text-[13px] font-medium text-ink">
-        What did you spend on {noun} in {formatMonthKey(month)}?
+        {t.question(noun, formatMonthKey(month))}
       </div>
       <p className="mt-0.5 text-[12px] text-muted">
-        {partial?.asOf ? `You logged ${formatMoney(partial.amount, currency)} by ${formatDate(partial.asOf)}. Enter the full month.` : bankHint}
+        {partial?.asOf ? t.partial(formatMoney(partial.amount, currency), formatDate(partial.asOf)) : bankHint}
       </p>
       <div className="mt-2 flex items-center gap-2">
-        <MoneyField size="sm" currency={currency} value={value} onValueChange={setValue} className="min-w-0 flex-1" aria-label={`Spent on ${noun} in ${formatMonthKey(month)}`} />
+        <MoneyField size="sm" currency={currency} value={value} onValueChange={setValue} className="min-w-0 flex-1" aria-label={t.ariaLabel(noun, formatMonthKey(month))} />
         <Button type="submit" size="sm" variant={value > 0 ? 'primary' : 'secondary'} disabled={value <= 0}>
-          Save
+          {t.save}
         </Button>
       </div>
     </form>

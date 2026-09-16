@@ -3,24 +3,26 @@ import { useNavigate } from "react-router-dom";
 import { Logo } from "@/components/layout/Logo";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
+import { useT } from "@/i18n";
 import { usePlanStore } from "@/store/planStore";
 
 export function Welcome() {
   const navigate = useNavigate();
   const loadSample = usePlanStore((s) => s.loadSample);
   const startOnboarding = usePlanStore((s) => s.startOnboarding);
+  const t = useT();
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <LanguageSwitch variant="compact" className="absolute right-4 top-4" />
       <Logo className="mb-10" to="/welcome" />
       <div className="w-full max-w-xl text-center">
         <h1 className="text-[32px] font-bold leading-tight tracking-tight text-ink sm:text-[40px]">
-          Understand what your life actually costs.
+          {t.welcome.headline}
         </h1>
         <p className="mx-auto mt-3 max-w-md text-[15px] text-muted">
-          Finly turns your income, bills, savings and balances into one clear
-          picture: how much you can safely spend, how much you are saving, and
-          how resilient you are.
+          {t.welcome.intro}
         </p>
       </div>
 
@@ -37,15 +39,14 @@ export function Welcome() {
           <div className="flex min-w-0 flex-1 flex-col gap-3 self-stretch">
             <div>
               <div className="text-[16px] font-semibold text-ink">
-                Plan my finances
+                {t.welcome.plan.title}
               </div>
               <div className="mt-1 text-[13px] text-muted">
-                A guided session in ten short steps. Skip anything that does not
-                apply to you.
+                {t.welcome.plan.description}
               </div>
             </div>
             <span className="mt-auto inline-flex items-center gap-1 text-[13px] font-medium text-brand-700">
-              Start planning <ArrowRight size={14} />
+              {t.welcome.plan.cta} <ArrowRight size={14} />
             </span>
           </div>
         </button>
@@ -61,15 +62,14 @@ export function Welcome() {
           <div className="flex min-w-0 flex-1 flex-col gap-3 self-stretch">
             <div>
               <div className="text-[16px] font-semibold text-ink">
-                Explore with sample data
+                {t.welcome.demo.title}
               </div>
               <div className="mt-1 text-[13px] text-muted">
-                See the full dashboard with an example plan. You can edit
-                everything or reset it later.
+                {t.welcome.demo.description}
               </div>
             </div>
             <span className="mt-auto inline-flex items-center gap-1 text-[13px] font-medium text-purple-500">
-              Open the demo <ArrowRight size={14} />
+              {t.welcome.demo.cta} <ArrowRight size={14} />
             </span>
           </div>
         </button>
@@ -77,11 +77,11 @@ export function Welcome() {
 
       <div className="mt-8">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
-          Skip for now
+          {t.welcome.skip}
         </Button>
       </div>
       <p className="mt-6 max-w-sm text-center text-[12px] text-faint">
-        Everything stays in this browser unless you turn on sync, and even then it is encrypted before it leaves.
+        {t.welcome.privacy}
       </p>
     </div>
   );

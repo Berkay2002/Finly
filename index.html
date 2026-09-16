@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#f5f7fa" />
+    <script>
+      // Apply the saved theme before first paint so dark mode does not flash light. Mirrors src/store/themeStore.ts.
+      (function () {
+        var mode = 'system';
+        try {
+          mode = JSON.parse(localStorage.getItem('finly.theme')).state.mode || 'system';
+        } catch (e) {}
+        var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        if (dark) document.querySelector('meta[name="theme-color"]').setAttribute('content', '#121214');
+      })();
+    </script>
     <title>Finly</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

@@ -2,16 +2,26 @@ import { ArrowRight } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatDate, formatMoney, formatMoneyRange, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
-import { goalProgress } from '@/engine/projections';
+import { goalProgress, goalReturn } from '@/engine/projections';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
-import { useCurrency, useEffectivePlan, useMetrics, usePlan, usePreviousSnapshot, useUpcoming, useViewDate } from '@/store/selectors';
+import {
+  useAccountReturns,
+  useCurrency,
+  useEffectivePlan,
+  useMetrics,
+  usePlan,
+  usePreviousSnapshot,
+  useUpcoming,
+  useViewDate,
+} from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
 import { BillsToConfirm } from '@/components/forms/BillsToConfirm';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
 import { DEBT_ACCENT, DEBT_ICON, useLoanSheet } from '@/components/forms/LoanEditor';
+import { useSavingsTaxSheet } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -23,16 +33,19 @@ import { IconTile } from '@/components/ui/IconTile';
 import { ProgressBar, SplitBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
 import { LinkButton } from '@/components/ui/Button';
+import { messages, useT } from '@/i18n';
 
 function greeting(now: Date): string {
+  const t = messages().dashboard.greeting;
   const h = now.getHours();
-  if (h < 5) return 'Good night';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 5) return t.night;
+  if (h < 12) return t.morning;
+  if (h < 18) return t.afternoon;
+  return t.evening;
 }
 
 export function Dashboard() {
+  const d = useT().dashboard;
   const plan = usePlan();
   const shown = useEffectivePlan();
   const m = useMetrics();
@@ -46,6 +59,8 @@ export function Dashboard() {
   const expenses = useExpenseSheet();
   const goalSheet = useGoalSheet();
   const loanSheet = useLoanSheet();
+  const taxSheet = useSavingsTaxSheet();
+  const returns = useAccountReturns();
 
   const isEmpty = !m.hasIncome && !m.hasExpenses && !m.hasAccounts && !m.hasGoals && !m.hasDebts;
   if (isEmpty && !plan.onboarding.completed) return <Navigate to="/welcome" replace />;
@@ -56,7 +71,7 @@ export function Dashboard() {
     value: m.expenses.byCategory[c],
     accent: CATEGORY_META[c].accent,
   }));
-  if (m.debt.monthly > 0) slices.push({ key: 'loans', label: 'Loans', value: m.debt.monthly, accent: 'red' });
+  if (m.debt.monthly > 0) slices.push({ key: 'loans', label: d.loans, value: m.debt.monthly, accent: 'red' });
 
   const goals = shown.goals.filter((g) => g.targetAmount).slice(0, 4);
   const name = plan.userName.trim();
@@ -64,22 +79,22 @@ export function Dashboard() {
   return (
     <div>
       <PageHeader
-        title={name ? `${greeting(new Date())}, ${name}` : greeting(new Date())}
-        subtitle={`Here's your financial overview for ${formatMonthYear(viewMonth)}.`}
+        title={name ? d.greeting.withName(greeting(new Date()), name) : greeting(new Date())}
+        subtitle={d.subtitle(formatMonthYear(viewMonth))}
       />
 
       {isEmpty && (
         <Callout
           tone="tip"
-          title="Your plan is empty"
+          title={d.empty.title}
           className="mb-5"
           action={
             <LinkButton to="/onboarding/income" size="sm" iconRight={ArrowRight}>
-              Start planning
+              {d.empty.action}
             </LinkButton>
           }
         >
-          Add your income and expenses to bring this dashboard to life.
+          {d.empty.body}
         </Callout>
       )}
 
@@ -88,30 +103,32 @@ export function Dashboard() {
         <StatCard
           icon="stat-safe-to-spend"
           accent="brand"
-          label="Safe to spend"
+          label={d.stats.safeToSpend}
           value={money(m.safeToSpend)}
           sub={
             m.actuals.confirmed.length > 0 && m.actuals.variance !== 0
-              ? `Bills came in ${money(Math.abs(m.actuals.variance))} ${m.actuals.variance > 0 ? 'above' : 'below'} plan`
+              ? m.actuals.variance > 0
+                ? d.stats.billsAbovePlan(money(Math.abs(m.actuals.variance)))
+                : d.stats.billsBelowPlan(money(Math.abs(m.actuals.variance)))
               : m.actuals.pending.length > 0 && m.range.safeToSpend.low < m.safeToSpend
-                ? `Down to ${money(m.range.safeToSpend.low)} if every bill runs high`
+                ? d.stats.downTo(money(m.range.safeToSpend.low))
                 : m.oneOffsThisMonth > 0
-                  ? `After ${money(m.oneOffsThisMonth)} of one-off costs`
-                  : 'Available this month'
+                  ? d.stats.afterOneOffs(money(m.oneOffsThisMonth))
+                  : d.stats.availableThisMonth
           }
           className={clsx('col-span-2 xl:col-span-1', m.safeToSpend < 0 && 'border-orange-500/40')}
         />
         <StatCard
           icon="stat-income"
           accent="blue"
-          label="Total income"
+          label={d.stats.totalIncome}
           value={money(m.income.total)}
-          sub={<DeltaOr before={prev?.income} after={m.income.total} fallback="Average per month" />}
+          sub={<DeltaOr before={prev?.income} after={m.income.total} fallback={d.stats.averagePerMonth} />}
         />
         <StatCard
           icon="stat-cost"
           accent="red"
-          label="Normal monthly cost"
+          label={d.stats.normalMonthlyCost}
           value={money(m.lifestyleCost)}
           sub={
             <DeltaOr
@@ -120,13 +137,13 @@ export function Dashboard() {
               invert
               suffix={
                 (prev?.billsConfirmed ?? 0) > 0 || m.actuals.confirmed.length > 0
-                  ? 'vs last month, real bills'
+                  ? d.stats.vsLastMonthRealBills
                   : undefined
               }
               fallback={
                 m.range.hasRanges
-                  ? `Usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
-                  : `${money(m.essentialCost)} essential`
+                  ? d.stats.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
+                  : d.stats.essential(money(m.essentialCost))
               }
             />
           }
@@ -134,16 +151,16 @@ export function Dashboard() {
         <StatCard
           icon="stat-saving"
           accent="green"
-          label="Planned saving & investing"
+          label={d.stats.plannedSaving}
           value={money(m.savings.total)}
-          sub={<DeltaOr before={prev?.savings} after={m.savings.total} fallback={`${formatPercent(m.savings.rate)} of income`} />}
+          sub={<DeltaOr before={prev?.savings} after={m.savings.total} fallback={d.stats.ofIncome(formatPercent(m.savings.rate))} />}
         />
         <StatCard
           icon="stat-bank"
           accent="indigo"
-          label="Current bank balance"
+          label={d.stats.bankBalance}
           value={money(m.position.cashInBank)}
-          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback="All cash accounts combined" />}
+          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback={d.stats.allCashAccounts} />}
         />
       </div>
 
@@ -153,13 +170,13 @@ export function Dashboard() {
       <div className="mb-5 grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader
-            title="Where your money goes"
+            title={d.spending.title}
             subtitle={
               <>
-                <span className="tabular font-semibold text-ink">{money(m.lifestyleCost)}</span> / month
+                <span className="tabular font-semibold text-ink">{money(m.lifestyleCost)}</span> {d.spending.perMonth}
               </>
             }
-            action="View all expenses"
+            action={d.spending.viewAll}
             actionTo="/insights"
           />
           {m.hasExpenses || m.hasDebts ? (
@@ -174,20 +191,20 @@ export function Dashboard() {
               }
             />
           ) : (
-            <p className="text-[13px] text-muted">Add expenses to see the breakdown.</p>
+            <p className="text-[13px] text-muted">{d.spending.empty}</p>
           )}
         </Card>
 
         <Card>
-          <CardHeader title="Your financial position" action="View accounts" actionTo="/accounts" />
+          <CardHeader title={d.position.title} action={d.position.viewAccounts} actionTo="/accounts" />
           <ul className="divide-y divide-line">
             {[
-              { icon: 'account-everyday' as const, accent: 'blue' as const, label: 'Everyday money', value: m.position.everyday },
-              { icon: 'account-savings' as const, accent: 'purple' as const, label: 'Savings', value: m.position.cashSavings },
-              { icon: 'account-emergency' as const, accent: 'yellow' as const, label: 'Emergency fund', value: m.position.emergency },
-              { icon: 'account-investment' as const, accent: 'green' as const, label: 'Investments', value: m.position.investments },
+              { icon: 'account-everyday' as const, accent: 'blue' as const, label: d.position.everyday, value: m.position.everyday },
+              { icon: 'account-savings' as const, accent: 'purple' as const, label: d.position.savings, value: m.position.cashSavings },
+              { icon: 'account-emergency' as const, accent: 'yellow' as const, label: d.position.emergency, value: m.position.emergency },
+              { icon: 'account-investment' as const, accent: 'green' as const, label: d.position.investments, value: m.position.investments },
               ...(m.position.totalDebt > 0
-                ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: 'Loans', value: -m.position.totalDebt }]
+                ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: d.position.loans, value: -m.position.totalDebt }]
                 : []),
             ].map((r) => (
               <li key={r.label} className={clsx('flex items-center gap-3', m.position.totalDebt > 0 ? 'py-2' : 'py-2.5')}>
@@ -198,7 +215,7 @@ export function Dashboard() {
             ))}
           </ul>
           <div className="mt-2 flex items-center justify-between border-t border-line pt-3">
-            <span className="text-[14px] font-semibold text-ink">{m.position.totalDebt > 0 ? 'Net worth' : 'Total assets'}</span>
+            <span className="text-[14px] font-semibold text-ink">{m.position.totalDebt > 0 ? d.position.netWorth : d.position.totalAssets}</span>
             <span className="tabular text-[16px] font-bold text-ink">
               {money(m.position.totalDebt > 0 ? m.position.netWorth : m.position.totalAssets)}
             </span>
@@ -206,21 +223,21 @@ export function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader icon={<IconTile icon="card-goals" accent="brand" size="sm" />} title="Savings & goals" action="View all" actionTo="/savings" />
+          <CardHeader icon={<IconTile icon="card-goals" accent="brand" size="sm" />} title={d.goals.title} action={d.goals.viewAll} actionTo="/savings" />
           {goals.length === 0 ? (
             <p className="text-[13px] text-muted">
-              {plan.goals.length > 0 ? 'Add a target amount to a goal to track progress here.' : 'No goals yet.'}{' '}
+              {plan.goals.length > 0 ? d.goals.addTarget : d.goals.none}{' '}
               <Link to="/savings" className="font-medium text-brand-700">
-                Manage goals
+                {d.goals.manage}
               </Link>
             </p>
           ) : (
             <ul className="space-y-1">
               {goals.map((g) => {
-                const p = goalProgress(g, now);
+                const p = goalProgress(g, now, goalReturn(g, returns));
                 return (
                   <li key={g.id}>
-                    <EditableRow onClick={() => goalSheet.openEdit(g.id)} title="Edit goal" className="py-1">
+                    <EditableRow onClick={() => goalSheet.openEdit(g.id)} title={d.goals.edit} className="py-1">
                     <IconTile icon={goalIcon(g.icon, g.kind)} accent={goalAccent(g.icon, g.kind)} size="sm" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
@@ -246,30 +263,28 @@ export function Dashboard() {
         <Card>
           <CardHeader
             icon={<IconTile icon="card-income-stability" accent="green" size="sm" />}
-            title="Income stability"
-            action="View details"
+            title={d.stability.title}
+            action={d.stability.viewDetails}
             actionTo="/income"
           />
           <SplitBar a={m.income.reliable} b={m.income.variable} accentA="brand" accentB="blue" />
           <div className="mt-3 grid grid-cols-2 divide-x divide-line">
             <div>
               <div className="tabular text-[17px] font-semibold text-ink">{money(m.income.reliable)}</div>
-              <div className="text-[12px] text-muted">Reliable income</div>
+              <div className="text-[12px] text-muted">{d.stability.reliable}</div>
             </div>
             <div className="pl-4">
               <div className="tabular text-[17px] font-semibold text-ink">{money(m.income.variable)}</div>
-              <div className="text-[12px] text-muted">Variable income</div>
+              <div className="text-[12px] text-muted">{d.stability.variable}</div>
             </div>
           </div>
           <div className="mt-4">
             {!m.hasExpenses || !m.hasIncome ? (
-              <Callout tone="neutral">Add income and expenses to check whether reliable income covers essentials.</Callout>
+              <Callout tone="neutral">{d.stability.empty}</Callout>
             ) : m.resilience.reliableCoversEssentials ? (
-              <Callout tone="success">Your essential costs are covered by your reliable income.</Callout>
+              <Callout tone="success">{d.stability.covered}</Callout>
             ) : (
-              <Callout tone="warning">
-                {money(-m.resilience.essentialMargin)} of your essential costs depends on variable income.
-              </Callout>
+              <Callout tone="warning">{d.stability.notCovered(money(-m.resilience.essentialMargin))}</Callout>
             )}
           </div>
         </Card>
@@ -277,14 +292,12 @@ export function Dashboard() {
         <Card>
           <CardHeader
             icon={<IconTile icon="card-upcoming" accent="blue" size="sm" />}
-            title="Upcoming expenses"
-            action="View all"
+            title={d.upcoming.title}
+            action={d.upcoming.viewAll}
             actionTo="/planning#outlook"
           />
           {upcoming.length === 0 ? (
-            <p className="text-[13px] text-muted">
-              No irregular expenses with dates yet. Add a next due date to yearly or one-off costs to see them here.
-            </p>
+            <p className="text-[13px] text-muted">{d.upcoming.empty}</p>
           ) : (
             <ul className="divide-y divide-line">
               {upcoming.map((u) => {
@@ -292,8 +305,10 @@ export function Dashboard() {
                 return (
                 <li key={u.id}>
                   <EditableRow
-                    onClick={() => (u.source === 'debt' ? loanSheet.openEdit(u.expenseId) : expenses.openEdit(u.expenseId))}
-                    title={u.source === 'debt' ? 'Edit loan' : 'Edit expense'}
+                    onClick={() =>
+                      u.source === 'tax' ? taxSheet.open() : u.source === 'debt' ? loanSheet.openEdit(u.expenseId) : expenses.openEdit(u.expenseId)
+                    }
+                    title={u.source === 'tax' ? d.upcoming.seeTax : u.source === 'debt' ? d.upcoming.editLoan : d.upcoming.editExpense}
                     className="py-2.5"
                   >
                   <IconTile
@@ -317,28 +332,28 @@ export function Dashboard() {
         <Card>
           <CardHeader
             icon={<IconTile icon="card-income-stopped" accent="purple" size="sm" />}
-            title="If your income stopped"
-            action="View scenarios"
+            title={d.runway.title}
+            action={d.runway.viewScenarios}
             actionTo="/planning"
           />
           <div className="grid grid-cols-2 divide-x divide-line">
             <div>
               <div className="tabular text-[22px] font-bold text-ink">{formatMonths(m.resilience.essentialRunwayMonths)}</div>
-              <div className="text-[12px] text-muted">Essential expenses</div>
+              <div className="text-[12px] text-muted">{d.runway.essential}</div>
             </div>
             <div className="pl-4">
               <div className="tabular text-[22px] font-bold text-ink">{formatMonths(m.resilience.lifestyleRunwayMonths)}</div>
-              <div className="text-[12px] text-muted">Current lifestyle</div>
+              <div className="text-[12px] text-muted">{d.runway.lifestyle}</div>
             </div>
           </div>
           <div className="mt-4">
             <Callout tone="info">
               {m.resilience.availableForRunway > 0 && m.essentialCost > 0
-                ? `You could cover your essential costs for ${formatMonths(m.resilience.essentialRunwayMonths)} with ${money(m.resilience.availableForRunway)} of cash and emergency savings.`
-                : 'Add cash accounts and expenses to see how long your savings would last.'}
+                ? d.runway.coverFor(formatMonths(m.resilience.essentialRunwayMonths), money(m.resilience.availableForRunway))
+                : d.runway.empty}
               {m.debt.csnMonthly > 0 &&
                 m.resilience.availableForRunway > 0 &&
-                ` CSN can lower its payments if your income drops, which stretches it to ${formatMonths(m.resilience.essentialRunwayCsnReducedMonths)}.`}
+                ` ${d.runway.csn(formatMonths(m.resilience.essentialRunwayCsnReducedMonths))}`}
             </Callout>
           </div>
         </Card>
@@ -349,24 +364,25 @@ export function Dashboard() {
         <div className="flex items-center gap-3 lg:w-[38%]">
           <IconTile icon="card-resilience" accent="green" />
           <div>
-            <div className="text-[13px] font-semibold text-ink">Financial resilience</div>
+            <div className="text-[13px] font-semibold text-ink">{d.resilience.title}</div>
             <div className="tabular text-[22px] font-bold leading-tight text-ink">
               {m.position.emergency > 0 && m.essentialCost > 0 ? formatMonths(m.resilience.emergencyMonths) : '–'}
             </div>
-            <div className="text-[12px] text-muted">Emergency fund covers your essential costs</div>
+            <div className="text-[12px] text-muted">{d.resilience.caption}</div>
           </div>
         </div>
         <div className="flex-1 lg:border-l lg:border-line lg:pl-5">
           <ResilienceMessage />
         </div>
         <LinkButton to="/insights" variant="secondary" iconRight={ArrowRight} className="self-start lg:self-center">
-          View insights
+          {d.resilience.viewInsights}
         </LinkButton>
       </Card>
 
       {expenses.sheet}
       {goalSheet.sheet}
       {loanSheet.sheet}
+      {taxSheet.sheet}
 
       {/* Quick links for the sections on small screens */}
       <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:hidden">
@@ -385,31 +401,30 @@ export function Dashboard() {
 }
 
 function ResilienceMessage() {
+  const r = useT().dashboard.resilience;
   const m = useMetrics();
   const currency = useCurrency();
   const months = m.resilience.emergencyMonths;
   if (!m.hasExpenses) {
-    return <Callout tone="neutral">Add your expenses and an emergency account to measure your cushion.</Callout>;
+    return <Callout tone="neutral">{r.empty}</Callout>;
   }
   if (m.position.emergency === 0) {
     return (
-      <Callout tone="tip" title="No dedicated emergency fund yet">
-        Your cash in bank still gives you {formatMonths(m.resilience.essentialRunwayMonths)} of essential runway.
+      <Callout tone="tip" title={r.noFundTitle}>
+        {r.noFundBody(formatMonths(m.resilience.essentialRunwayMonths))}
       </Callout>
     );
   }
   if (months >= 3) {
     return (
-      <Callout tone="success" title="You're in a good position">
-        Your financial cushion is solid. Keep building towards your goals; {formatMoney(m.breathingRoom, currency)} per month is
-        currently unallocated.
+      <Callout tone="success" title={r.goodTitle}>
+        {r.goodBody(formatMoney(m.breathingRoom, currency))}
       </Callout>
     );
   }
   return (
-    <Callout tone="warning" title={`${formatMonths(months)} of essential costs in your emergency fund`}>
-      Three months is a common reference point. Your breathing room is {formatMoney(m.breathingRoom, currency)} per month if you
-      want to build it faster.
+    <Callout tone="warning" title={r.lowTitle(formatMonths(months))}>
+      {r.lowBody(formatMoney(m.breathingRoom, currency))}
     </Callout>
   );
 }

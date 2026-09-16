@@ -1,0 +1,80 @@
+import type { Messages } from '../en';
+import { plural } from '../plural';
+
+export default {
+  strip: {
+    allConfirmed: (n, month) =>
+      n === 1 ? `Den rörliga räkningen för ${month} är bekräftad` : `Alla ${n} rörliga räkningar för ${month} är bekräftade`,
+    stillEstimated: (n, month) =>
+      `${n} ${plural(n, 'räkning', 'räkningar')} för ${month} ${plural(n, 'är fortfarande uppskattad', 'är fortfarande uppskattade')}`,
+    onPlan: 'Allt blev som planerat.',
+    above: (amount) => `Räkningarna blev ${amount} högre än planerat.`,
+    below: (amount) => `Räkningarna blev ${amount} lägre än planerat.`,
+    pending: (names, more) =>
+      `${names.join(', ')}${more > 0 ? ` och ${more} till` : ''}. Fyll i det riktiga beloppet när fakturan kommer.`,
+    vsPlan: (amount) => `${amount} mot planen`,
+    enterBills: 'Fyll i räkningar',
+    review: 'Granska',
+  },
+  sheet: {
+    toConfirm: 'Räkningar att bekräfta',
+    confirmed: 'Bekräftade räkningar',
+    subtitle: (month) => `${month} · uppskattningar tills fakturan kommer`,
+    done: 'Klar',
+  },
+  list: {
+    confirmed: 'Bekräftade',
+    onPlan: 'Enligt plan',
+    vsPlan: (amount) => `${amount} mot planen`,
+    noteLagged:
+      'Räkningen för förra månaden brukar komma i mitten av månaden och ska betalas i slutet av den. Fram till dess gäller uppskattningen.',
+    notePending: 'Uppskattade kostnader budgeteras med sitt vanliga belopp. Fyll i vad du faktiskt betalade när du vet det.',
+    noteConfirmed:
+      'Kvar att spendera räknas nu på de riktiga beloppen i stället för uppskattningarna. Inmatade räkningar sparas på månaden.',
+  },
+  row: {
+    estimated: (amount) => `uppskattat ${amount}`,
+    estimatedRange: (amount, range) => `uppskattat ${amount}, brukar vara ${range}`,
+    billFor: (month) => `Räkning för ${month} · `,
+    planned: (amount) => `planerat ${amount}`,
+    editExpense: 'Redigera utgift',
+    actualFor: (name) => `Faktiskt belopp för ${name}`,
+    confirm: 'Bekräfta',
+    onPlan: 'Enligt plan',
+    clear: 'Ta bort inmatat belopp',
+  },
+  section: {
+    monthlyCost: 'Månadskostnad',
+    usually: (range) => `Brukar vara ${range}`,
+    ofIncome: (percent) => `${percent} av inkomsten`,
+    perYearAmount: (amount) => `${amount} per år`,
+    perYear: 'Per år',
+    items: (n) => `${n} ${plural(n, 'post', 'poster')}`,
+    essential: 'Nödvändigt',
+    ofSection: (percent) => `${percent} av den här delen`,
+    committed: 'Bundet',
+    flexible: (amount) => `${amount} går att ändra`,
+    yourExpenses: 'Dina utgifter',
+    yourExpensesSubtitle: 'Tryck på en rad för att ändra hur den klassas.',
+    transportSubtitle: 'Bränsle, parkering, biljetter och taxi, räknat på det sätt du faktiskt betalar.',
+    leisureSubtitle: 'Utekvällar, bio, kurser och annat du betalar för löpande.',
+    loans: 'Lån',
+    loansSubtitle: 'CSN, bolån, billån och krediter har en egen sida, med skuld, ränta och när lånet är betalt.',
+    viewLoans: 'Visa lån',
+    addLoan: 'Lägg till lån',
+    paymentsPerMonth: 'Betalningar per månad',
+    totalOwed: 'Total skuld',
+    carCost: 'Vad bilen faktiskt kostar',
+    carCostWithLoans: 'Poster taggade som bil och billån, sammanlagt.',
+    carCostItems: 'Alla poster taggade som bil, sammanlagt.',
+    perMonth: 'Per månad',
+    subscriptions: 'Prenumerationer',
+    subscriptionsSubtitle: 'Alla poster taggade som prenumeration.',
+    largest: 'Störst i den här delen',
+    perYearShort: (amount) => `${amount}/år`,
+    comingUp: 'Kommande',
+    spreadTitle: 'Varför slå ut oregelbundna kostnader?',
+    spreadBody:
+      'En semester för 12 000 kr blir 1 000 kr i månaden. När du avsätter pengar så här kommer de dyra månaderna inte som en överraskning.',
+  },
+} satisfies Messages['bills'];

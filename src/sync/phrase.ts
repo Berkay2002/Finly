@@ -1,5 +1,6 @@
 import { entropyToMnemonic, mnemonicToEntropy } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english.js';
+import { messages } from '@/i18n';
 
 /** Why a typed phrase was rejected. */
 export type PhraseProblem = 'length' | 'word' | 'checksum';
@@ -45,13 +46,14 @@ export function phraseToSecret(words: string[]): Uint8Array {
 
 /** A message the user can act on. */
 export function describePhraseError(e: unknown): string {
-  if (!(e instanceof PhraseError)) return 'That phrase could not be read.';
+  const t = messages().sync.phraseError;
+  if (!(e instanceof PhraseError)) return t.unreadable;
   switch (e.problem) {
     case 'length':
-      return `A sync phrase has ${PHRASE_WORDS} words.`;
+      return t.length(PHRASE_WORDS);
     case 'word':
-      return `"${e.word}" is not a word from the list. Check the spelling.`;
+      return t.word(e.word ?? '');
     case 'checksum':
-      return 'The phrase does not check out. One word is probably wrong or out of order.';
+      return t.checksum;
   }
 }

@@ -3,9 +3,10 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
 import type { ActualLine, PendingBill } from '@/engine/metrics';
-import { CATEGORY_META } from '@/engine/taxonomy';
+import { CATEGORY_META, expenseName } from '@/engine/taxonomy';
+import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
-import { useCurrency, useMetrics, useViewDate } from '@/store/selectors';
+import { useCurrency, useMetrics, usePlan, useViewDate } from '@/store/selectors';
 import { Button, IconButton } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { MoneyField } from '@/components/ui/fields';
@@ -19,23 +20,27 @@ import { Sheet } from '@/components/ui/Sheet';
  * Renders nothing when the plan has no variable monthly items.
  */
 export function BillsToConfirm({ className, onEdit }: { className?: string; onEdit?: (expenseId: string) => void }) {
+  const t = useT();
   const m = useMetrics();
   const currency = useCurrency();
+  const billName = useBillName();
   const [open, setOpen] = useState(false);
   const { pending, confirmed, variance, month } = m.actuals;
   if (pending.length === 0 && confirmed.length === 0) return null;
 
-  const names = pending.map((p) => p.name);
+  const names = pending.map(billName);
   const summary =
     pending.length === 0
-      ? `All ${confirmed.length} variable bill${confirmed.length === 1 ? '' : 's'} for ${formatMonthKey(month)} confirmed`
-      : `${pending.length} bill${pending.length === 1 ? '' : 's'} still estimated for ${formatMonthKey(month)}`;
+      ? t.bills.strip.allConfirmed(confirmed.length, formatMonthKey(month))
+      : t.bills.strip.stillEstimated(pending.length, formatMonthKey(month));
   const detail =
     pending.length === 0
       ? variance === 0
-        ? 'Everything landed on plan.'
-        : `Bills came in ${formatMoney(Math.abs(variance), currency)} ${variance > 0 ? 'above' : 'below'} plan.`
-      : `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}. Enter the real figure when the invoice lands.`;
+        ? t.bills.strip.onPlan
+        : variance > 0
+          ? t.bills.strip.above(formatMoney(Math.abs(variance), currency))
+          : t.bills.strip.below(formatMoney(Math.abs(variance), currency))
+      : t.bills.strip.pending(names.slice(0, 3), Math.max(0, names.length - 3));
 
   return (
     <>
@@ -54,11 +59,11 @@ export function BillsToConfirm({ className, onEdit }: { className?: string; onEd
         </div>
         {confirmed.length > 0 && variance !== 0 && (
           <Chip tone={variance > 0 ? 'orange' : 'brand'} className="hidden whitespace-nowrap sm:inline-flex">
-            {formatMoney(variance, currency, { sign: true })} vs plan
+            {t.bills.strip.vsPlan(formatMoney(variance, currency, { sign: true }))}
           </Chip>
         )}
         <span className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-brand-700">
-          {pending.length > 0 ? 'Enter bills' : 'Review'}
+          {pending.length > 0 ? t.bills.strip.enterBills : t.bills.strip.review}
           <ChevronRight size={14} />
         </span>
       </button>
@@ -66,12 +71,12 @@ export function BillsToConfirm({ className, onEdit }: { className?: string; onEd
       <Sheet
         open={open}
         onClose={() => setOpen(false)}
-        title={pending.length > 0 ? 'Bills to confirm' : 'Bills confirmed'}
-        subtitle={`${formatMonthKey(month)} · estimates until the invoice lands`}
+        title={pending.length > 0 ? t.bills.sheet.toConfirm : t.bills.sheet.confirmed}
+        subtitle={t.bills.sheet.subtitle(formatMonthKey(month))}
         footer={
           <div className="flex justify-end">
             <Button variant="secondary" onClick={() => setOpen(false)}>
-              Done
+              {t.bills.sheet.done}
             </Button>
           </div>
         }
@@ -91,8 +96,18 @@ export function BillsToConfirm({ className, onEdit }: { className?: string; onEd
   );
 }
 
+/** A bill's name for display: a suggested item's default name follows the language. */
+function useBillName(): (bill: { id: string; name: string }) => string {
+  const plan = usePlan();
+  return (bill) => {
+    const item = plan.expenses.find((e) => e.id === bill.id);
+    return item ? expenseName(item) : bill.name;
+  };
+}
+
 /** The pending and confirmed bills for the viewed month, with inline entry. */
 export function BillsList({ onEdit }: { onEdit?: (expenseId: string) => void }) {
+  const t = useT();
   const m = useMetrics();
   const currency = useCurrency();
   const now = useViewDate();
@@ -120,9 +135,9 @@ export function BillsList({ onEdit }: { onEdit?: (expenseId: string) => void }) 
       {confirmed.length > 0 && (
         <div className={clsx(pending.length > 0 && 'mt-4 border-t border-line pt-3')}>
           <div className="mb-1 flex items-center justify-between">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-faint">Confirmed</div>
+            <div className="text-[12px] font-semibold uppercase tracking-wide text-faint">{t.bills.list.confirmed}</div>
             <Chip tone={variance > 0 ? 'orange' : variance < 0 ? 'brand' : 'neutral'}>
-              {variance === 0 ? 'On plan' : `${formatMoney(variance, currency, { sign: true })} vs plan`}
+              {variance === 0 ? t.bills.list.onPlan : t.bills.list.vsPlan(formatMoney(variance, currency, { sign: true }))}
             </Chip>
           </div>
           <ul className="divide-y divide-line">
@@ -135,10 +150,10 @@ export function BillsList({ onEdit }: { onEdit?: (expenseId: string) => void }) 
 
       <p className="mt-4 text-[12px] text-muted">
         {pending.length > 0 && anyLagged && earlyInMonth
-          ? 'Bills for the previous month usually arrive mid-month and are due at the end of it. Until then the estimate stands.'
+          ? t.bills.list.noteLagged
           : pending.length > 0
-            ? 'Estimated costs are budgeted at their typical amount. Enter what you actually paid once you know it.'
-            : 'Safe to spend now runs on the real figures instead of the estimates. Recorded bills stay with the month.'}
+            ? t.bills.list.notePending
+            : t.bills.list.noteConfirmed}
       </p>
     </div>
   );
@@ -155,11 +170,13 @@ function PendingRow({
   onConfirm: (amount: number) => void;
   onEdit?: () => void;
 }) {
+  const t = useT();
+  const name = useBillName()(bill);
   const [value, setValue] = useState(0);
   const meta = CATEGORY_META[bill.category];
   const estimate = bill.varies
-    ? `estimated ${formatMoney(bill.monthly, currency)}, usually ${formatMoneyRange(bill.monthlyLow, bill.monthlyHigh, currency)}`
-    : `estimated ${formatMoney(bill.monthly, currency)}`;
+    ? t.bills.row.estimatedRange(formatMoney(bill.monthly, currency), formatMoneyRange(bill.monthlyLow, bill.monthlyHigh, currency))
+    : t.bills.row.estimated(formatMoney(bill.monthly, currency));
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
       <button
@@ -167,13 +184,13 @@ function PendingRow({
         onClick={onEdit}
         disabled={!onEdit}
         className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
-        title={onEdit ? 'Edit expense' : undefined}
+        title={onEdit ? t.bills.row.editExpense : undefined}
       >
         <IconTile icon={CATEGORY_ICON[bill.category]} accent={meta.accent} size="sm" />
         <div className="min-w-0">
-          <div className="truncate text-[13.5px] font-medium text-ink">{bill.name}</div>
+          <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
           <div className="text-[12px] text-muted">
-            {bill.billingLag > 0 ? `Bill for ${formatMonthKey(bill.periodMonth)} · ` : ''}
+            {bill.billingLag > 0 ? t.bills.row.billFor(formatMonthKey(bill.periodMonth)) : ''}
             {estimate}
           </div>
         </div>
@@ -191,11 +208,11 @@ function PendingRow({
           value={value}
           onValueChange={setValue}
           placeholder={String(Math.round(bill.monthly))}
-          aria-label={`Actual amount for ${bill.name}`}
+          aria-label={t.bills.row.actualFor(name)}
           className="min-w-0 flex-1 sm:w-36 sm:flex-none"
         />
         <Button type="submit" size="sm" variant={value > 0 ? 'primary' : 'secondary'} icon={Check} disabled={value <= 0}>
-          Confirm
+          {t.bills.row.confirm}
         </Button>
       </form>
     </li>
@@ -203,25 +220,27 @@ function PendingRow({
 }
 
 function ConfirmedRow({ bill, currency, onClear }: { bill: ActualLine; currency: string; onClear: () => void }) {
+  const t = useT();
+  const name = useBillName()(bill);
   const meta = CATEGORY_META[bill.category];
   const tone = bill.variance > 0 ? 'orange' : bill.variance < 0 ? 'brand' : 'neutral';
   return (
     <li className="flex items-center gap-3 py-2.5">
       <IconTile icon={CATEGORY_ICON[bill.category]} accent={meta.accent} size="sm" />
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-medium text-ink">{bill.name}</div>
+        <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
         <div className="text-[12px] text-muted">
-          {bill.billingLag > 0 ? `Bill for ${formatMonthKey(bill.periodMonth)} · ` : ''}
-          planned {formatMoney(bill.monthly, currency)}
+          {bill.billingLag > 0 ? t.bills.row.billFor(formatMonthKey(bill.periodMonth)) : ''}
+          {t.bills.row.planned(formatMoney(bill.monthly, currency))}
         </div>
       </div>
       <div className="text-right">
         <div className="tabular text-[13.5px] font-semibold text-ink">{formatMoney(bill.actual, currency)}</div>
         <Chip tone={tone} className="mt-0.5">
-          {bill.variance === 0 ? 'On plan' : formatMoney(bill.variance, currency, { sign: true })}
+          {bill.variance === 0 ? t.bills.row.onPlan : formatMoney(bill.variance, currency, { sign: true })}
         </Chip>
       </div>
-      <IconButton icon={Undo2} label="Clear this bill" onClick={onClear} />
+      <IconButton icon={Undo2} label={t.bills.row.clear} onClick={onClear} />
     </li>
   );
 }

@@ -3,7 +3,9 @@ import { useMemo } from 'react';
 import { endOfMonthDate, isFrozen, type MetricsSnapshot } from '@/engine/history';
 import { computeMetrics, type PlanMetrics } from '@/engine/metrics';
 import { allGoalProgress, monthOutlook, savingsProjection, upcomingExpenses } from '@/engine/projections';
+import type { GovBondRate } from '@/engine/rates';
 import type { FinancialPlan } from '@/engine/types';
+import { useRateOutlook } from '@/lib/rateOutlook';
 import { usePlanStore } from './planStore';
 import { useUiStore, viewDateFor } from './uiStore';
 
@@ -48,38 +50,54 @@ export function useViewDate(): Date {
   return useMemo(() => (frozen ? endOfMonthDate(key) : viewDateFor(viewMonth)), [viewMonth, key, frozen]);
 }
 
+/** Today's statslåneränta, for savings tax in a year whose 30 November rate is not known yet. */
+export function useGovBondRate(): GovBondRate | undefined {
+  return useRateOutlook().govBondRate;
+}
+
 export function useMetrics(): PlanMetrics {
   const plan = useEffectivePlan();
   const now = useViewDate();
-  return useMemo(() => computeMetrics(plan, now), [plan, now]);
+  const gov = useGovBondRate();
+  return useMemo(() => computeMetrics(plan, now, gov), [plan, now, gov]);
 }
 
 export function useGoalProgress() {
   const plan = useEffectivePlan();
   const now = useViewDate();
-  return useMemo(() => allGoalProgress(plan, now), [plan, now]);
+  const gov = useGovBondRate();
+  return useMemo(() => allGoalProgress(plan, now, gov), [plan, now, gov]);
+}
+
+/** After-tax expected return of each account, percent, by id: what a linked goal grows by. */
+export function useAccountReturns(): Map<string, number> {
+  const m = useMetrics();
+  return useMemo(() => new Map(m.capitalTax.accounts.map((t) => [t.accountId, t.netReturn])), [m]);
 }
 
 export function useUpcoming(horizonMonths = 12) {
   const plan = useEffectivePlan();
   const now = useViewDate();
-  return useMemo(() => upcomingExpenses(plan, now, horizonMonths), [plan, now, horizonMonths]);
+  const gov = useGovBondRate();
+  return useMemo(() => upcomingExpenses(plan, now, horizonMonths, gov), [plan, now, horizonMonths, gov]);
 }
 
 export function useMonthOutlook(horizonMonths = 12) {
   const plan = useEffectivePlan();
   const now = useViewDate();
   const metrics = useMetrics();
-  return useMemo(() => monthOutlook(plan, metrics, now, horizonMonths), [plan, metrics, now, horizonMonths]);
+  const gov = useGovBondRate();
+  return useMemo(() => monthOutlook(plan, metrics, now, horizonMonths, gov), [plan, metrics, now, horizonMonths, gov]);
 }
 
 export function useSavingsProjection(includeUnallocated = false) {
   const plan = useEffectivePlan();
   const now = useViewDate();
   const metrics = useMetrics();
+  const gov = useGovBondRate();
   return useMemo(
-    () => savingsProjection(plan, metrics, now, 12, { includeUnallocated }),
-    [plan, metrics, now, includeUnallocated],
+    () => savingsProjection(plan, metrics, now, 12, { includeUnallocated, gov }),
+    [plan, metrics, now, includeUnallocated, gov],
   );
 }
 

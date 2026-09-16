@@ -1,6 +1,7 @@
 import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
+import { useT } from '@/i18n';
 
 /**
  * A full-width list row that opens an editor in place. Hover tints the row; pair it with
@@ -8,7 +9,7 @@ import clsx from 'clsx';
  */
 export function EditableRow({
   onClick,
-  title = 'Edit',
+  title,
   className,
   children,
 }: {
@@ -17,11 +18,12 @@ export function EditableRow({
   className?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <button
       type="button"
       onClick={onClick}
-      title={title}
+      title={title ?? t.expenses.editableRow.edit}
       className={clsx(
         'group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 text-left transition-colors hover:bg-page',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200',

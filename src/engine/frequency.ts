@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import type { Frequency, Occurrences } from './types';
 
 /** Months per occurrence, for interval frequencies. */
@@ -72,12 +73,23 @@ export function isIrregular(frequency: Frequency, occurrences?: Occurrences): bo
   return frequency === 'quarterly' || frequency === 'yearly' || frequency === 'once';
 }
 
-export const FREQUENCY_LABELS: Record<Frequency, string> = {
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  quarterly: 'Quarterly',
-  yearly: 'Yearly',
-  once: 'One-off',
+/** Labels in the current language. Read them when rendering; a copy taken at import keeps the old language. */
+export const FREQUENCY_LABELS: Readonly<Record<Frequency, string>> = {
+  get weekly() {
+    return messages().taxonomy.frequencies.weekly;
+  },
+  get monthly() {
+    return messages().taxonomy.frequencies.monthly;
+  },
+  get quarterly() {
+    return messages().taxonomy.frequencies.quarterly;
+  },
+  get yearly() {
+    return messages().taxonomy.frequencies.yearly;
+  },
+  get once() {
+    return messages().taxonomy.frequencies.once;
+  },
 };
 
 export const FREQUENCIES: Frequency[] = ['weekly', 'monthly', 'quarterly', 'yearly', 'once'];

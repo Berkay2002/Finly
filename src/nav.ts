@@ -1,30 +1,41 @@
 import type { ExpenseCategory } from '@/engine/types';
 import type { IconSource } from '@/components/ui/Icon';
+import { messages, type Messages } from '@/i18n';
 
 export interface NavItem {
   to: string;
-  label: string;
+  /** In the current language. */
+  readonly label: string;
   icon: IconSource;
   category?: ExpenseCategory;
 }
 
+const item = (to: string, key: keyof Messages['nav'], icon: IconSource, category?: ExpenseCategory): NavItem => ({
+  to,
+  icon,
+  ...(category ? { category } : {}),
+  get label() {
+    return messages().nav[key];
+  },
+});
+
 export const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Home', icon: 'nav-home' },
-  { to: '/income', label: 'Income', icon: 'nav-income' },
-  { to: '/home', label: 'Home & Bills', icon: 'nav-home-bills', category: 'home' },
-  { to: '/living', label: 'Living Costs', icon: 'nav-living', category: 'living' },
-  { to: '/transport', label: 'Transport', icon: 'nav-transport', category: 'transport' },
-  { to: '/finance', label: 'Finance & Insurance', icon: 'nav-finance', category: 'finance' },
-  { to: '/leisure', label: 'Leisure', icon: 'nav-leisure', category: 'leisure' },
-  { to: '/planned', label: 'Planned Spending', icon: 'nav-planned', category: 'planned' },
-  { to: '/savings', label: 'Savings & Goals', icon: 'nav-savings' },
-  { to: '/accounts', label: 'Accounts', icon: 'nav-accounts' },
-  { to: '/loans', label: 'Loans', icon: 'stat-bank' },
-  { to: '/planning', label: 'Planning Tools', icon: 'nav-planning' },
-  { to: '/insights', label: 'Insights', icon: 'nav-insights' },
+  item('/', 'home', 'nav-home'),
+  item('/income', 'income', 'nav-income'),
+  item('/home', 'homeBills', 'nav-home-bills', 'home'),
+  item('/living', 'living', 'nav-living', 'living'),
+  item('/transport', 'transport', 'nav-transport', 'transport'),
+  item('/finance', 'finance', 'nav-finance', 'finance'),
+  item('/leisure', 'leisure', 'nav-leisure', 'leisure'),
+  item('/planned', 'planned', 'nav-planned', 'planned'),
+  item('/savings', 'savings', 'nav-savings'),
+  item('/accounts', 'accounts', 'nav-accounts'),
+  item('/loans', 'loans', 'stat-bank'),
+  item('/planning', 'planning', 'nav-planning'),
+  item('/insights', 'insights', 'nav-insights'),
 ];
 
-export const SETTINGS_ITEM: NavItem = { to: '/settings', label: 'Settings', icon: 'nav-settings' };
+export const SETTINGS_ITEM: NavItem = item('/settings', 'settings', 'nav-settings');
 
 export const CATEGORY_ROUTE: Record<ExpenseCategory, string> = {
   home: '/home',

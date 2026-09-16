@@ -10,7 +10,7 @@ const base =
   'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap';
 
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-sm',
+  primary: 'bg-brand-solid text-white hover:bg-brand-solid-hover shadow-sm',
   secondary: 'bg-card text-ink border border-line hover:bg-page',
   ghost: 'text-ink-soft hover:bg-page',
   soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100',

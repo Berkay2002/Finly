@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { amountForMonthly } from '@/engine/everyday';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { suggestionBySlug } from '@/engine/taxonomy';
+import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, useMetrics, usePlan } from '@/store/selectors';
 import { SpendNudges, SpendTiles } from '@/components/everyday/EverydayCards';
@@ -26,6 +27,7 @@ export function FoodCard() {
   const { addExpense, updateExpense } = usePlanStore();
   const [estimating, setEstimating] = useState(false);
   const f = m.food;
+  const t = useT().everyday.food;
   const money = (n: number) => formatMoney(n, currency);
   const groceries = plan.expenses.find((e) => e.subcategory === 'groceries' && !e.includedElsewhere);
   const hasLunches = plan.expenses.some((e) => e.subcategory === 'work_lunches');
@@ -48,8 +50,8 @@ export function FoodCard() {
     <Card>
       <CardHeader
         icon={<IconTile icon="nav-living" accent="green" size="sm" />}
-        title="Food & drink"
-        subtitle="Groceries and eating out, in the units you actually spend in."
+        title={t.title}
+        subtitle={t.subtitle}
       />
       {f.monthly > 0 ? (
         <>
@@ -61,11 +63,11 @@ export function FoodCard() {
               <div className="mt-1.5 flex justify-between gap-3 text-[12px]">
                 <span className="text-ink-soft">
                   <span className={clsx('mr-1 inline-block h-2 w-2 rounded-full align-middle', ACCENT.green.dot)} />
-                  At home <span className="tabular text-ink">{money(f.atHome)}</span>
+                  {t.atHome} <span className="tabular text-ink">{money(f.atHome)}</span>
                 </span>
                 <span className="text-ink-soft">
                   <span className={clsx('mr-1 inline-block h-2 w-2 rounded-full align-middle', ACCENT.orange.dot)} />
-                  Eating out <span className="tabular text-ink">{money(f.eatingOut)}</span>
+                  {t.eatingOut} <span className="tabular text-ink">{money(f.eatingOut)}</span>
                   <span className="ml-1 text-muted">({formatPercent(f.eatingOutShare)})</span>
                 </span>
               </div>
@@ -76,28 +78,29 @@ export function FoodCard() {
         </>
       ) : (
         <p className="text-[13px] text-muted">
-          No food costs yet. Start from what a household like yours needs, then add what you spend eating out.
+          {t.empty}
         </p>
       )}
 
       <div className="mt-3 flex justify-end">
         <Button size="sm" variant="secondary" onClick={() => setEstimating(true)}>
-          {groceries ? 'Re-estimate groceries' : 'Estimate groceries'}
+          {groceries ? t.reestimate : t.estimate}
         </Button>
       </div>
 
       <Sheet
         open={estimating}
         onClose={() => setEstimating(false)}
-        title="Estimate groceries"
-        subtitle="From Konsumentverket's food costs for your household"
+        title={t.sheetTitle}
+        subtitle={t.sheetSubtitle}
       >
         <HouseholdFoodEstimator
           currency={currency}
           applyLabel={(monthly) => {
             const target = groceries ?? fromSuggestion(suggestionBySlug('groceries')!);
-            const noun = target.occurrences ? 'each time' : target.frequency === 'weekly' ? 'a week' : 'a month';
-            return `${groceries ? 'Set' : 'Add'} groceries to ${money(amountForMonthly(target, monthly))} ${noun}`;
+            const per = target.occurrences ? 'each' : target.frequency === 'weekly' ? 'week' : 'month';
+            const amount = money(amountForMonthly(target, monthly));
+            return groceries ? t.setGroceries(amount, per) : t.addGroceries(amount, per);
           }}
           onApply={applyEstimate}
           onCancel={() => setEstimating(false)}

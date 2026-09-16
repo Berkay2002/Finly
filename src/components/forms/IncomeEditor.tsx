@@ -8,6 +8,7 @@ import { homeKommunCode } from '@/engine/home';
 import { findKommun, kommunerFor } from '@/engine/tax/kommuner';
 import { DEFAULT_TAX_PROFILE, isTaxYearStale, resolveTaxYear, withholdingForGross } from '@/engine/tax/sweden';
 import type { Frequency, GrossIncome, IncomeKind, IncomeSource, Reliability } from '@/engine/types';
+import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
@@ -16,7 +17,7 @@ import { MoneyField, SegmentedControl, SelectField, Switch, TextField, TogglePil
 import { Sheet } from '@/components/ui/Sheet';
 import { ItemRow } from './ItemRow';
 
-const freqOptions = FREQUENCIES.filter((f) => f !== 'once').map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
+const freqOptions = () => FREQUENCIES.filter((f) => f !== 'once').map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
 
 type Draft = Omit<IncomeSource, 'id'> & { id?: string };
 type EntryMode = 'net' | 'gross';
@@ -60,6 +61,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
   const currency = useCurrency();
   const { addIncome, updateIncome, removeIncome } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
+  const t = useT().income.editor;
 
   useEffect(() => {
     if (autoOpenAdd) setEditing(blankDraft('reliable'));
@@ -78,9 +80,8 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
 
   const section = (reliability: Reliability) => {
     const items = plan.income.filter((i) => i.reliability === reliability);
-    const title = reliability === 'reliable' ? 'Reliable income' : 'Variable income';
-    const sub =
-      reliability === 'reliable' ? 'Income you can count on, each month.' : 'Income that can vary from month to month.';
+    const title = reliability === 'reliable' ? t.reliableTitle : t.variableTitle;
+    const sub = reliability === 'reliable' ? t.reliableSubtitle : t.variableSubtitle;
     return (
       <div>
         <div className="mb-2 flex items-end justify-between gap-3">
@@ -89,7 +90,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
             <p className="text-[12.5px] text-muted">{sub}</p>
           </div>
           <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing(blankDraft(reliability))}>
-            Add income
+            {t.addIncome}
           </Button>
         </div>
         <div className="space-y-2">
@@ -105,14 +106,14 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                   {src.note && <span>{src.note}</span>}
                   {src.gross && (
                     <span className="tabular">
-                      Net {formatMoney(src.amount, currency)}
-                      {src.gross.netOverridden ? ' (from payslip)' : ''}
+                      {t.net(formatMoney(src.amount, currency))}
+                      {src.gross.netOverridden ? t.fromPayslip : ''}
                     </span>
                   )}
                   {src.frequency !== 'monthly' && (
-                    <span className="tabular">≈ {formatMoney(toMonthly(src.amount, src.frequency), currency)}/month</span>
+                    <span className="tabular">{t.perMonthApprox(formatMoney(toMonthly(src.amount, src.frequency), currency))}</span>
                   )}
-                  {!src.includeInBaseline && <Chip tone="orange">Not in baseline</Chip>}
+                  {!src.includeInBaseline && <Chip tone="orange">{t.notInBaseline}</Chip>}
                 </>
               }
               fields={
@@ -130,7 +131,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                       }
                     }}
                     className="min-w-0 flex-1 sm:w-36 sm:flex-none"
-                    title={src.gross ? 'Gross (before tax)' : 'Net (after tax)'}
+                    title={src.gross ? t.grossTitle : t.netTitle}
                   />
                   <SelectField
                     size="sm"
@@ -143,14 +144,14 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                         updateIncome(src.id, { frequency });
                       }
                     }}
-                    options={freqOptions}
+                    options={freqOptions()}
                     className="w-32 shrink-0"
                   />
                 </>
               }
               menu={[
-                { label: 'Edit details', icon: Pencil, onSelect: () => setEditing({ ...src }) },
-                { label: 'Remove', icon: Trash2, danger: true, onSelect: () => removeIncome(src.id) },
+                { label: t.editDetails, icon: Pencil, onSelect: () => setEditing({ ...src }) },
+                { label: t.remove, icon: Trash2, danger: true, onSelect: () => removeIncome(src.id) },
               ]}
             />
           ))}
@@ -160,7 +161,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
               onClick={() => setEditing(blankDraft(reliability))}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-page/60 px-3 py-3 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
             >
-              <Plus size={14} /> Add {reliability === 'reliable' ? 'a reliable' : 'a variable'} income source
+              <Plus size={14} /> {reliability === 'reliable' ? t.addReliable : t.addVariable}
             </button>
           )}
         </div>
@@ -176,14 +177,14 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
       <Sheet
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit income' : 'Add income'}
+        title={editing?.id ? t.editIncome : t.addIncome}
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setEditing(null)}>
-              Cancel
+              {t.cancel}
             </Button>
             <Button onClick={save} disabled={!editing?.name.trim()}>
-              {editing?.id ? 'Save' : 'Add income'}
+              {editing?.id ? t.save : t.addIncome}
             </Button>
           </div>
         }
@@ -191,7 +192,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
         {editing && (
           <div className="space-y-4">
             <SelectField
-              label="Type"
+              label={t.type}
               value={editing.kind}
               onValueChange={(kind: IncomeKind) => {
                 const meta = incomeKindMeta(kind);
@@ -206,18 +207,18 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
               }}
               options={INCOME_KINDS.map((k) => ({ value: k.id, label: k.label }))}
             />
-            <TextField label="Name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            <TextField label={t.name} value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
             <TextField
-              label="Note"
-              hint="(optional)"
-              placeholder="e.g. Main job, average of last year"
+              label={t.note}
+              hint={t.optional}
+              placeholder={t.notePlaceholder}
               value={editing.note ?? ''}
               onChange={(e) => setEditing({ ...editing, note: e.target.value })}
             />
 
             {GROSS_KINDS.includes(editing.kind) && (
               <div>
-                <div className="mb-1 text-[12.5px] font-medium text-ink-soft">I know my salary</div>
+                <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.iKnowMySalary}</div>
                 <SegmentedControl<EntryMode>
                   value={editing.gross ? 'gross' : 'net'}
                   onChange={(mode) => {
@@ -225,8 +226,8 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                     else setEditing(withNet(editing, blankGross(editing.amount, homeKommunCode(plan))));
                   }}
                   options={[
-                    { value: 'net', label: 'After tax (net)' },
-                    { value: 'gross', label: 'Before tax (gross)' },
+                    { value: 'net', label: t.afterTax },
+                    { value: 'gross', label: t.beforeTax },
                   ]}
                 />
               </div>
@@ -237,40 +238,40 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <MoneyField
-                  label="Amount"
+                  label={t.amount}
                   currency={currency}
                   value={editing.amount}
                   onValueChange={(amount) => setEditing({ ...editing, amount })}
                 />
                 <SelectField
-                  label="Frequency"
+                  label={t.frequency}
                   value={editing.frequency}
                   onValueChange={(frequency: Frequency) => setEditing({ ...editing, frequency })}
-                  options={freqOptions}
+                  options={freqOptions()}
                 />
               </div>
             )}
 
             <div>
-              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">Reliability</div>
+              <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.reliability}</div>
               <TogglePill
                 size="md"
                 value={editing.reliability}
                 onChange={(reliability: Reliability) => setEditing({ ...editing, reliability })}
                 options={[
-                  { value: 'reliable', label: 'Reliable' },
-                  { value: 'variable', label: 'Variable' },
+                  { value: 'reliable', label: t.reliable },
+                  { value: 'variable', label: t.variable },
                 ]}
               />
               <p className="mt-1 text-[12px] text-muted">
-                Reliable income is what your essential costs should ideally be covered by.
+                {t.reliabilityHint}
               </p>
             </div>
             <Switch
               checked={editing.includeInBaseline}
               onChange={(includeInBaseline) => setEditing({ ...editing, includeInBaseline })}
-              label="Include in my baseline budget"
-              description="Turn off to track this income without planning around it."
+              label={t.includeInBaseline}
+              description={t.includeInBaselineHint}
             />
           </div>
         )}
@@ -296,13 +297,14 @@ function GrossFields({
   currency: string;
   onChange: (d: Draft) => void;
 }) {
+  const t = useT().income.gross;
   const year = resolveTaxYear(gross.taxYear);
   const kommunOptions = useMemo(
     () => [
-      { value: NATIONAL, label: `Not sure (national average ${year.fallbackKommunalRate}%)` },
-      ...kommunerFor(year.year).map((k) => ({ value: k.code, label: `${k.name} · ${k.rate.toFixed(2)}%` })),
+      { value: NATIONAL, label: t.notSure(formatPercent(year.fallbackKommunalRate / 100, 2)) },
+      ...kommunerFor(year.year).map((k) => ({ value: k.code, label: t.kommunOption(k.name, formatPercent(k.rate / 100, 2)) })),
     ],
-    [year],
+    [year, t],
   );
   const w = withholdingForGross(gross, draft.frequency);
   const estimate = w.netPerPeriod;
@@ -317,23 +319,23 @@ function GrossFields({
     <div className="space-y-4 rounded-xl border border-line bg-page/60 p-3">
       <div className="grid grid-cols-2 gap-3">
         <MoneyField
-          label="Gross salary"
-          hint="before tax"
+          label={t.grossSalary}
+          hint={t.beforeTax}
           currency={currency}
           value={gross.amount}
           onValueChange={(amount) => setGross({ amount })}
         />
         <SelectField
-          label="Frequency"
+          label={t.frequency}
           value={draft.frequency}
           onValueChange={(frequency: Frequency) => onChange(withNet({ ...draft, frequency }, gross))}
-          options={freqOptions}
+          options={freqOptions()}
         />
       </div>
 
       <SelectField
-        label="Kommun"
-        hint="sets your municipal tax"
+        label={t.kommun}
+        hint={t.kommunHint}
         value={gross.profile.kommunCode ?? NATIONAL}
         onValueChange={(code: string) => {
           const kommun = kommunerFor(year.year).find((k) => k.code === code);
@@ -345,38 +347,36 @@ function GrossFields({
       <Switch
         checked={gross.profile.churchMember}
         onChange={(churchMember) => setProfile({ churchMember })}
-        label="Member of Svenska kyrkan"
-        description="Adds the church fee to your withholding."
+        label={t.church}
+        description={t.churchHint}
       />
       <Switch
         checked={gross.profile.over66}
         onChange={(over66) => setProfile({ over66 })}
-        label="66 or older at the start of the year"
-        description="Higher basic deduction and a different job tax credit."
+        label={t.over66}
+        description={t.over66Hint}
       />
 
       <div className="rounded-lg border border-line bg-card px-3 py-2.5 text-[12.5px]">
         <div className="flex items-baseline justify-between">
-          <span className="text-muted">Estimated tax</span>
+          <span className="text-muted">{t.estimatedTax}</span>
           <span className="tabular font-medium text-ink">
-            {formatMoney(w.tax, currency)}/month · {formatPercent(w.effectiveRate, 1)}
+            {t.taxPerMonth(formatMoney(w.tax, currency), formatPercent(w.effectiveRate, 1))}
           </span>
         </div>
         <div className="mt-1 flex items-baseline justify-between">
-          <span className="text-muted">Estimated net</span>
+          <span className="text-muted">{t.estimatedNet}</span>
           <span className="tabular font-semibold text-ink">{formatMoney(estimate, currency)}</span>
         </div>
         <p className="mt-1.5 text-[11.5px] text-faint">
-          Skattetabell {w.tableNumber}, kolumn {w.column}, {w.taxYear} rules
-          {stale ? ` (no ${new Date().getFullYear()} rules loaded yet)` : ''}. Same as your employer's monthly
-          withholding, so it does not matter which month you start.
+          {t.tableNote(w.tableNumber, w.column, w.taxYear, stale ? new Date().getFullYear() : undefined)}
         </p>
       </div>
 
       <div>
         <MoneyField
-          label="Net you actually receive"
-          hint={gross.netOverridden ? 'from your payslip' : 'estimate, adjust if your payslip differs'}
+          label={t.netReceived}
+          hint={gross.netOverridden ? t.fromPayslip : t.estimateHint}
           currency={currency}
           value={draft.amount}
           onValueChange={(amount) => onChange({ ...draft, amount, gross: { ...gross, netOverridden: amount !== estimate } })}
@@ -387,7 +387,7 @@ function GrossFields({
             className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
             onClick={() => setGross({ netOverridden: false })}
           >
-            Reset to estimate ({formatMoney(estimate, currency)})
+            {t.reset(formatMoney(estimate, currency))}
           </button>
         )}
       </div>

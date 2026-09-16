@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
 import { formatMoney, formatPercent } from '@/engine/format';
+import { useT } from '@/i18n';
 import { ACCENT, type Accent } from './accent';
 
 export interface DonutSlice {
@@ -56,6 +57,7 @@ export function Donut({
   onActiveKey?: (key: string | null) => void;
   className?: string;
 }) {
+  const t = useT();
   const data = slices.filter((s) => s.value > 0);
   const empty = data.length === 0;
   const sum = data.reduce((a, s) => a + s.value, 0);
@@ -134,14 +136,14 @@ export function Donut({
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
         {empty ? (
-          <circle cx={c} cy={c} r={(outer + inner) / 2} fill="none" stroke="#e6eaf0" strokeWidth={thickness} />
+          <circle cx={c} cy={c} r={(outer + inner) / 2} fill="none" stroke="var(--color-line)" strokeWidth={thickness} />
         ) : sectors.length === 1 ? (
           <circle
             cx={c}
             cy={c}
             r={(outer + inner) / 2}
             fill="none"
-            stroke={ACCENT[sectors[0].accent].hex}
+            stroke={ACCENT[sectors[0].accent].color}
             strokeWidth={thickness}
             onMouseEnter={interactive ? () => enter(sectors[0].key) : undefined}
             onMouseLeave={interactive ? leaveSlice : undefined}
@@ -155,7 +157,7 @@ export function Donut({
               <path
                 key={s.key}
                 d={sectorPath(c, outer, inner, s.start, s.end)}
-                fill={ACCENT[s.accent].hex}
+                fill={ACCENT[s.accent].color}
                 fillOpacity={dimmed ? 0.3 : 1}
                 onMouseEnter={interactive ? () => enter(s.key) : undefined}
                 onMouseLeave={interactive ? leaveSlice : undefined}
@@ -186,7 +188,7 @@ export function Donut({
             {hovered.label}
           </div>
           <div className="tabular font-semibold text-ink">{formatMoney(hovered.value, currency)}</div>
-          <div className="tabular text-muted">{formatPercent(hovered.value / sum)} of total</div>
+          <div className="tabular text-muted">{t.ui.donut.ofTotal(formatPercent(hovered.value / sum))}</div>
         </div>
       )}
       {center && (

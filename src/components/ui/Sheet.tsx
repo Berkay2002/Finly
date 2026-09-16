@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { type ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
+import { useT } from '@/i18n';
 import { IconButton } from './Button';
 
 const SCROLL_KEYS = new Set([' ', 'PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown']);
@@ -31,6 +32,7 @@ export function Sheet({
   footer?: ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }) {
+  const t = useT();
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
 
@@ -77,7 +79,7 @@ export function Sheet({
       role="dialog"
       aria-modal
     >
-      <div className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="absolute inset-0 bg-scrim backdrop-blur-[2px]" onClick={onClose} />
       <div
         className={clsx(
           'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl',
@@ -89,7 +91,7 @@ export function Sheet({
             {title && <h2 className="text-[16px] font-semibold text-ink">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>}
           </div>
-          <IconButton icon={X} label="Close" onClick={onClose} className="-mr-2 -mt-1" />
+          <IconButton icon={X} label={t.ui.sheet.close} onClick={onClose} className="-mr-2 -mt-1" />
         </div>
         <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           {children}

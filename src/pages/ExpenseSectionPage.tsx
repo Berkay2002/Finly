@@ -1,8 +1,9 @@
 import { formatDate, formatMoney, formatMoneyRange, formatPercent } from '@/engine/format';
-import { CATEGORY_META } from '@/engine/taxonomy';
+import { CATEGORY_META, debtName, expenseName } from '@/engine/taxonomy';
 import type { ExpenseCategory } from '@/engine/types';
+import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useMetrics, useUpcoming } from '@/store/selectors';
+import { useCurrency, useMetrics, usePlan, useUpcoming } from '@/store/selectors';
 import { CommuteCard } from '@/components/everyday/CommuteCard';
 import { EverydayCard, SpendMonthCard } from '@/components/everyday/EverydayCards';
 import { FoodCard } from '@/components/food/FoodCards';
@@ -15,6 +16,9 @@ import { IconTile } from '@/components/ui/IconTile';
 import { StatCard } from '@/components/ui/StatCard';
 
 export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) {
+  const t = useT();
+  const s = t.bills.section;
+  const plan = usePlan();
   const m = useMetrics();
   const currency = useCurrency();
   const autoAdd = useAutoAdd();
@@ -22,6 +26,15 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
   const meta = CATEGORY_META[category];
   const Icon = CATEGORY_ICON[category];
   const money = (n: number) => formatMoney(n, currency);
+  const lineName = (l: { id: string; name: string }) => {
+    const item = plan.expenses.find((e) => e.id === l.id);
+    return item ? expenseName(item) : l.name;
+  };
+  const upcomingName = (u: (typeof upcoming)[number]) => {
+    if (u.source === 'expense') return lineName({ id: u.expenseId, name: u.name });
+    const debt = u.source === 'debt' ? plan.debts?.find((d) => d.id === u.expenseId) : undefined;
+    return debt ? debtName(debt) : u.name;
+  };
 
   const lines = m.expenses.lines.filter((l) => l.category === category);
   const total = m.expenses.byCategory[category];
@@ -40,36 +53,36 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
         <StatCard
           icon={Icon}
           accent={meta.accent}
-          label="Monthly cost"
+          label={s.monthlyCost}
           value={money(total)}
           sub={
             ranged
-              ? `Usually ${formatMoneyRange(range.low, range.high, currency)}`
+              ? s.usually(formatMoneyRange(range.low, range.high, currency))
               : m.income.total > 0
-                ? `${formatPercent(share)} of income`
-                : `${money(total * 12)} per year`
+                ? s.ofIncome(formatPercent(share))
+                : s.perYearAmount(money(total * 12))
           }
         />
-        <StatCard icon="card-expensive-months" accent="blue" label="Per year" value={money(total * 12)} sub={`${lines.length} item${lines.length === 1 ? '' : 's'}`} />
+        <StatCard icon="card-expensive-months" accent="blue" label={s.perYear} value={money(total * 12)} sub={s.items(lines.length)} />
         <StatCard
           icon="goal-shield"
           accent="green"
-          label="Essential"
+          label={s.essential}
           value={money(essential)}
-          sub={total > 0 ? `${formatPercent(essential / total)} of this section` : undefined}
+          sub={total > 0 ? s.ofSection(formatPercent(essential / total)) : undefined}
         />
         <StatCard
           icon="nav-finance"
           accent="orange"
-          label="Committed"
+          label={s.committed}
           value={money(committed)}
-          sub={total > 0 ? `${money(total - committed)} flexible` : undefined}
+          sub={total > 0 ? s.flexible(money(total - committed)) : undefined}
         />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card>
-          <CardHeader title="Your expenses" subtitle="Tap a row to change how it is classified." />
+          <CardHeader title={s.yourExpenses} subtitle={s.yourExpensesSubtitle} />
           <ExpenseEditor category={category} autoOpenAdd={autoAdd} />
         </Card>
 
@@ -83,33 +96,33 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           {category === 'transport' && (
             <>
               <CommuteCard />
-              <EverydayCard group="transport" subtitle="Fuel, parking, tickets and taxis, in the units you actually pay in." />
+              <EverydayCard group="transport" subtitle={s.transportSubtitle} />
               <SpendMonthCard group="transport" />
             </>
           )}
           {category === 'leisure' && (
             <>
-              <EverydayCard group="leisure" subtitle="Nights out, cinema, classes and other things you pay for as you go." />
+              <EverydayCard group="leisure" subtitle={s.leisureSubtitle} />
               <SpendMonthCard group="leisure" />
             </>
           )}
           {category === 'finance' && (
             <Card>
               <CardHeader
-                title="Loans"
-                subtitle="CSN, mortgage, car loans and credit have their own page, with balance, rate and payoff."
+                title={s.loans}
+                subtitle={s.loansSubtitle}
                 icon={<IconTile icon="stat-bank" accent="red" size="sm" />}
-                action={m.hasDebts ? 'View loans' : 'Add a loan'}
+                action={m.hasDebts ? s.viewLoans : s.addLoan}
                 actionTo={m.hasDebts ? '/loans' : '/loans?add=1'}
               />
               {m.hasDebts && (
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-page p-3">
-                    <div className="text-[11.5px] text-muted">Payments per month</div>
+                    <div className="text-[11.5px] text-muted">{s.paymentsPerMonth}</div>
                     <div className="tabular text-[18px] font-semibold text-ink">{money(m.debt.monthly)}</div>
                   </div>
                   <div className="rounded-xl bg-page p-3">
-                    <div className="text-[11.5px] text-muted">Total owed</div>
+                    <div className="text-[11.5px] text-muted">{s.totalOwed}</div>
                     <div className="tabular text-[18px] font-semibold text-ink">{money(m.debt.balance)}</div>
                   </div>
                 </div>
@@ -118,14 +131,14 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           )}
           {category === 'transport' && m.car.monthly > 0 && (
             <Card>
-              <CardHeader title="True car cost" subtitle={m.car.loans.length > 0 ? 'Car-tagged items and car loans combined.' : 'All car-tagged items combined.'} icon={<IconTile icon="card-car-cost" accent="orange" size="sm" />} />
+              <CardHeader title={s.carCost} subtitle={m.car.loans.length > 0 ? s.carCostWithLoans : s.carCostItems} icon={<IconTile icon="card-car-cost" accent="orange" size="sm" />} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-page p-3">
-                  <div className="text-[11.5px] text-muted">Per month</div>
+                  <div className="text-[11.5px] text-muted">{s.perMonth}</div>
                   <div className="tabular text-[18px] font-semibold text-ink">{money(m.car.monthly)}</div>
                 </div>
                 <div className="rounded-xl bg-page p-3">
-                  <div className="text-[11.5px] text-muted">Per year</div>
+                  <div className="text-[11.5px] text-muted">{s.perYear}</div>
                   <div className="tabular text-[18px] font-semibold text-ink">{money(m.car.annual)}</div>
                 </div>
               </div>
@@ -133,14 +146,14 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           )}
           {category === 'leisure' && m.subscriptions.monthly > 0 && (
             <Card>
-              <CardHeader title="Subscriptions" subtitle="All subscription-tagged items." icon={<IconTile icon="card-subscriptions" accent="purple" size="sm" />} />
+              <CardHeader title={s.subscriptions} subtitle={s.subscriptionsSubtitle} icon={<IconTile icon="card-subscriptions" accent="purple" size="sm" />} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl bg-page p-3">
-                  <div className="text-[11.5px] text-muted">Per month</div>
+                  <div className="text-[11.5px] text-muted">{s.perMonth}</div>
                   <div className="tabular text-[18px] font-semibold text-ink">{money(m.subscriptions.monthly)}</div>
                 </div>
                 <div className="rounded-xl bg-page p-3">
-                  <div className="text-[11.5px] text-muted">Per year</div>
+                  <div className="text-[11.5px] text-muted">{s.perYear}</div>
                   <div className="tabular text-[18px] font-semibold text-ink">{money(m.subscriptions.annual)}</div>
                 </div>
               </div>
@@ -149,14 +162,14 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
 
           {largest.length > 0 && (
             <Card>
-              <CardHeader title="Largest in this section" />
+              <CardHeader title={s.largest} />
               <ol className="space-y-2">
                 {largest.map((l, i) => (
                   <li key={l.id} className="flex items-center gap-3 text-[13px]">
                     <span className="w-4 text-right text-muted">{i + 1}.</span>
-                    <span className="min-w-0 flex-1 truncate text-ink">{l.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-ink">{lineName(l)}</span>
                     <span className="tabular font-medium text-ink">{money(l.monthly)}</span>
-                    <span className="tabular w-24 shrink-0 whitespace-nowrap text-right text-[12px] text-muted">{money(l.annual)}/yr</span>
+                    <span className="tabular w-24 shrink-0 whitespace-nowrap text-right text-[12px] text-muted">{s.perYearShort(money(l.annual))}</span>
                   </li>
                 ))}
               </ol>
@@ -165,12 +178,12 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
 
           {upcoming.length > 0 && (
             <Card>
-              <CardHeader title="Coming up" icon={<IconTile icon="card-upcoming" accent="blue" size="sm" />} />
+              <CardHeader title={s.comingUp} icon={<IconTile icon="card-upcoming" accent="blue" size="sm" />} />
               <ul className="divide-y divide-line">
                 {upcoming.map((u) => (
                   <li key={u.id} className="flex items-center justify-between py-2 text-[13px]">
                     <div>
-                      <div className="font-medium text-ink">{u.name}</div>
+                      <div className="font-medium text-ink">{upcomingName(u)}</div>
                       <div className="text-[12px] text-muted">{formatDate(u.date)}</div>
                     </div>
                     <div className="tabular font-semibold text-ink">{money(u.amount)}</div>
@@ -181,8 +194,8 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           )}
 
           {category === 'planned' && (
-            <Callout tone="tip" title="Why spread irregular costs?">
-              A 12,000 holiday is 1,000 per month. Provisioning like this keeps expensive months from surprising you.
+            <Callout tone="tip" title={s.spreadTitle}>
+              {s.spreadBody}
             </Callout>
           )}
         </div>

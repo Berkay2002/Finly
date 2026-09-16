@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import { isMonthKey, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import type { FinancialPlan } from '@/engine/types';
 import { parsePlan, type PlanData } from './planStore';
@@ -39,7 +40,7 @@ function cleanSnapshots(raw: unknown): SnapshotMap {
  */
 export function parsePlanFile(json: string): PlanData {
   const raw = JSON.parse(json) as Record<string, unknown> | null;
-  if (!raw || typeof raw !== 'object') throw new Error('Not a Finly plan file');
+  if (!raw || typeof raw !== 'object') throw new Error(messages().settings.notPlanFile);
   if (raw.version === 2 && raw.plan && typeof raw.plan === 'object') {
     return { plan: parsePlan(raw.plan), snapshots: cleanSnapshots(raw.snapshots) };
   }

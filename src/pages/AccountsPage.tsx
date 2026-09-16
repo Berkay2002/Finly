@@ -1,8 +1,10 @@
 import { IconTile } from '@/components/ui/IconTile';
-import { formatMoney, formatPercent } from '@/engine/format';
+import { formatMoney, formatMonths, formatPercent } from '@/engine/format';
+import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
 import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
+import { SavingsTaxStrip } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -17,6 +19,7 @@ export function AccountsPage() {
   const currency = useCurrency();
   const prev = usePreviousSnapshot();
   const autoAdd = useAutoAdd();
+  const t = useT().accounts.page;
   const money = (n: number) => formatMoney(n, currency);
 
   const slices: DonutSlice[] = [...plan.accounts]
@@ -28,27 +31,27 @@ export function AccountsPage() {
 
   return (
     <div>
-      <PageHeader title="Accounts & Financial Position" subtitle="All your accounts. One clear overview." />
+      <PageHeader title={t.title} subtitle={t.subtitle} />
 
       <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
           icon="stat-bank"
           accent="blue"
-          label="Total tracked assets"
+          label={t.totalAssets}
           value={money(m.position.totalAssets)}
-          sub={<DeltaOr before={prev?.totalAssets} after={m.position.totalAssets} fallback="All accounts combined" />}
+          sub={<DeltaOr before={prev?.totalAssets} after={m.position.totalAssets} fallback={t.allAccountsCombined} />}
         />
         <StatCard
           icon="account-cash"
           accent="green"
-          label="Cash in bank"
+          label={t.cashInBank}
           value={money(m.position.cashInBank)}
-          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback="Everyday + savings accounts" />}
+          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback={t.everydayPlusSavings} />}
         />
         <StatCard
           icon="account-emergency"
           accent="yellow"
-          label="Emergency savings"
+          label={t.emergencySavings}
           value={money(m.position.emergency)}
           sub={
             <DeltaOr
@@ -56,8 +59,8 @@ export function AccountsPage() {
               after={m.position.emergency}
               fallback={
                 m.essentialCost > 0 && m.position.emergency > 0
-                  ? `${emergencyMonths.toFixed(1)} months of essentials`
-                  : 'Reserved for the unexpected'
+                  ? t.monthsOfEssentials(formatMonths(emergencyMonths))
+                  : t.reservedForUnexpected
               }
             />
           }
@@ -65,34 +68,39 @@ export function AccountsPage() {
         <StatCard
           icon="account-investment"
           accent="purple"
-          label="Investments"
+          label={t.investments}
           value={money(m.position.investments)}
-          sub={<DeltaOr before={prev?.investments} after={m.position.investments} fallback={`${formatPercent(investShare)} of assets`} />}
+          sub={<DeltaOr before={prev?.investments} after={m.position.investments} fallback={t.ofAssets(formatPercent(investShare))} />}
         />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">
           <Card>
-            <CardHeader title="Your accounts" subtitle="Balances are what you tell us. Update them whenever you like." />
+            <CardHeader title={t.yourAccounts} subtitle={t.yourAccountsSubtitle} />
             <AccountEditor autoOpenAdd={autoAdd} previous={prev?.byAccount} />
           </Card>
 
+          <SavingsTaxStrip />
+
           <Card>
-            <CardHeader icon={<IconTile icon="card-position" accent="blue" size="sm" />} title="Your financial position" subtitle="Money you can spend now, kept apart from money you own but do not intend to spend." />
+            <CardHeader icon={<IconTile icon="card-position" accent="blue" size="sm" />} title={t.position} subtitle={t.positionSubtitle} />
             <dl className="divide-y divide-line">
               {[
-                ['Everyday money', m.position.everyday, 'Spending, salary and joint accounts'],
-                ['Cash savings', m.position.cashSavings, 'Savings accounts and cash'],
-                ['Dedicated emergency savings', m.position.emergency, 'Not for everyday spending'],
-                ['Investment value', m.position.investments, 'Tracked, not spendable'],
-                ...(m.position.other > 0 ? [['Other tracked balances', m.position.other, '']] : []),
-                ['Total tracked assets', m.position.totalAssets, ''],
+                [t.everydayMoney, m.position.everyday, t.everydayMoneyHint],
+                [t.cashSavings, m.position.cashSavings, t.cashSavingsHint],
+                [t.dedicatedEmergency, m.position.emergency, t.dedicatedEmergencyHint],
+                [t.investmentValue, m.position.investments, t.investmentValueHint],
+                ...(m.position.other > 0 ? [[t.otherBalances, m.position.other, '']] : []),
+                [t.totalAssets, m.position.totalAssets, ''],
                 ...(m.position.totalDebt > 0
                   ? [
-                      ['Loans', -m.position.totalDebt, 'CSN, mortgage and other credit'],
-                      ['Net worth', m.position.netWorth, 'Assets minus loans'],
+                      [t.loans, -m.position.totalDebt, t.loansHint],
+                      [t.netWorth, m.position.netWorth, t.netWorthHint],
                     ]
+                  : []),
+                ...(m.position.netWorth - m.position.netWorthAfterTax >= 1
+                  ? [[t.ifSoldAfterTax, m.position.netWorthAfterTax, t.ifSoldAfterTaxHint]]
                   : []),
               ].map(([label, value, sub], i, arr) => (
                 <div key={String(label)} className="flex items-center justify-between gap-3 py-2.5">
@@ -111,9 +119,9 @@ export function AccountsPage() {
 
         <div className="space-y-4 self-start">
           <Card>
-            <CardHeader icon={<IconTile icon="card-allocation" accent="purple" size="sm" />} title="Account allocation" />
+            <CardHeader icon={<IconTile icon="card-allocation" accent="purple" size="sm" />} title={t.allocation} />
             {plan.accounts.length === 0 ? (
-              <p className="text-[13px] text-muted">Add accounts to see how your money is spread.</p>
+              <p className="text-[13px] text-muted">{t.addAccountsToSee}</p>
             ) : (
               <>
                 <DonutBreakdown
@@ -122,22 +130,22 @@ export function AccountsPage() {
                   center={
                     <>
                       <span className="tabular text-[17px] font-bold text-ink">{formatMoney(m.position.totalAssets, '')}</span>
-                      <span className="text-[11px] text-muted">{currency} total</span>
+                      <span className="text-[11px] text-muted">{t.currencyTotal(currency)}</span>
                     </>
                   }
                 />
                 <div className="mt-4">
                   {investShare >= 0.5 ? (
-                    <Callout tone="success" title={`Investments make up ${formatPercent(investShare)} of your total assets.`}>
-                      Remember they can move in value, so they are kept separate from your runway.
+                    <Callout tone="success" title={t.investmentsShare(formatPercent(investShare))}>
+                      {t.investmentsShareBody}
                     </Callout>
                   ) : m.position.emergency === 0 && m.position.totalAssets > 0 ? (
-                    <Callout tone="tip" title="No dedicated emergency savings yet">
-                      Marking an account as an emergency fund lets Finly show how many months of essentials it covers.
+                    <Callout tone="tip" title={t.noEmergencyTitle}>
+                      {t.noEmergencyBody}
                     </Callout>
                   ) : (
-                    <Callout tone="success" title="Your accounts are in good shape.">
-                      {formatPercent(m.position.cashInBank / Math.max(1, m.position.totalAssets))} of your assets are cash you can reach quickly.
+                    <Callout tone="success" title={t.goodShapeTitle}>
+                      {t.goodShapeBody(formatPercent(m.position.cashInBank / Math.max(1, m.position.totalAssets)))}
                     </Callout>
                   )}
                 </div>
@@ -145,7 +153,7 @@ export function AccountsPage() {
             )}
           </Card>
           <Callout tone="neutral" icon="goal-piggy">
-            Goal balances on the Savings page are tracked separately from account balances, so a goal can span several accounts.
+            {t.goalsSeparate}
           </Callout>
         </div>
       </div>

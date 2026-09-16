@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import { monthlySpread } from './amounts';
 import { isFoodItem, type SpendSummary } from './everyday';
 import type { AgeGroup, ExpenseItem, HouseholdMember } from './types';
@@ -6,18 +7,15 @@ import type { AgeGroup, ExpenseItem, HouseholdMember } from './types';
 /* Konsumentverket's food costs                                        */
 /* ------------------------------------------------------------------ */
 
-export const AGE_GROUPS: { id: AgeGroup; label: string }[] = [
-  { id: '0', label: 'Under 1' },
-  { id: '1-3', label: '1–3 years' },
-  { id: '4-6', label: '4–6 years' },
-  { id: '7-10', label: '7–10 years' },
-  { id: '11-14', label: '11–14 years' },
-  { id: '15-17', label: '15–17 years' },
-  { id: '18-24', label: '18–24 years' },
-  { id: '25-50', label: '25–50 years' },
-  { id: '51-70', label: '51–70 years' },
-  { id: '71+', label: '71 or older' },
-];
+const AGE_GROUP_IDS: AgeGroup[] = ['0', '1-3', '4-6', '7-10', '11-14', '15-17', '18-24', '25-50', '51-70', '71+'];
+
+/** Labels are getters, so they follow the current language. */
+export const AGE_GROUPS: { id: AgeGroup; readonly label: string }[] = AGE_GROUP_IDS.map((id) => ({
+  id,
+  get label() {
+    return messages().household.food.ageGroups[id];
+  },
+}));
 
 interface FoodCostTable {
   /** All meals cooked at home, kr per month. */

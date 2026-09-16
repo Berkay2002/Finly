@@ -1,0 +1,16 @@
+export default {
+  home: 'Home',
+  income: 'Income',
+  homeBills: 'Home & Bills',
+  living: 'Living Costs',
+  transport: 'Transport',
+  finance: 'Finance & Insurance',
+  leisure: 'Leisure',
+  planned: 'Planned Spending',
+  savings: 'Savings & Goals',
+  accounts: 'Accounts',
+  loans: 'Loans',
+  planning: 'Planning Tools',
+  insights: 'Insights',
+  settings: 'Settings',
+};

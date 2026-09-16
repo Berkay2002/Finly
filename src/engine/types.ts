@@ -241,6 +241,13 @@ export type AccountKind =
   | 'emergency'
   | 'joint'
   | 'cash'
+  /** Investeringssparkonto. Taxed on its value each year (schablonskatt), not on gains. */
+  | 'isk'
+  /** Kapitalförsäkring. Like ISK, but the insurer takes the tax from the account. */
+  | 'kf'
+  /** Aktie- och fondkonto (depå). 30 % tax on gains when sold and on dividends. */
+  | 'af'
+  /** An investment account whose tax wrapper has not been chosen (saved before ISK, KF and AF existed). */
   | 'investment'
   | 'other';
 
@@ -253,6 +260,18 @@ export interface Account {
   balance: number;
   /** Balance as last entered in each month (YYYY-MM), so net worth has a history. */
   balances?: Record<string, number>;
+  /** ISK, KF, AF: expected yearly return before tax, percent. */
+  expectedReturn?: number;
+  /** Cash accounts: yearly interest before tax, percent. */
+  interestRate?: number;
+  /** Money put in each month. Only used when no savings goal is linked to the account. */
+  monthlyDeposit?: number;
+  /** AF: what the holdings cost (anskaffningsvärde), for the gain and the tax if sold. */
+  costBasis?: number;
+  /** AF: percent of the value held in funds (taxed 0.12 % a year); the rest is shares. Default 100. */
+  fundShare?: number;
+  /** AF: yearly dividend yield on the shares part, percent. Default 0. */
+  dividendYield?: number;
 }
 
 export type GoalKind = 'emergency' | 'general' | 'investment' | 'purchase' | 'pension' | 'custom';

@@ -5,6 +5,7 @@ import clsx from 'clsx';
 import { formatMoney, formatMoneyRange, formatPercent } from '@/engine/format';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
+import { useT } from '@/i18n';
 import { useCurrency, useMetrics } from '@/store/selectors';
 import { Callout } from '@/components/ui/Callout';
 import { CATEGORY_ICON } from '@/components/ui/icons';
@@ -21,6 +22,7 @@ function Section({
   editTo: string;
   children: ReactNode;
 }) {
+  const t = useT().summary.step;
   return (
     <div className="rounded-2xl border border-line bg-card">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
@@ -29,7 +31,7 @@ function Section({
           {title}
         </div>
         <Link to={editTo} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand-700 hover:underline">
-          <Pencil size={12} /> Edit
+          <Pencil size={12} /> {t.edit}
         </Link>
       </div>
       <dl className="divide-y divide-line px-4">{children}</dl>
@@ -65,31 +67,32 @@ export function SummaryStep() {
   const m = useMetrics();
   const currency = useCurrency();
   const money = (n: number) => formatMoney(n, currency);
+  const t = useT().summary.step;
 
   return (
     <div className="space-y-4">
       {m.breathingRoom < 0 ? (
-        <Callout tone="warning" title={`Your plan is ${money(-m.breathingRoom)} per month over your income`}>
-          Nothing is wrong with your numbers. The dashboard will show what is flexible and what you could change.
+        <Callout tone="warning" title={t.overTitle(money(-m.breathingRoom))}>
+          {t.overBody}
         </Callout>
       ) : m.hasIncome && m.hasExpenses ? (
-        <Callout tone="success" title={`${money(m.breathingRoom)} per month is unallocated`}>
-          After your normal lifestyle and planned saving, this is your breathing room.
+        <Callout tone="success" title={t.unallocatedTitle(money(m.breathingRoom))}>
+          {t.unallocatedBody}
         </Callout>
       ) : (
-        <Callout tone="tip" title="Some sections are still empty">
-          You can confirm now and fill them in later from the dashboard.
+        <Callout tone="tip" title={t.emptyTitle}>
+          {t.emptyBody}
         </Callout>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Section icon="stat-income" title="Income" editTo="/onboarding/income">
-          <Line label="Reliable income" value={money(m.income.reliable)} />
-          <Line label="Average variable income" value={money(m.income.variable)} />
-          <Line label="Average monthly income" value={money(m.income.total)} strong />
+        <Section icon="stat-income" title={t.income.title} editTo="/onboarding/income">
+          <Line label={t.income.reliable} value={money(m.income.reliable)} />
+          <Line label={t.income.variable} value={money(m.income.variable)} />
+          <Line label={t.income.total} value={money(m.income.total)} strong />
         </Section>
 
-        <Section icon="stat-cost" title="Expenses" editTo="/onboarding/home">
+        <Section icon="stat-cost" title={t.expenses.title} editTo="/onboarding/home">
           {EXPENSE_CATEGORIES.map((c) => {
             return (
               <Line
@@ -97,7 +100,7 @@ export function SummaryStep() {
                 label={
                   <>
                     <Icon icon={CATEGORY_ICON[c]} size={14} pictureScale={1.5} className="text-muted" />
-                    {c === 'planned' ? 'Irregular costs (monthly equivalent)' : CATEGORY_META[c].label}
+                    {c === 'planned' ? t.expenses.irregular : CATEGORY_META[c].label}
                   </>
                 }
                 value={money(m.expenses.byCategory[c])}
@@ -109,59 +112,59 @@ export function SummaryStep() {
               label={
                 <>
                   <Icon icon="stat-bank" size={14} pictureScale={1.5} className="text-muted" />
-                  Loan payments
+                  {t.expenses.loanPayments}
                 </>
               }
               value={money(m.debt.monthly)}
-              sub={m.debt.interest > 0 ? `${money(m.debt.interest)} of it interest` : undefined}
+              sub={m.debt.interest > 0 ? t.expenses.interest(money(m.debt.interest)) : undefined}
             />
           )}
           <Line
-            label="Normal lifestyle cost"
+            label={t.expenses.lifestyleCost}
             value={money(m.lifestyleCost)}
             strong
             sub={
               m.range.hasRanges
-                ? `usually ${formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency)}`
+                ? t.expenses.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
                 : undefined
             }
           />
         </Section>
 
-        <Section icon="nav-savings" title="Financial plan" editTo="/onboarding/savings">
-          <Line label="Total expected monthly spending" value={money(m.lifestyleCost)} />
+        <Section icon="nav-savings" title={t.plan.title} editTo="/onboarding/savings">
+          <Line label={t.plan.spending} value={money(m.lifestyleCost)} />
           <Line
-            label="Planned saving"
+            label={t.plan.plannedSaving}
             value={money(m.savings.futureSpending)}
-            sub="for planned future spending"
+            sub={t.plan.futureSpending}
           />
-          <Line label="Planned investing & long-term" value={money(m.savings.longTerm)} />
+          <Line label={t.plan.longTerm} value={money(m.savings.longTerm)} />
           <Line
-            label="Unallocated money"
+            label={t.plan.unallocated}
             value={money(m.breathingRoom)}
             strong
             negative={m.breathingRoom < 0}
             sub={
               m.range.hasRanges && m.income.total > 0
-                ? `${money(m.range.breathingRoom.low)} in an expensive month`
+                ? t.plan.expensiveMonth(money(m.range.breathingRoom.low))
                 : m.income.total > 0
-                  ? `${formatPercent(m.breathingRoom / m.income.total)} of income`
+                  ? t.plan.ofIncome(formatPercent(m.breathingRoom / m.income.total))
                   : undefined
             }
           />
         </Section>
 
-        <Section icon="stat-bank" title="Current position" editTo="/onboarding/accounts">
-          <Line label="Everyday money" value={money(m.position.everyday)} />
-          <Line label="Cash savings" value={money(m.position.cashSavings)} />
-          <Line label="Emergency savings" value={money(m.position.emergency)} />
-          <Line label="Investments" value={money(m.position.investments)} />
-          {m.position.other > 0 && <Line label="Other tracked balances" value={money(m.position.other)} />}
-          <Line label="Total tracked assets" value={money(m.position.totalAssets)} strong={m.position.totalDebt === 0} />
+        <Section icon="stat-bank" title={t.position.title} editTo="/onboarding/accounts">
+          <Line label={t.position.everyday} value={money(m.position.everyday)} />
+          <Line label={t.position.cashSavings} value={money(m.position.cashSavings)} />
+          <Line label={t.position.emergency} value={money(m.position.emergency)} />
+          <Line label={t.position.investments} value={money(m.position.investments)} />
+          {m.position.other > 0 && <Line label={t.position.other} value={money(m.position.other)} />}
+          <Line label={t.position.totalAssets} value={money(m.position.totalAssets)} strong={m.position.totalDebt === 0} />
           {m.position.totalDebt > 0 && (
             <>
-              <Line label="Loans" value={money(-m.position.totalDebt)} />
-              <Line label="Net worth" value={money(m.position.netWorth)} strong negative={m.position.netWorth < 0} />
+              <Line label={t.position.loans} value={money(-m.position.totalDebt)} />
+              <Line label={t.position.netWorth} value={money(m.position.netWorth)} strong negative={m.position.netWorth < 0} />
             </>
           )}
         </Section>

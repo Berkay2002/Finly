@@ -2,12 +2,13 @@ import { ChevronRight, Plus } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { formatMoney, formatMonths, formatPercent } from '@/engine/format';
+import { formatMoney, formatMonths, formatNumber, formatPercent } from '@/engine/format';
 import type { CostLine } from '@/engine/metrics';
+import { DEPOSIT_GUARANTEE, savingsNudges } from '@/engine/tax/capital';
 import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES, type ExpenseTag } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
-import { useCurrency, useMetrics } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics } from '@/store/selectors';
 import { customDraft, useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -18,8 +19,10 @@ import { EditableRow, EditableTitle } from '@/components/ui/EditableRow';
 import { CATEGORY_ICON } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { ProgressBar, SplitBar, StackedBar } from '@/components/ui/ProgressBar';
+import { useT } from '@/i18n';
 
 export function InsightsPage() {
+  const t = useT().insights;
   const m = useMetrics();
   const currency = useCurrency();
   const money = (n: number) => formatMoney(n, currency);
@@ -35,15 +38,15 @@ export function InsightsPage() {
 
   return (
     <div>
-      <PageHeader title="Insights" subtitle="The deeper questions: what costs the most, what is committed, and what could change." />
+      <PageHeader title={t.title} subtitle={t.subtitle} />
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Where money goes */}
         <Card>
           <CardHeader
             icon={<IconTile icon="card-where-money-goes" accent="brand" size="sm" />}
-            title="Where is my money going?"
-            subtitle="Monthly amount and share of income by area. Open an area to change what is in it."
+            title={t.whereMoneyGoes.title}
+            subtitle={t.whereMoneyGoes.subtitle}
           />
           <ul className="space-y-1">
             {EXPENSE_CATEGORIES.map((c) => {
@@ -78,18 +81,18 @@ export function InsightsPage() {
         <Card>
           <CardHeader
             icon={<IconTile icon="card-largest" accent="indigo" size="sm" />}
-            title="What costs me the most?"
-            subtitle="Largest individual items, with their annual equivalent. Tap one to edit it."
+            title={t.topCosts.title}
+            subtitle={t.topCosts.subtitle}
           />
           {m.topCosts.length === 0 ? (
-            <p className="text-[13px] text-muted">Add expenses to see your biggest cost drivers.</p>
+            <p className="text-[13px] text-muted">{t.topCosts.empty}</p>
           ) : (
             <ol className="divide-y divide-line">
               {m.topCosts.map((l, i) => (
                 <li key={l.id}>
                   <EditableLine onClick={() => openEdit(l.id)} name={l.name} lead={<span className="w-5 text-right font-medium text-muted">{i + 1}.</span>}>
                     <span className="tabular font-medium text-ink">{money(l.monthly)}</span>
-                    <span className="tabular w-24 text-right text-[12px] text-muted">{money(l.annual)}/yr</span>
+                    <span className="tabular w-24 text-right text-[12px] text-muted">{t.topCosts.perYear(money(l.annual))}</span>
                   </EditableLine>
                 </li>
               ))}
@@ -101,9 +104,9 @@ export function InsightsPage() {
         <Card>
           <CardHeader
             icon={<IconTile icon="nav-home-bills" accent="orange" size="sm" />}
-            title="How much of my lifestyle is already committed?"
-            subtitle="Committed costs are hard to change soon. Flexible ones you could realistically adjust."
-            action="Home & bills"
+            title={t.committed.title}
+            subtitle={t.committed.subtitle}
+            action={t.committed.action}
             actionTo={CATEGORY_ROUTE.home}
           />
           <SplitBar a={committed} b={m.expenses.flexible} accentA="orange" accentB="green" />
@@ -111,19 +114,19 @@ export function InsightsPage() {
             <div>
               <div className="tabular text-[17px] font-semibold text-ink">{money(committed)}</div>
               <div className="text-[12px] text-muted">
-                Committed · {m.lifestyleCost > 0 ? formatPercent(committed / m.lifestyleCost) : '–'}
-                {m.debt.monthly > 0 && <span className="block text-faint">incl. {money(m.debt.monthly)} of loans</span>}
+                {t.committed.committed(m.lifestyleCost > 0 ? formatPercent(committed / m.lifestyleCost) : '–')}
+                {m.debt.monthly > 0 && <span className="block text-faint">{t.committed.inclLoans(money(m.debt.monthly))}</span>}
               </div>
             </div>
             <div className="pl-4">
               <div className="tabular text-[17px] font-semibold text-ink">{money(m.expenses.flexible)}</div>
-              <div className="text-[12px] text-muted">Flexible · {m.lifestyleCost > 0 ? formatPercent(m.expenses.flexible / m.lifestyleCost) : '–'}</div>
+              <div className="text-[12px] text-muted">{t.committed.flexible(m.lifestyleCost > 0 ? formatPercent(m.expenses.flexible / m.lifestyleCost) : '–')}</div>
             </div>
           </div>
           <dl className="mt-4 divide-y divide-line text-[13px]">
-            <Row label="Essential monthly cost" hint="the minimum to meet obligations" value={money(m.essentialCost)} />
-            <Row label="Normal lifestyle cost" hint="essentials plus your usual discretionary spending" value={money(m.lifestyleCost)} />
-            <Row label="Planned cost" hint="lifestyle plus saving and investing" value={money(m.plannedCost)} strong />
+            <Row label={t.committed.essential} hint={t.committed.essentialHint} value={money(m.essentialCost)} />
+            <Row label={t.committed.lifestyle} hint={t.committed.lifestyleHint} value={money(m.lifestyleCost)} />
+            <Row label={t.committed.planned} hint={t.committed.plannedHint} value={money(m.plannedCost)} strong />
           </dl>
         </Card>
 
@@ -131,16 +134,16 @@ export function InsightsPage() {
         <Card>
           <CardHeader
             icon={<IconTile icon="stat-safe-to-spend" accent="brand" size="sm" />}
-            title="Today versus the future"
-            subtitle="What share of your income goes where."
-            action="Savings & goals"
+            title={t.allocation.title}
+            subtitle={t.allocation.subtitle}
+            action={t.allocation.action}
             actionTo="/savings"
           />
           {m.income.total === 0 ? (
             <p className="text-[13px] text-muted">
-              Add income to see the allocation.{' '}
+              {t.allocation.empty}{' '}
               <Link to="/income" className="font-medium text-brand-700">
-                Add income
+                {t.allocation.addIncome}
               </Link>
             </p>
           ) : (
@@ -156,11 +159,11 @@ export function InsightsPage() {
               />
               <ul className="mt-3 space-y-1.5 text-[13px]">
                 {[
-                  ['Current lifestyle', m.allocation.lifestyle, 'blue'],
-                  ...(m.allocation.debtPaydown > 0 ? [['Paying down loans', m.allocation.debtPaydown, 'red']] : []),
-                  ['Planned future spending', m.allocation.futureSpending, 'green'],
-                  ['Long-term saving & investing', m.allocation.longTerm, 'purple'],
-                  ['Unallocated', m.allocation.unallocated, 'neutral'],
+                  [t.allocation.lifestyle, m.allocation.lifestyle, 'blue'],
+                  ...(m.allocation.debtPaydown > 0 ? [[t.allocation.debtPaydown, m.allocation.debtPaydown, 'red']] : []),
+                  [t.allocation.futureSpending, m.allocation.futureSpending, 'green'],
+                  [t.allocation.longTerm, m.allocation.longTerm, 'purple'],
+                  [t.allocation.unallocated, m.allocation.unallocated, 'neutral'],
                 ].map(([label, v, accent]) => (
                   <li key={String(label)} className="flex items-center gap-2">
                     <span className={clsx('h-2.5 w-2.5 rounded-full', ACCENT[accent as keyof typeof ACCENT].dot)} />
@@ -171,7 +174,7 @@ export function InsightsPage() {
               </ul>
               {m.breathingRoom < 0 && (
                 <Callout tone="warning" className="mt-3">
-                  Your plan exceeds your income by {money(-m.breathingRoom)} per month, so the shares above add up to more than 100%.
+                  {t.allocation.overspent(money(-m.breathingRoom))}
                 </Callout>
               )}
             </>
@@ -182,13 +185,13 @@ export function InsightsPage() {
         <Card>
           <CardHeader
             icon={<IconTile icon="nav-leisure" accent="green" size="sm" />}
-            title="Which expenses could I realistically reduce?"
-            subtitle="Optional and flexible items. Tap one to change its amount or how it is classified."
-            action="Leisure"
+            title={t.reducible.title}
+            subtitle={t.reducible.subtitle}
+            action={t.reducible.action}
             actionTo={CATEGORY_ROUTE.leisure}
           />
           {m.reducible.length === 0 ? (
-            <p className="text-[13px] text-muted">Nothing is marked both optional and flexible.</p>
+            <p className="text-[13px] text-muted">{t.reducible.empty}</p>
           ) : (
             <ul className="divide-y divide-line">
               {m.reducible.slice(0, 8).map((l) => (
@@ -202,7 +205,7 @@ export function InsightsPage() {
             </ul>
           )}
           <div className="mt-3 flex justify-between border-t border-line pt-3 text-[13px]">
-            <span className="text-ink-soft">All optional & flexible spending</span>
+            <span className="text-ink-soft">{t.reducible.total}</span>
             <span className="tabular font-semibold text-ink">{money(m.reducible.reduce((a, l) => a + l.monthly, 0))}</span>
           </div>
         </Card>
@@ -212,19 +215,19 @@ export function InsightsPage() {
           <Card>
             <CardHeader
               icon={<IconTile icon="card-subscriptions" accent="purple" size="sm" />}
-              title="Subscriptions"
-              action="Add subscription"
+              title={t.subscriptions.title}
+              action={t.subscriptions.add}
               actionIcon={Plus}
               onAction={() => openNew(['subscription'])}
             />
             <Total monthly={money(m.subscriptions.monthly)} annual={money(m.subscriptions.annual)} />
-            <TaggedLines lines={m.subscriptions.lines} money={money} onEdit={openEdit} empty="No subscriptions yet. Add one here, or tag an existing expense as a subscription." />
+            <TaggedLines lines={m.subscriptions.lines} money={money} onEdit={openEdit} empty={t.subscriptions.empty} />
           </Card>
           <Card>
             <CardHeader
               icon={<IconTile icon="card-car-cost" accent="orange" size="sm" />}
-              title="How expensive is my car really?"
-              action="Add car cost"
+              title={t.car.title}
+              action={t.car.add}
               actionIcon={Plus}
               onAction={() => expenses.openNew(customDraft('transport', '', ['car']))}
             />
@@ -233,14 +236,14 @@ export function InsightsPage() {
               lines={m.car.lines}
               money={money}
               onEdit={openEdit}
-              empty={m.car.loans.length > 0 ? '' : 'No car costs yet. Add one here, or tag an existing expense as car-related.'}
+              empty={m.car.loans.length > 0 ? '' : t.car.empty}
             />
             {m.car.loans.length > 0 && (
               <ul className={clsx('divide-y divide-line', m.car.lines.length > 0 ? 'border-t border-line' : 'mt-3')}>
                 {m.car.loans.map((l) => (
                   <li key={l.id}>
                     <EditableLine onClick={() => loans.openEdit(l.id)} name={l.name}>
-                      <span className="text-[12px] text-muted">Loan</span>
+                      <span className="text-[12px] text-muted">{t.car.loan}</span>
                       <span className="tabular text-ink">{money(l.monthly)}</span>
                     </EditableLine>
                   </li>
@@ -248,35 +251,37 @@ export function InsightsPage() {
               </ul>
             )}
             <p className="mt-3 border-t border-line pt-3 text-[12.5px] text-muted">
-              Common car costs like fuel, insurance and tax are one tap away on{' '}
+              {t.car.hintBefore}{' '}
               <Link to={CATEGORY_ROUTE.transport} className="font-medium text-brand-700">
-                Transport
+                {t.car.hintLink}
               </Link>
-              .
+              {t.car.hintAfter}
             </p>
           </Card>
         </div>
+
+        <SavingsNudgesCard />
 
         {/* Resilience */}
         <Card className="lg:col-span-2">
           <CardHeader
             icon={<IconTile icon="card-resilience" accent="green" size="sm" />}
-            title="How financially resilient am I?"
-            subtitle="Plain numbers instead of a score."
-            action="Update accounts"
+            title={t.resilience.title}
+            subtitle={t.resilience.subtitle}
+            action={t.resilience.action}
             actionTo="/accounts"
           />
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Emergency savings" value={money(m.position.emergency)} sub={m.essentialCost > 0 ? `${formatMonths(m.resilience.emergencyMonths)} of essentials` : undefined} />
-            <Stat label="Essential runway" value={formatMonths(m.resilience.essentialRunwayMonths)} sub={`${money(m.resilience.availableForRunway)} cash & emergency`} />
-            <Stat label="Lifestyle runway" value={formatMonths(m.resilience.lifestyleRunwayMonths)} sub="at your normal lifestyle" />
+            <Stat label={t.resilience.emergency} value={money(m.position.emergency)} sub={m.essentialCost > 0 ? t.resilience.emergencySub(formatMonths(m.resilience.emergencyMonths)) : undefined} />
+            <Stat label={t.resilience.essentialRunway} value={formatMonths(m.resilience.essentialRunwayMonths)} sub={t.resilience.essentialRunwaySub(money(m.resilience.availableForRunway))} />
+            <Stat label={t.resilience.lifestyleRunway} value={formatMonths(m.resilience.lifestyleRunwayMonths)} sub={t.resilience.lifestyleRunwaySub} />
             <Stat
-              label="Essentials vs reliable income"
-              value={m.resilience.reliableCoversEssentials ? 'Covered' : 'Not covered'}
+              label={t.resilience.coverage}
+              value={m.resilience.reliableCoversEssentials ? t.resilience.covered : t.resilience.notCovered}
               sub={
                 m.resilience.reliableCoversEssentials
-                  ? `${money(m.resilience.essentialMargin)} to spare`
-                  : `${money(-m.resilience.essentialMargin)} relies on variable income`
+                  ? t.resilience.toSpare(money(m.resilience.essentialMargin))
+                  : t.resilience.reliesOnVariable(money(-m.resilience.essentialMargin))
               }
               tone={m.resilience.reliableCoversEssentials ? 'good' : 'warn'}
             />
@@ -290,10 +295,70 @@ export function InsightsPage() {
   );
 }
 
+/** Rule-based tips on which account type suits the money, from the savings tax. Hidden when there is nothing to say. */
+function SavingsNudgesCard() {
+  const t = useT().insights.nudges;
+  const m = useMetrics();
+  const plan = useEffectivePlan();
+  const currency = useCurrency();
+  const money = (n: number) => formatMoney(n, currency);
+  const nudges = savingsNudges(plan, m.capitalTax);
+  if (nudges.length === 0) return null;
+  const rate = (n: number) => t.rate(formatNumber(n, 2));
+
+  return (
+    <Card className="lg:col-span-2">
+      <CardHeader
+        icon={<IconTile icon="account-investment" accent="purple" size="sm" />}
+        title={t.title}
+        subtitle={t.subtitle}
+        action={t.action}
+        actionTo="/accounts"
+      />
+      <div className="grid gap-3 lg:grid-cols-2">
+        {nudges.map((n) => {
+          switch (n.kind) {
+            case 'pick_wrapper':
+              return (
+                <Callout key={n.kind} tone="tip" title={t.pickWrapperTitle(n.accountIds.length)}>
+                  {t.pickWrapperBody(money(n.balance))}
+                </Callout>
+              );
+            case 'cash_to_isk':
+              return (
+                <Callout key={n.kind} tone="tip" title={t.cashToIskTitle}>
+                  {t.cashToIskBody(money(n.cash), n.interestTax >= 1 ? money(n.interestTax) : null, money(n.room))}
+                </Callout>
+              );
+            case 'af_to_isk':
+              return (
+                <Callout key={n.accountId} tone="tip" title={t.afToIskTitle(n.name)}>
+                  {t.afToIskBody(rate(n.expectedReturn), rate(n.breakEven), n.room >= 1 ? money(n.room) : null)}{' '}
+                  {n.gain === undefined
+                    ? t.moveUnknown
+                    : n.gain >= 0
+                      ? t.moveTax(money(n.taxIfSold))
+                      : t.moveLoss(money(-n.gain))}
+                </Callout>
+              );
+            case 'deposit_guarantee':
+              return (
+                <Callout key={n.institution} tone="warning" title={t.depositTitle(money(n.amount), n.institution)}>
+                  {t.depositBody(money(DEPOSIT_GUARANTEE))}
+                </Callout>
+              );
+          }
+        })}
+      </div>
+    </Card>
+  );
+}
+
 /** A cost line that opens the expense editor in place. */
 function EditableLine({ name, lead, children, onClick }: { name: string; lead?: ReactNode; children: ReactNode; onClick: () => void }) {
+  const t = useT().insights;
   return (
-    <EditableRow onClick={onClick} title="Edit expense" className="py-2 text-[13px]">
+    <EditableRow onClick={onClick} title={t.editExpense} className="py-2 text-[13px]">
       {lead}
       <EditableTitle className="flex-1 text-ink">{name}</EditableTitle>
       {children}
@@ -302,11 +367,12 @@ function EditableLine({ name, lead, children, onClick }: { name: string; lead?: 
 }
 
 function Total({ monthly, annual }: { monthly: string; annual: string }) {
+  const t = useT().insights;
   return (
     <div className="flex items-baseline gap-3">
       <span className="tabular text-[22px] font-bold text-ink">{monthly}</span>
-      <span className="text-[12.5px] text-muted">/ month</span>
-      <span className="tabular ml-auto text-[13px] text-muted">{annual} / year</span>
+      <span className="text-[12.5px] text-muted">{t.perMonth}</span>
+      <span className="tabular ml-auto text-[13px] text-muted">{t.perYear(annual)}</span>
     </div>
   );
 }

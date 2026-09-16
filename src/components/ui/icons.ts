@@ -33,6 +33,9 @@ export const ACCOUNT_ICON: Record<AccountKind, IconSource> = {
   emergency: 'account-emergency',
   joint: 'account-joint',
   cash: 'account-cash',
+  isk: 'account-investment',
+  kf: 'account-investment',
+  af: 'account-investment',
   investment: 'account-investment',
   other: 'account-other',
 };
@@ -44,6 +47,9 @@ export const ACCOUNT_ACCENT: Record<AccountKind, Accent> = {
   emergency: 'yellow',
   joint: 'red',
   cash: 'orange',
+  isk: 'green',
+  kf: 'brand',
+  af: 'blue',
   investment: 'green',
   other: 'indigo',
 };

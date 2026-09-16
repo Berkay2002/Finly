@@ -1,16 +1,17 @@
 import { Menu, Plus } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import clsx from 'clsx';
+import { useT } from '@/i18n';
 import { useUiStore } from '@/store/uiStore';
 import { Icon, type IconSource } from '@/components/ui/Icon';
 
-const tabs: { to: string; label: string; icon: IconSource }[] = [
-  { to: '/', label: 'Home', icon: 'nav-home' },
-  { to: '/insights', label: 'Insights', icon: 'nav-insights' },
-  { to: '/planning', label: 'Planning', icon: 'nav-planning' },
-];
-
 export function BottomNav({ className }: { className?: string }) {
+  const t = useT();
+  const tabs: { to: string; label: string; icon: IconSource }[] = [
+    { to: '/', label: t.nav.home, icon: 'nav-home' },
+    { to: '/insights', label: t.nav.insights, icon: 'nav-insights' },
+    { to: '/planning', label: t.layout.bottomNav.planning, icon: 'nav-planning' },
+  ];
   const { pathname } = useLocation();
   const setMoreOpen = useUiStore((s) => s.setMoreOpen);
   const setQuickAddOpen = useUiStore((s) => s.setQuickAddOpen);
@@ -50,9 +51,9 @@ export function BottomNav({ className }: { className?: string }) {
         <div className="flex flex-1 items-center justify-center">
           <button
             type="button"
-            aria-label="Add"
+            aria-label={t.layout.bottomNav.add}
             onClick={() => setQuickAddOpen(true)}
-            className="-mt-7 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg shadow-brand-600/30 transition hover:bg-brand-700"
+            className="-mt-7 inline-flex h-14 w-14 items-center justify-center rounded-full bg-brand-solid text-white shadow-lg shadow-brand-solid/30 transition hover:bg-brand-solid-hover"
           >
             <Plus size={26} />
           </button>
@@ -67,7 +68,7 @@ export function BottomNav({ className }: { className?: string }) {
           )}
         >
           <Menu size={22} strokeWidth={1.9} className={clsx(moreActive ? '' : 'opacity-70', 'h-[29px] w-[29px] p-[3px]')} />
-          More
+          {t.layout.bottomNav.more}
         </button>
       </div>
     </nav>

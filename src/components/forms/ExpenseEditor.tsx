@@ -24,9 +24,11 @@ import {
   monthlyToWeekly,
 } from '@/engine/frequency';
 import { amountForMonthly } from '@/engine/everyday';
-import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
+import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey, formatNumber } from '@/engine/format';
 import {
   CATEGORY_META,
+  expenseName,
+  groupLabel,
   groupsFor,
   isEverydaySpend,
   suggestionBySlug,
@@ -42,6 +44,7 @@ import {
   type Frequency,
   type Occurrences,
 } from '@/engine/types';
+import { messages, useT } from '@/i18n';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
 import { HomeFields } from './HomeFields';
 import { HouseholdFoodEstimator } from './HouseholdFood';
@@ -57,7 +60,7 @@ import { ItemRow } from './ItemRow';
 /** How often an item is paid: a frequency, or `each` for an item priced per purchase. */
 type Cadence = Frequency | 'each';
 
-const CADENCE_LABELS: Record<Cadence, string> = { each: 'Each time', ...FREQUENCY_LABELS };
+const cadenceLabel = (c: Cadence): string => (c === 'each' ? messages().expenses.cadence.each : FREQUENCY_LABELS[c]);
 
 const cadenceOf = (e: Pick<ExpenseItem, 'frequency' | 'occurrences'>): Cadence => (e.occurrences ? 'each' : e.frequency);
 
@@ -66,7 +69,7 @@ function cadenceOptions(e: Pick<ExpenseItem, 'subcategory' | 'frequency' | 'occu
   const list: Cadence[] = isEverydaySpend(e) ? ['each', 'weekly', 'monthly'] : [...FREQUENCIES, 'each'];
   const current = cadenceOf(e);
   if (!list.includes(current)) list.push(current);
-  return list.map((c) => ({ value: c, label: CADENCE_LABELS[c] }));
+  return list.map((c) => ({ value: c, label: cadenceLabel(c) }));
 }
 
 /** Switching cadence keeps the amount as typed; it only changes what the amount means. */
@@ -81,11 +84,14 @@ const occurrencesPatch = (occurrences: Occurrences): Partial<ExpenseItem> => ({
   frequency: frequencyForOccurrences(occurrences),
 });
 
-const perOptions: { value: Occurrences['per']; label: string }[] = [
-  { value: 'week', label: 'a week' },
-  { value: 'month', label: 'a month' },
-  { value: 'year', label: 'a year' },
-];
+const perOptions = (): { value: Occurrences['per']; label: string }[] => {
+  const t = messages().expenses.perOptions;
+  return [
+    { value: 'week', label: t.week },
+    { value: 'month', label: t.month },
+    { value: 'year', label: t.year },
+  ];
+};
 
 /** "× 5 a week" next to the price of one purchase. */
 function TimesFields({
@@ -97,6 +103,7 @@ function TimesFields({
   onChange: (o: Occurrences) => void;
   disabled?: boolean;
 }) {
+  const t = useT();
   return (
     <div className="flex shrink-0 items-center gap-1.5">
       <span className="text-[12.5px] text-muted" aria-hidden>
@@ -106,7 +113,7 @@ function TimesFields({
         size="sm"
         value={value.times}
         onValueChange={(times) => onChange({ ...value, times })}
-        aria-label="Times"
+        aria-label={t.expenses.row.times}
         className="w-14"
         disabled={disabled}
       />
@@ -114,7 +121,7 @@ function TimesFields({
         size="sm"
         value={value.per}
         onValueChange={(per) => onChange({ ...value, per })}
-        options={perOptions}
+        options={perOptions()}
         className="w-[6.5rem]"
         disabled={disabled}
       />
@@ -122,20 +129,17 @@ function TimesFields({
   );
 }
 
-const lagOptions: { value: '0' | '1' | '2'; label: string }[] = [
-  { value: '0', label: 'The same month' },
-  { value: '1', label: 'The month before (paid a month later)' },
-  { value: '2', label: 'Two months before' },
-];
+const lagOptions = (): { value: '0' | '1' | '2'; label: string }[] => {
+  const t = messages().expenses.lagOptions;
+  return [
+    { value: '0', label: t.same },
+    { value: '1', label: t.before },
+    { value: '2', label: t.twoBefore },
+  ];
+};
 
 // Loans have their own model and page; the `debt` tag only survives on plans from before that.
-const TAG_LABELS: Record<Exclude<ExpenseTag, 'debt'>, string> = {
-  car: 'Car',
-  subscription: 'Subscription',
-  insurance: 'Insurance',
-  utility: 'Utility',
-  public_transport: 'Public transport',
-};
+const TAG_IDS: Exclude<ExpenseTag, 'debt'>[] = ['car', 'subscription', 'insurance', 'utility', 'public_transport'];
 
 export type ExpenseDraft = Omit<ExpenseItem, 'id'> & { id?: string };
 type Draft = ExpenseDraft;
@@ -179,6 +183,7 @@ export function ExpenseEditor({
   autoOpenAdd?: boolean;
   showGroups?: boolean;
 }) {
+  const t = useT();
   const plan = usePlan();
   const currency = useCurrency();
   const { addExpense, updateExpense, removeExpense } = usePlanStore();
@@ -231,27 +236,26 @@ export function ExpenseEditor({
         key={e.id}
         icon={Icon}
         accent={accent}
-        title={e.name}
+        title={expenseName(e)}
         onClick={() => setEditing({ ...e })}
         className={clsx(e.includedElsewhere && 'opacity-60')}
         meta={
           <>
             {e.note && <span>{e.note}</span>}
-            {e.tariff && !e.includedElsewhere && <span className="tabular">{formatAmount(e.tariff.kwh)} kWh/month</span>}
+            {e.tariff && !e.includedElsewhere && <span className="tabular">{t.expenses.row.kwhPerMonth(formatAmount(e.tariff.kwh))}</span>}
             {notMonthly && monthly > 0 && !e.includedElsewhere && (
-              <span className="tabular">≈ {formatMoney(monthly, currency)}/month</span>
+              <span className="tabular">{t.expenses.row.approxPerMonth(formatMoney(monthly, currency))}</span>
             )}
             {ranged && !e.includedElsewhere && (
               <span className="tabular">
-                varies {formatMoneyRange(spread.low, spread.high, currency)}
-                {notMonthly ? '/month' : ''}
+                {t.expenses.row.varies(formatMoneyRange(spread.low, spread.high, currency), notMonthly)}
               </span>
             )}
-            {isIrregular(e.frequency, e.occurrences) && e.nextDate && <span>next {formatDate(e.nextDate)}</span>}
-            {e.includedElsewhere && <Chip tone="neutral">Included elsewhere</Chip>}
-            {suggestion && <Chip tone="orange">Estimate outdated</Chip>}
-            {!e.essential && <Chip tone="purple">Optional</Chip>}
-            {!e.committed && <Chip tone="blue">Flexible</Chip>}
+            {isIrregular(e.frequency, e.occurrences) && e.nextDate && <span>{t.expenses.row.next(formatDate(e.nextDate))}</span>}
+            {e.includedElsewhere && <Chip tone="neutral">{t.expenses.row.includedElsewhere}</Chip>}
+            {suggestion && <Chip tone="orange">{t.expenses.row.estimateOutdated}</Chip>}
+            {!e.essential && <Chip tone="purple">{t.expenses.row.optional}</Chip>}
+            {!e.committed && <Chip tone="blue">{t.expenses.row.flexible}</Chip>}
           </>
         }
         fields={
@@ -263,11 +267,11 @@ export function ExpenseEditor({
               placeholder={ranged && e.amount === 0 ? String(Math.round(amountSpread(e).typical)) : undefined}
               title={
                 e.tariff
-                  ? 'Calculated from usage and prices'
+                  ? t.expenses.row.calculatedTitle
                   : e.occurrences
-                    ? 'Price each time'
+                    ? t.expenses.row.priceEachTime
                     : ranged
-                      ? 'Typical amount'
+                      ? t.expenses.row.typicalAmount
                       : undefined
               }
               onValueChange={(amount) => updateExpense(e.id, { amount })}
@@ -293,8 +297,8 @@ export function ExpenseEditor({
           </>
         }
         menu={[
-          { label: 'Edit details', icon: Pencil, onSelect: () => setEditing({ ...e }) },
-          { label: 'Remove', icon: Trash2, danger: true, onSelect: () => removeExpense(e.id) },
+          { label: t.expenses.row.editDetails, icon: Pencil, onSelect: () => setEditing({ ...e }) },
+          { label: t.expenses.row.remove, icon: Trash2, danger: true, onSelect: () => removeExpense(e.id) },
         ]}
       />
     );
@@ -304,10 +308,10 @@ export function ExpenseEditor({
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12.5px] text-muted">
-          {items.length === 0 ? 'Nothing added yet.' : `${items.length} item${items.length === 1 ? '' : 's'}`}
+          {items.length === 0 ? t.expenses.list.nothingYet : t.expenses.list.count(items.length)}
         </p>
         <Button variant="secondary" size="sm" icon={Plus} onClick={() => setAdding(true)}>
-          Add expense
+          {t.expenses.list.addExpense}
         </Button>
       </div>
 
@@ -317,14 +321,14 @@ export function ExpenseEditor({
           onClick={() => setAdding(true)}
           className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-page/60 px-3 py-5 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
         >
-          <Plus size={14} /> Add your first {CATEGORY_META[category].shortLabel.toLowerCase()} expense
+          <Plus size={14} /> {t.expenses.list.addFirst(CATEGORY_META[category].shortLabel)}
         </button>
       )}
 
       {showGroups
         ? grouped.map(([group, list]) => (
             <div key={group}>
-              <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-faint">{group}</h3>
+              <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-faint">{groupLabel(group)}</h3>
               <div className="space-y-2">{list.map(row)}</div>
             </div>
           ))
@@ -367,25 +371,26 @@ export function ExpenseSheet({
   onRemove?: () => void;
   showCategory?: boolean;
 }) {
+  const t = useT();
   const currency = useCurrency();
   return (
     <Sheet
       open={draft !== null}
       onClose={onClose}
-      title={draft?.id ? 'Edit expense' : 'New expense'}
+      title={draft?.id ? t.expenses.sheet.editTitle : t.expenses.sheet.newTitle}
       subtitle={draft && !showCategory ? CATEGORY_META[draft.category].label : undefined}
       footer={
         <div className="flex items-center gap-2">
           {onRemove && draft?.id && (
             <Button variant="ghost" icon={Trash2} onClick={onRemove} className="mr-auto text-red-500 hover:bg-red-100">
-              Remove
+              {t.expenses.sheet.remove}
             </Button>
           )}
           <Button variant="secondary" onClick={onClose} className="ml-auto">
-            Cancel
+            {t.expenses.sheet.cancel}
           </Button>
           <Button onClick={onSave} disabled={!draft?.name.trim()}>
-            {draft?.id ? 'Save' : 'Add expense'}
+            {draft?.id ? t.expenses.sheet.save : t.expenses.sheet.addExpense}
           </Button>
         </div>
       }
@@ -438,6 +443,8 @@ function ExpenseDetailForm({
   currency: string;
   showCategory?: boolean;
 }) {
+  const t = useT();
+  const tf = t.expenses.form;
   const set = (patch: Partial<Draft>) => onChange({ ...draft, ...patch });
   const setRange = (patch: Partial<NonNullable<Draft['range']>>) => {
     const next = { low: draft.range?.low ?? 0, high: draft.range?.high ?? 0, ...patch };
@@ -457,24 +464,24 @@ function ExpenseDetailForm({
     const sibling = plan.expenses.find((x) => x.tariff && x.id !== draft.id)?.tariff;
     setTariff(defaultTariff(tariffPart, { sibling, kommunCode: homeKommunCode(plan) }));
   };
-  const toggleTag = (t: ExpenseTag) =>
-    set({ tags: draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t] });
+  const toggleTag = (tag: ExpenseTag) =>
+    set({ tags: draft.tags.includes(tag) ? draft.tags.filter((x) => x !== tag) : [...draft.tags, tag] });
   return (
     <div className="space-y-4">
       {showCategory && (
         <SelectField
-          label="Category"
-          hint="(which page it lives on)"
+          label={tf.category}
+          hint={tf.categoryHint}
           value={draft.category}
           onValueChange={(category: ExpenseCategory) => set({ category })}
           options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].label }))}
         />
       )}
-      <TextField label="Name" value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!draft.id} />
+      <TextField label={tf.name} value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!draft.id} />
       <TextField
-        label="Note"
-        hint="(optional)"
-        placeholder="e.g. Includes water and heating"
+        label={tf.note}
+        hint={tf.optionalHint}
+        placeholder={tf.notePlaceholder}
         value={draft.note ?? ''}
         onChange={(e) => set({ note: e.target.value })}
       />
@@ -482,22 +489,22 @@ function ExpenseDetailForm({
         <MoneyField
           label={
             draft.tariff
-              ? 'Calculated amount'
+              ? tf.calculatedAmount
               : draft.occurrences
                 ? draft.fixed
-                  ? 'Price each time'
-                  : 'Typical price'
+                  ? tf.priceEachTime
+                  : tf.typicalPrice
                 : draft.fixed
-                  ? 'Amount'
-                  : 'Typical amount'
+                  ? tf.amount
+                  : tf.typicalAmount
           }
           hint={
             draft.tariff
-              ? '(average month)'
+              ? tf.averageMonthHint
               : draft.occurrences && perPurchaseHint
                 ? `(${perPurchaseHint.toLowerCase()})`
                 : !draft.fixed && hasRange
-                  ? '(what you budget for)'
+                  ? tf.budgetForHint
                   : undefined
           }
           currency={currency}
@@ -507,7 +514,7 @@ function ExpenseDetailForm({
           disabled={!!draft.tariff}
         />
         <SelectField
-          label="How often"
+          label={tf.howOften}
           value={cadenceOf(draft)}
           onValueChange={(c: Cadence) => set(cadencePatch(draft, c))}
           options={cadenceOptions(draft)}
@@ -517,18 +524,18 @@ function ExpenseDetailForm({
       {draft.occurrences && (
         <div className="grid grid-cols-2 gap-3">
           <CountField
-            label="Times"
+            label={tf.times}
             value={draft.occurrences.times}
             onValueChange={(times) => set(occurrencesPatch({ ...draft.occurrences!, times }))}
           />
           <SelectField
-            label="Per"
+            label={tf.per}
             value={draft.occurrences.per}
             onValueChange={(per) => set(occurrencesPatch({ ...draft.occurrences!, per }))}
             options={[
-              { value: 'week', label: 'Week' },
-              { value: 'month', label: 'Month' },
-              { value: 'year', label: 'Year' },
+              { value: 'week', label: tf.week },
+              { value: 'month', label: tf.month },
+              { value: 'year', label: tf.year },
             ]}
           />
         </div>
@@ -538,7 +545,7 @@ function ExpenseDetailForm({
           {estimating ? (
             <HouseholdFoodEstimator
               currency={currency}
-              applyLabel={(m) => `Use ${formatMoney(amountForMonthly(draft, m), currency)} ${cadenceNoun(draft)}`}
+              applyLabel={(m) => tf.useAmount(formatMoney(amountForMonthly(draft, m), currency), cadenceOf(draft))}
               onApply={(m) => {
                 set({ amount: amountForMonthly(draft, m) });
                 setEstimating(false);
@@ -547,9 +554,9 @@ function ExpenseDetailForm({
             />
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="min-w-0 flex-1 text-[12.5px] text-muted">Not sure? Start from what a household like yours needs.</p>
+              <p className="min-w-0 flex-1 text-[12.5px] text-muted">{tf.notSure}</p>
               <Button size="sm" variant="soft" onClick={() => setEstimating(true)}>
-                Estimate from household
+                {tf.estimateFromHousehold}
               </Button>
             </div>
           )}
@@ -561,12 +568,8 @@ function ExpenseDetailForm({
             <Switch
               checked={!!draft.tariff}
               onChange={(on) => (on ? startTariff() : setTariff(undefined))}
-              label="Calculate from usage and prices"
-              description={
-                tariffPart === 'supply'
-                  ? 'kWh × (spot price + påslag) + månadsavgift'
-                  : 'kWh × (överföring + energiskatt) + abonnemang'
-              }
+              label={tf.calculateFromUsage}
+              description={tariffPart === 'supply' ? tf.supplyFormula : tf.gridFormula}
             />
           )}
           {draft.tariff ? (
@@ -574,20 +577,20 @@ function ExpenseDetailForm({
           ) : (
             <>
               <div className={clsx('mb-2 text-[12.5px] font-medium text-ink-soft', tariffPart && 'mt-3')}>
-                Usual range
+                {tf.usualRange}
                 <span className="ml-1 font-normal text-faint">
-                  ({draft.occurrences ? 'each time' : `per ${periodNoun(draft.frequency)}`}, optional)
+                  {tf.rangeQualifier(draft.occurrences ? null : draft.frequency)}
                 </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <MoneyField
-                  label="Cheapest"
+                  label={tf.cheapest}
                   currency={currency}
                   value={draft.range?.low ?? 0}
                   onValueChange={(low) => setRange({ low })}
                 />
                 <MoneyField
-                  label="Most expensive"
+                  label={tf.mostExpensive}
                   currency={currency}
                   value={draft.range?.high ?? 0}
                   onValueChange={(high) => setRange({ high })}
@@ -596,13 +599,17 @@ function ExpenseDetailForm({
               <p className="mt-2 text-[12px] text-muted">
                 {hasRange
                   ? draft.occurrences
-                    ? `Budgets for ${formatMoney(spread.typical, currency)} each time; usually between ${formatMoneyRange(spread.low, spread.high, currency)}.`
-                    : `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
+                    ? tf.budgetsEachTime(formatMoney(spread.typical, currency), formatMoneyRange(spread.low, spread.high, currency))
+                    : tf.budgetsPeriod(
+                        formatMoney(spread.typical, currency),
+                        draft.frequency,
+                        formatMoneyRange(spread.low, spread.high, currency),
+                      )
                   : draft.occurrences
-                    ? 'For a price that differs from one time to the next. Leave the typical price empty to budget for the midpoint.'
+                    ? tf.rangeHelpEachTime
                     : everyday
-                      ? `For costs that move from ${periodNoun(draft.frequency)} to ${periodNoun(draft.frequency)}, like the grocery shop. Leave the typical amount empty to budget for the midpoint.`
-                      : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
+                      ? tf.rangeHelpEveryday(draft.frequency)
+                      : tf.rangeHelpBill}
               </p>
             </>
           )}
@@ -614,37 +621,37 @@ function ExpenseDetailForm({
           />
           {draft.frequency === 'monthly' && !everyday && (
             <SelectField
-              label="The bill covers"
-              hint="(so we ask for the right month)"
+              label={tf.billCovers}
+              hint={tf.billCoversHint}
               className="mt-3"
               value={String(Math.min(2, Math.max(0, draft.billingLag ?? 0))) as '0' | '1' | '2'}
               onValueChange={(v) => set({ billingLag: Number(v) || undefined })}
-              options={lagOptions}
+              options={lagOptions()}
             />
           )}
         </div>
       )}
       {draft.frequency !== 'monthly' && draft.frequency !== 'weekly' && !draft.occurrences && (
         <DateField
-          label={draft.frequency === 'once' ? 'Expected date' : 'Next due date'}
-          hint="(used for upcoming expenses)"
+          label={draft.frequency === 'once' ? tf.expectedDate : tf.nextDueDate}
+          hint={tf.dateHint}
           value={draft.nextDate ?? ''}
           onChange={(e) => set({ nextDate: e.target.value || undefined })}
         />
       )}
       {(draft.frequency !== 'monthly' || draft.occurrences || everyday) && monthly > 0 && !draft.tariff && (
         <p className="tabular -mt-2 text-[12px] text-muted">
-          ≈ {formatMoney(monthly, currency)} a month
-          {everyday && ` · ${formatMoney(monthlyToWeekly(monthly), currency)} a week · ${formatMoney(monthlyToDaily(monthly), currency)} a day`}
+          {tf.approxMonthly(formatMoney(monthly, currency))}
+          {everyday && tf.approxWeekDay(formatMoney(monthlyToWeekly(monthly), currency), formatMoney(monthlyToDaily(monthly), currency))}
         </p>
       )}
 
       <div className="rounded-xl border border-line bg-page/60 p-3">
-        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">How would you describe this cost?</div>
+        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">{tf.describe}</div>
         <div className="space-y-2.5">
           <ClassificationRow
-            label="Amount"
-            help="Does it cost the same each time?"
+            label={tf.amountRow}
+            help={tf.amountHelp}
             value={draft.fixed ? 'fixed' : 'variable'}
             onChange={(v) =>
               v === 'fixed'
@@ -652,60 +659,60 @@ function ExpenseDetailForm({
                 : set({ fixed: false })
             }
             options={[
-              { value: 'fixed', label: 'Fixed' },
-              { value: 'variable', label: 'Variable' },
+              { value: 'fixed', label: tf.fixed },
+              { value: 'variable', label: tf.variable },
             ]}
           />
           <ClassificationRow
-            label="Need"
-            help="Is it required to keep your life running?"
+            label={tf.need}
+            help={tf.needHelp}
             value={draft.essential ? 'essential' : 'optional'}
             onChange={(v) => set({ essential: v === 'essential' })}
             options={[
-              { value: 'essential', label: 'Essential' },
-              { value: 'optional', label: 'Optional' },
+              { value: 'essential', label: tf.essential },
+              { value: 'optional', label: tf.optional },
             ]}
           />
           <ClassificationRow
-            label="Flexibility"
-            help="Could you realistically change it soon?"
+            label={tf.flexibility}
+            help={tf.flexibilityHelp}
             value={draft.committed ? 'committed' : 'flexible'}
             onChange={(v) => set({ committed: v === 'committed' })}
             options={[
-              { value: 'committed', label: 'Committed' },
-              { value: 'flexible', label: 'Flexible' },
+              { value: 'committed', label: tf.committed },
+              { value: 'flexible', label: tf.flexible },
             ]}
           />
         </div>
       </div>
 
       <div>
-        <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">Tags</div>
+        <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">{tf.tags}</div>
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(TAG_LABELS) as (keyof typeof TAG_LABELS)[]).map((t) => (
+          {TAG_IDS.map((tag) => (
             <button
-              key={t}
+              key={tag}
               type="button"
-              onClick={() => toggleTag(t)}
+              onClick={() => toggleTag(tag)}
               className={clsx(
                 'rounded-full border px-2.5 py-1 text-[12px] font-medium transition',
-                draft.tags.includes(t)
+                draft.tags.includes(tag)
                   ? 'border-brand-500 bg-brand-50 text-brand-700'
                   : 'border-line bg-card text-muted hover:text-ink',
               )}
             >
-              {TAG_LABELS[t]}
+              {t.expenses.tags[tag]}
             </button>
           ))}
         </div>
-        <p className="mt-1 text-[12px] text-muted">Tags power the car cost and subscription insights.</p>
+        <p className="mt-1 text-[12px] text-muted">{tf.tagsHelp}</p>
       </div>
 
       <Switch
         checked={!!draft.includedElsewhere}
         onChange={(includedElsewhere) => set({ includedElsewhere })}
-        label="Already included in another payment"
-        description="e.g. water included in rent. Kept visible, excluded from totals."
+        label={tf.includedElsewhere}
+        description={tf.includedElsewhereHelp}
       />
     </div>
   );
@@ -726,6 +733,7 @@ function RecordedBills({
   onApply: (s: { typical: number; low: number; high: number }) => void;
   onUseKwh: (kwh: number) => void;
 }) {
+  const tb = useT().expenses.bills;
   const history = actualsHistory(draft);
   if (!history) return null;
   const suggestion = suggestFromActuals(draft);
@@ -735,11 +743,11 @@ function RecordedBills({
     <div className="mt-3 border-t border-line pt-3">
       <div className="mb-1.5 flex items-center justify-between text-[12px]">
         <span className="font-medium text-ink-soft">
-          Recorded bills
+          {tb.recorded}
           <span className="ml-1 font-normal text-faint">({history.count})</span>
         </span>
         <span className="tabular text-muted">
-          avg {formatMoney(history.average, currency)} · {formatMoneyRange(history.min, history.max, currency)}
+          {tb.average(formatMoney(history.average, currency), formatMoneyRange(history.min, history.max, currency))}
         </span>
       </div>
       <ul className="flex flex-wrap gap-1.5">
@@ -749,18 +757,21 @@ function RecordedBills({
           </li>
         ))}
         {history.count > recent.length && (
-          <li className="rounded-md px-1 py-1 text-[11.5px] text-faint">+{history.count - recent.length} more</li>
+          <li className="rounded-md px-1 py-1 text-[11.5px] text-faint">{tb.more(history.count - recent.length)}</li>
         )}
       </ul>
       {suggestion && (
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
           <Sparkles size={14} className="shrink-0 text-orange-500" />
           <span className="min-w-0 flex-1">
-            Your last {suggestion.basedOn} bills say <span className="tabular font-semibold">{formatMoney(suggestion.typical, currency)}</span> typical,{' '}
-            <span className="tabular font-semibold">{formatMoneyRange(suggestion.low, suggestion.high, currency)}</span>.
+            {tb.suggestionBefore(suggestion.basedOn)}
+            <span className="tabular font-semibold">{formatMoney(suggestion.typical, currency)}</span>
+            {tb.suggestionMiddle}
+            <span className="tabular font-semibold">{formatMoneyRange(suggestion.low, suggestion.high, currency)}</span>
+            {tb.suggestionAfter}
           </span>
           <Button size="sm" variant="soft" onClick={() => onApply(suggestion)}>
-            Use these
+            {tb.useThese}
           </Button>
         </div>
       )}
@@ -768,11 +779,12 @@ function RecordedBills({
         <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
           <Sparkles size={14} className="shrink-0 text-orange-500" />
           <span className="min-w-0 flex-1">
-            At these prices your last {usage.basedOn} bills mean about{' '}
-            <span className="tabular font-semibold">{formatAmount(usage.kwh)} kWh</span> a month.
+            {tb.usageBefore(usage.basedOn)}
+            <span className="tabular font-semibold">{formatAmount(usage.kwh)} kWh</span>
+            {tb.usageAfter}
           </span>
           <Button size="sm" variant="soft" onClick={() => onUseKwh(usage.kwh)}>
-            Use {formatAmount(usage.kwh)} kWh
+            {tb.useKwh(formatAmount(usage.kwh))}
           </Button>
         </div>
       )}
@@ -793,7 +805,7 @@ function usageFromBills(tariff: ElectricityTariff, entries: { amount: number }[]
   return { kwh, basedOn: recent.length };
 }
 
-const formatOre = (ore: number) => String(Math.round(ore * 10) / 10);
+const formatOre = (ore: number) => formatNumber(Math.round(ore * 10) / 10, 1);
 
 /** Usage and price inputs for a calculated electricity bill, with the arithmetic shown underneath. */
 function TariffFields({
@@ -805,6 +817,7 @@ function TariffFields({
   onChange: (t: ElectricityTariff) => void;
   currency: string;
 }) {
+  const tt = useT().expenses.tariff;
   const plan = usePlan();
   const set = (patch: Partial<ElectricityTariff>) => onChange({ ...tariff, ...patch });
   const supply = tariff.part === 'supply';
@@ -816,66 +829,66 @@ function TariffFields({
     <div className="mt-3 space-y-3">
       <div>
         <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
-          Where you live
+          {tt.whereYouLive}
         </div>
         <HomeFields compact />
       </div>
 
       <div>
         <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
-          Usage
-          <span className="ml-1 font-normal text-faint">(shared with your other electricity bill)</span>
+          {tt.usage}
+          <span className="ml-1 font-normal text-faint">{tt.usageShared}</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <MoneyField
-            label="Per year"
+            label={tt.perYear}
             currency="kWh"
             value={Math.round(tariff.kwh * 12)}
             onValueChange={(year) => set({ kwh: year / 12 })}
           />
           <MoneyField
-            label="Light month"
+            label={tt.lightMonth}
             currency="kWh"
             value={tariff.kwhLow ?? 0}
             onValueChange={(n) => set({ kwhLow: optional(n) })}
           />
           <MoneyField
-            label="Heavy month"
+            label={tt.heavyMonth}
             currency="kWh"
             value={tariff.kwhHigh ?? 0}
             onValueChange={(n) => set({ kwhHigh: optional(n) })}
           />
         </div>
         <p className="mt-1.5 text-[12px] text-muted">
-          {tariff.kwh > 0 ? `${formatAmount(tariff.kwh)} kWh in an average month. ` : ''}
-          Your grid company shows the yearly figure as "Årsförbrukning" or "Estimated annual consumption".
+          {tariff.kwh > 0 ? tt.averageMonthKwh(formatAmount(tariff.kwh)) : ''}
+          {tt.yearlyFigure}
         </p>
       </div>
 
       <div>
         <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
-          {supply ? 'Your electricity deal' : 'Your grid tariff'}
-          <span className="ml-1 font-normal text-faint">(incl. moms)</span>
+          {supply ? tt.electricityDeal : tt.gridTariff}
+          <span className="ml-1 font-normal text-faint">{tt.inclVat}</span>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <MoneyField
-            label={supply ? 'Spot price' : 'Överföringsavgift'}
+            label={supply ? tt.spotPrice : tt.transferFee}
             currency="öre/kWh"
             inputClassName="pr-20!"
             value={tariff.energyPrice}
             onValueChange={(energyPrice) => set({ energyPrice, priceMonth: undefined })}
           />
           <MoneyField
-            label={supply ? 'Påslag' : 'Energiskatt'}
+            label={supply ? tt.surcharge : tt.energyTax}
             currency="öre/kWh"
             inputClassName="pr-20!"
             value={tariff.surcharge}
             onValueChange={(surcharge) => set({ surcharge })}
           />
           <MoneyField
-            label={supply ? 'Månadsavgift' : 'Abonnemang'}
-            hint={supply ? undefined : '(+ effektavgift)'}
-            currency={`${currency}/mo`}
+            label={supply ? tt.monthlyFee : tt.subscription}
+            hint={supply ? undefined : tt.powerFeeHint}
+            currency={tt.perMonthUnit(currency)}
             inputClassName="pr-20!"
             value={tariff.monthlyFee}
             onValueChange={(monthlyFee) => set({ monthlyFee })}
@@ -886,13 +899,13 @@ function TariffFields({
         ) : (
           <p className="mt-2 text-[12px] text-muted">
             {kommun
-              ? `Energiskatt in ${kommun.name} is ${expectedTax} öre/kWh in 2026${expectedTax === REDUCED_ENERGY_TAX_ORE ? ', with the northern Sweden deduction' : ''}.`
-              : `Energiskatt is ${ENERGY_TAX_ORE} öre/kWh in 2026, ${REDUCED_ENERGY_TAX_ORE} öre in Norrbotten, Västerbotten, Jämtland and a few kommuner nearby.`}
+              ? tt.energyTaxIn(kommun.name, expectedTax, expectedTax === REDUCED_ENERGY_TAX_ORE)
+              : tt.energyTaxGeneral(ENERGY_TAX_ORE, REDUCED_ENERGY_TAX_ORE)}
             {kommun && tariff.surcharge !== expectedTax && (
               <>
                 {' '}
                 <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => set({ surcharge: expectedTax })}>
-                  Use {expectedTax} öre
+                  {tt.useOre(expectedTax)}
                 </button>
               </>
             )}
@@ -911,6 +924,7 @@ function TariffFields({
  * the rest.
  */
 function SpotPriceFetch({ tariff, onChange }: { tariff: ElectricityTariff; onChange: (t: ElectricityTariff) => void }) {
+  const ts = useT().expenses.spot;
   const month = previousMonthKey();
   const { area } = homePriceArea(usePlan());
   const [state, setState] = useState<{ loading: boolean; error?: string }>({ loading: false });
@@ -923,7 +937,7 @@ function SpotPriceFetch({ tariff, onChange }: { tariff: ElectricityTariff; onCha
       onChange({ ...tariff, priceArea: area, energyPrice: avg.oreInclVat, priceMonth: month });
       setState({ loading: false });
     } catch (err) {
-      setState({ loading: false, error: err instanceof Error ? err.message : 'Could not load spot prices.' });
+      setState({ loading: false, error: err instanceof Error ? err.message : ts.loadError });
     }
   };
 
@@ -931,59 +945,40 @@ function SpotPriceFetch({ tariff, onChange }: { tariff: ElectricityTariff; onCha
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
       {current ? (
         <span>
-          {formatMonthKey(month)} average for {area}, incl. moms.
+          {ts.averageFor(formatMonthKey(month), area)}
         </span>
       ) : (
         <>
           <Button size="sm" variant="soft" icon={CloudDownload} onClick={load} disabled={state.loading}>
-            {state.loading ? 'Loading…' : `Use ${formatMonthKey(month)} average`}
+            {state.loading ? ts.loading : ts.useAverage(formatMonthKey(month))}
           </Button>
           {tariff.priceMonth && (
             <span>
-              Now using the {formatMonthKey(tariff.priceMonth)} average for {tariff.priceArea}.
+              {ts.nowUsing(formatMonthKey(tariff.priceMonth), tariff.priceArea ?? '')}
             </span>
           )}
         </>
       )}
       {state.error && <span className="text-red-500">{state.error}</span>}
-      <span className="w-full text-faint">Spot prices from elprisetjustnu.se. Add your supplier's påslag on top.</span>
+      <span className="w-full text-faint">{ts.source}</span>
     </div>
   );
 }
 
 function TariffBreakdown({ tariff, currency }: { tariff: ElectricityTariff; currency: string }) {
+  const tt = useT().expenses.tariff;
   const s = amountSpread({ amount: 0, frequency: 'monthly', tariff });
   if (s.typical <= 0) {
-    return <p className="text-[12px] text-muted">Enter your usage and prices to calculate the bill.</p>;
+    return <p className="text-[12px] text-muted">{tt.enterUsage}</p>;
   }
   return (
     <p className="tabular rounded-lg bg-card px-3 py-2 text-[12px] text-muted">
       {formatAmount(tariff.kwh)} kWh × {formatOre(perKwh(tariff) * 100)} öre + {formatMoney(tariff.monthlyFee, currency)} ={' '}
-      <span className="font-semibold text-ink">{formatMoney(s.typical, currency)}</span> in an average month
-      {s.high > s.low && <>, {formatMoneyRange(s.low, s.high, currency)} from light to heavy months</>}.
+      <span className="font-semibold text-ink">{formatMoney(s.typical, currency)}</span>
+      {tt.inAverageMonth}
+      {s.high > s.low && tt.lightToHeavy(formatMoneyRange(s.low, s.high, currency))}.
     </p>
   );
-}
-
-/** "a week", "each time"… for the amount an item is entered in. */
-function cadenceNoun(e: Pick<ExpenseItem, 'frequency' | 'occurrences'>): string {
-  if (e.occurrences) return 'each time';
-  return e.frequency === 'once' ? 'once' : `a ${periodNoun(e.frequency)}`;
-}
-
-function periodNoun(f: Frequency): string {
-  switch (f) {
-    case 'weekly':
-      return 'week';
-    case 'monthly':
-      return 'month';
-    case 'quarterly':
-      return 'quarter';
-    case 'yearly':
-      return 'year';
-    case 'once':
-      return 'occurrence';
-  }
 }
 
 function ClassificationRow<T extends string>({
@@ -1025,6 +1020,7 @@ function AddExpenseSheet({
   onPick: (s: ExpenseSuggestion) => void;
   onCustom: (name: string) => void;
 }) {
+  const ta = useT().expenses.add;
   const [query, setQuery] = useState('');
   useEffect(() => {
     if (open) setQuery('');
@@ -1040,8 +1036,8 @@ function AddExpenseSheet({
     <Sheet
       open={open}
       onClose={onClose}
-      title={`Add ${CATEGORY_META[category].shortLabel.toLowerCase()} expense`}
-      subtitle="Pick a common one, or create your own. You can add the same item twice."
+      title={ta.title(CATEGORY_META[category].shortLabel)}
+      subtitle={ta.subtitle}
     >
       <div className="relative mb-3">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
@@ -1052,7 +1048,7 @@ function AddExpenseSheet({
           onKeyDown={(e) => {
             if (e.key === 'Enter' && q && filtered.length === 0) onCustom(query.trim());
           }}
-          placeholder="Search or type a custom name…"
+          placeholder={ta.searchPlaceholder}
           className="h-10 w-full rounded-xl border border-line bg-card pl-9 pr-3 text-[13.5px] focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
         />
       </div>
@@ -1063,12 +1059,12 @@ function AddExpenseSheet({
         className="mb-3 flex w-full items-center gap-2 rounded-xl border border-dashed border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
       >
         <Plus size={14} />
-        {q ? `Create "${query.trim()}"` : 'Create a custom expense'}
+        {q ? ta.create(query.trim()) : ta.createCustom}
       </button>
 
       {groups.map((g) => (
         <div key={g} className="mb-3">
-          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-faint">{g}</div>
+          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-faint">{groupLabel(g)}</div>
           <div className="flex flex-wrap gap-1.5">
             {filtered
               .filter((s) => s.group === g)
@@ -1099,7 +1095,7 @@ function AddExpenseSheet({
         </div>
       ))}
       {filtered.length === 0 && (
-        <p className="py-4 text-center text-[13px] text-muted">No matches. Press Enter to create it.</p>
+        <p className="py-4 text-center text-[13px] text-muted">{ta.noMatches}</p>
       )}
     </Sheet>
   );

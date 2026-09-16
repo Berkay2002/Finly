@@ -15,7 +15,8 @@ export interface AccentStyle {
   text: string;
   bar: string;
   soft: string;
-  hex: string;
+  /** CSS colour for SVG fill/stroke; a token var so it follows the theme. */
+  color: string;
   dot: string;
 }
 
@@ -26,7 +27,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-brand-600',
     bar: 'bg-brand-500',
     soft: 'bg-brand-50',
-    hex: '#1a9a76',
+    color: 'var(--color-brand-500)',
     dot: 'bg-brand-500',
   },
   blue: {
@@ -34,7 +35,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-blue-500',
     bar: 'bg-blue-500',
     soft: 'bg-blue-100',
-    hex: '#3b7df5',
+    color: 'var(--color-blue-500)',
     dot: 'bg-blue-500',
   },
   green: {
@@ -42,7 +43,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-green-500',
     bar: 'bg-green-500',
     soft: 'bg-green-100',
-    hex: '#34b27b',
+    color: 'var(--color-green-500)',
     dot: 'bg-green-500',
   },
   orange: {
@@ -50,7 +51,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-orange-500',
     bar: 'bg-orange-500',
     soft: 'bg-orange-100',
-    hex: '#f2994a',
+    color: 'var(--color-orange-500)',
     dot: 'bg-orange-500',
   },
   yellow: {
@@ -58,7 +59,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-yellow-500',
     bar: 'bg-yellow-500',
     soft: 'bg-yellow-100',
-    hex: '#f5b400',
+    color: 'var(--color-yellow-500)',
     dot: 'bg-yellow-500',
   },
   purple: {
@@ -66,7 +67,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-purple-500',
     bar: 'bg-purple-500',
     soft: 'bg-purple-100',
-    hex: '#8b5cf6',
+    color: 'var(--color-purple-500)',
     dot: 'bg-purple-500',
   },
   lavender: {
@@ -74,7 +75,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-lavender-500',
     bar: 'bg-lavender-500',
     soft: 'bg-lavender-100',
-    hex: '#b9a6f5',
+    color: 'var(--color-lavender-500)',
     dot: 'bg-lavender-500',
   },
   red: {
@@ -82,7 +83,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-red-500',
     bar: 'bg-red-500',
     soft: 'bg-red-100',
-    hex: '#ef4444',
+    color: 'var(--color-red-500)',
     dot: 'bg-red-500',
   },
   indigo: {
@@ -90,7 +91,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-indigo-500',
     bar: 'bg-indigo-500',
     soft: 'bg-indigo-100',
-    hex: '#4f46e5',
+    color: 'var(--color-indigo-500)',
     dot: 'bg-indigo-500',
   },
   neutral: {
@@ -98,7 +99,7 @@ export const ACCENT: Record<Accent, AccentStyle> = {
     text: 'text-muted',
     bar: 'bg-faint',
     soft: 'bg-page',
-    hex: '#98a4b5',
+    color: 'var(--color-faint)',
     dot: 'bg-faint',
   },
 };

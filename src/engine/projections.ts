@@ -1,9 +1,13 @@
 import { addMonths, differenceInCalendarMonths, startOfMonth } from 'date-fns';
+import { messages } from '@/i18n';
 import { amountSpread } from './amounts';
 import { debtFlow } from './debts';
 import { isIrregular, monthsPerPeriod } from './frequency';
 import type { PlanMetrics } from './metrics';
 import { activeExpenses } from './metrics';
+import type { GovBondRate } from './rates';
+import { capitalTaxSummary, monthlyRate } from './tax/capital';
+import { debtName, expenseName } from './taxonomy';
 import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -12,8 +16,11 @@ import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
 
 export interface UpcomingExpense {
   id: string;
-  /** Where the occurrence comes from: an expense item, or a loan paid quarterly or yearly. */
-  source: 'expense' | 'debt';
+  /**
+   * Where the occurrence comes from: an expense item, a loan paid quarterly or yearly, or the tax on ISK and AF
+   * funds settled in the final tax (`SAVINGS_TAX_ID`).
+   */
+  source: 'expense' | 'debt' | 'tax';
   /** Id of the expense item or loan. */
   expenseId: string;
   name: string;
@@ -36,10 +43,25 @@ function parseIso(iso: string): Date {
  * Items without a date are placed at the end of the current month so that
  * they still appear in the calendar without a fabricated day.
  */
+export const SAVINGS_TAX_ID = 'savings-tax';
+
+/**
+ * Tax on ISK (and on funds in an AF) is not withheld: it comes with the final tax (slutskatt) the spring after.
+ * Placed on 12 May, the usual due date when the tax decision arrives in April; the KF refund nets against it.
+ */
+export function savingsTaxDue(plan: FinancialPlan, now: Date, gov?: GovBondRate): { year: number; date: Date; amount: number }[] {
+  return [now.getFullYear() - 1, now.getFullYear()]
+    .map((year) => ({ year, date: new Date(year + 1, 4, 12) }))
+    .filter((t) => t.date >= startOfMonth(now))
+    .map((t) => ({ ...t, amount: capitalTaxSummary(plan, now, gov, t.year).slutskatt }))
+    .filter((t) => t.amount >= 1);
+}
+
 export function upcomingExpenses(
   plan: FinancialPlan,
   now: Date = new Date(),
   horizonMonths = 12,
+  gov?: GovBondRate,
 ): UpcomingExpense[] {
   const start = startOfMonth(now);
   const end = addMonths(start, horizonMonths);
@@ -70,7 +92,7 @@ export function upcomingExpenses(
         id: `${e.id}-${date.toISOString().slice(0, 10)}`,
         source: 'expense',
         expenseId: e.id,
-        name: e.name,
+        name: expenseName(e),
         category: e.category,
         date,
         amount: spread.typical,
@@ -99,7 +121,7 @@ export function upcomingExpenses(
         id: `${d.id}-${date.toISOString().slice(0, 10)}`,
         source: 'debt',
         expenseId: d.id,
-        name: d.name,
+        name: debtName(d),
         category: 'finance',
         date,
         amount,
@@ -109,6 +131,21 @@ export function upcomingExpenses(
       k += 1;
       date = addMonths(first, k * step);
     }
+  }
+
+  for (const t of savingsTaxDue(plan, now, gov)) {
+    if (t.date >= end) continue;
+    out.push({
+      id: `${SAVINGS_TAX_ID}-${t.year}`,
+      source: 'tax',
+      expenseId: SAVINGS_TAX_ID,
+      name: messages().insights.engine.savingsTax(t.year),
+      category: 'finance',
+      date: t.date,
+      amount: t.amount,
+      low: t.amount,
+      high: t.amount,
+    });
   }
 
   return out.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -134,9 +171,10 @@ export function monthOutlook(
   metrics: PlanMetrics,
   now: Date = new Date(),
   horizonMonths = 12,
+  gov?: GovBondRate,
 ): MonthOutlook[] {
   const start = startOfMonth(now);
-  const upcoming = upcomingExpenses(plan, now, horizonMonths);
+  const upcoming = upcomingExpenses(plan, now, horizonMonths, gov);
   const irregularIds = new Set(
     activeExpenses(plan)
       .filter((e) => isIrregular(e.frequency, e.occurrences))
@@ -180,16 +218,35 @@ export interface GoalProgress {
   onTrack: boolean | null;
 }
 
-export function goalProgress(goal: SavingsGoal, now: Date = new Date()): GoalProgress {
+/** Longest a goal is simulated with returns before it counts as never reached: 50 years. */
+const MAX_GOAL_MONTHS = 600;
+
+/**
+ * `yearlyReturn` is the expected return after tax of the goal's linked account, percent (0 when not linked):
+ * the balance compounds monthly and the contribution is added at each month's end.
+ */
+export function goalProgress(goal: SavingsGoal, now: Date = new Date(), yearlyReturn = 0): GoalProgress {
   const target = goal.targetAmount ?? 0;
   const remaining = Math.max(0, target - goal.currentAmount);
   const progress = target > 0 ? Math.min(1, goal.currentAmount / target) : 0;
+  const r = monthlyRate(yearlyReturn);
+  const contribution = Math.max(0, goal.monthlyContribution);
 
   let monthsToTarget: number;
   if (target <= 0) monthsToTarget = Infinity;
   else if (remaining <= 0) monthsToTarget = 0;
-  else if (goal.monthlyContribution <= 0) monthsToTarget = Infinity;
-  else monthsToTarget = Math.ceil(remaining / goal.monthlyContribution);
+  else if (r === 0) monthsToTarget = contribution <= 0 ? Infinity : Math.ceil(remaining / contribution);
+  else {
+    monthsToTarget = Infinity;
+    let balance = goal.currentAmount;
+    for (let m = 1; m <= MAX_GOAL_MONTHS; m += 1) {
+      balance = balance * (1 + r) + contribution;
+      if (balance >= target) {
+        monthsToTarget = m;
+        break;
+      }
+    }
+  }
 
   const completionDate = Number.isFinite(monthsToTarget) ? addMonths(now, monthsToTarget) : null;
 
@@ -197,15 +254,32 @@ export function goalProgress(goal: SavingsGoal, now: Date = new Date()): GoalPro
   let onTrack: boolean | null = null;
   if (goal.targetDate && target > 0 && remaining > 0) {
     const monthsLeft = Math.max(1, differenceInCalendarMonths(parseIso(goal.targetDate), now));
-    requiredMonthly = remaining / monthsLeft;
+    if (r === 0) requiredMonthly = remaining / monthsLeft;
+    else {
+      // Contribution c such that current × (1 + r)^n + c × ((1 + r)^n − 1) / r reaches the target.
+      const growth = Math.pow(1 + r, monthsLeft);
+      requiredMonthly = Math.max(0, ((target - goal.currentAmount * growth) * r) / (growth - 1));
+    }
     onTrack = goal.monthlyContribution >= requiredMonthly;
   }
 
   return { goal, progress, remaining, monthsToTarget, completionDate, requiredMonthly, onTrack };
 }
 
-export function allGoalProgress(plan: FinancialPlan, now: Date = new Date()): GoalProgress[] {
-  return plan.goals.map((g) => goalProgress(g, now));
+/** Expected yearly return after tax for each account, percent, by account id. */
+export function accountReturns(plan: FinancialPlan, now: Date, gov?: GovBondRate): Map<string, number> {
+  const summary = capitalTaxSummary(plan, now, gov);
+  return new Map(summary.accounts.map((t) => [t.accountId, t.netReturn]));
+}
+
+/** The after-tax return a goal earns through its linked account, percent; 0 when it has none. */
+export function goalReturn(goal: SavingsGoal, returns: Map<string, number>): number {
+  return goal.linkedAccountId ? (returns.get(goal.linkedAccountId) ?? 0) : 0;
+}
+
+export function allGoalProgress(plan: FinancialPlan, now: Date = new Date(), gov?: GovBondRate): GoalProgress[] {
+  const returns = accountReturns(plan, now, gov);
+  return plan.goals.map((g) => goalProgress(g, now, goalReturn(g, returns)));
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,6 +292,8 @@ export interface ProjectionPoint {
   added: number;
   /** Total savings (goal balances) at that point. */
   balance: number;
+  /** `balance` plus the expected return after tax earned by goals linked to an account with a return. */
+  withReturns: number;
 }
 
 export function savingsProjection(
@@ -225,13 +301,28 @@ export function savingsProjection(
   metrics: PlanMetrics,
   now: Date = new Date(),
   horizonMonths = 12,
-  opts: { includeUnallocated?: boolean } = {},
+  opts: { includeUnallocated?: boolean; gov?: GovBondRate } = {},
 ): ProjectionPoint[] {
   const start = plan.goals.reduce((acc, g) => acc + g.currentAmount, 0);
-  const perMonth = metrics.savings.total + (opts.includeUnallocated ? Math.max(0, metrics.breathingRoom) : 0);
+  const extra = opts.includeUnallocated ? Math.max(0, metrics.breathingRoom) : 0;
+  const perMonth = metrics.savings.total + extra;
+  const returns = accountReturns(plan, now, opts.gov);
+  const growing = plan.goals.map((g) => ({
+    balance: g.currentAmount,
+    contribution: Math.max(0, g.monthlyContribution),
+    r: monthlyRate(goalReturn(g, returns)),
+  }));
+  let unallocated = 0;
   const out: ProjectionPoint[] = [];
   for (let i = 1; i <= horizonMonths; i += 1) {
-    out.push({ month: addMonths(startOfMonth(now), i), added: perMonth * i, balance: start + perMonth * i });
+    for (const g of growing) g.balance = g.balance * (1 + g.r) + g.contribution;
+    unallocated += extra;
+    out.push({
+      month: addMonths(startOfMonth(now), i),
+      added: perMonth * i,
+      balance: start + perMonth * i,
+      withReturns: growing.reduce((s, g) => s + g.balance, 0) + unallocated,
+    });
   }
   return out;
 }

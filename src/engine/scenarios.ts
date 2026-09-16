@@ -1,3 +1,4 @@
+import { messages } from '@/i18n';
 import { computeMetrics, type PlanMetrics } from './metrics';
 import { allGoalProgress, type GoalProgress } from './projections';
 import type { AmountRange, ExpenseCategory, FinancialPlan, Frequency } from './types';
@@ -42,7 +43,7 @@ export function applyScenario(plan: FinancialPlan, scenario: Scenario): Financia
         ...plan.expenses,
         {
           id: '__scenario__',
-          name: scenario.name || 'New expense',
+          name: scenario.name || messages().planning.newExpense,
           category: scenario.category,
           subcategory: 'custom',
           amount: scenario.amount,
@@ -132,26 +133,27 @@ export function runScenario(plan: FinancialPlan, scenario: Scenario, now: Date =
   const before = computeMetrics(plan, now);
   const afterPlan = applyScenario(plan, scenario);
   const after = computeMetrics(afterPlan, now);
+  const t = messages().planning.deltas;
 
   const deltas: MetricDelta[] = [
-    d('safeToSpend', 'Safe to spend', before.safeToSpend, after.safeToSpend, 'money'),
-    d('breathingRoom', 'Breathing room', before.breathingRoom, after.breathingRoom, 'money'),
-    d('flexible', 'Flexible spending', before.expenses.flexible, after.expenses.flexible, 'money'),
-    d('savings', 'Planned saving', before.savings.total, after.savings.total, 'money'),
-    d('savingsRate', 'Savings rate', before.savings.rate, after.savings.rate, 'percent'),
-    d('lifestyle', 'Lifestyle cost', before.lifestyleCost, after.lifestyleCost, 'money'),
-    d('essential', 'Essential cost', before.essentialCost, after.essentialCost, 'money'),
-    d('income', 'Total income', before.income.total, after.income.total, 'money'),
+    d('safeToSpend', t.safeToSpend, before.safeToSpend, after.safeToSpend, 'money'),
+    d('breathingRoom', t.breathingRoom, before.breathingRoom, after.breathingRoom, 'money'),
+    d('flexible', t.flexible, before.expenses.flexible, after.expenses.flexible, 'money'),
+    d('savings', t.savings, before.savings.total, after.savings.total, 'money'),
+    d('savingsRate', t.savingsRate, before.savings.rate, after.savings.rate, 'percent'),
+    d('lifestyle', t.lifestyle, before.lifestyleCost, after.lifestyleCost, 'money'),
+    d('essential', t.essential, before.essentialCost, after.essentialCost, 'money'),
+    d('income', t.income, before.income.total, after.income.total, 'money'),
     d(
       'essentialRunway',
-      'Essential runway',
+      t.essentialRunway,
       before.resilience.essentialRunwayMonths,
       after.resilience.essentialRunwayMonths,
       'months',
     ),
     d(
       'lifestyleRunway',
-      'Lifestyle runway',
+      t.lifestyleRunway,
       before.resilience.lifestyleRunwayMonths,
       after.resilience.lifestyleRunwayMonths,
       'months',

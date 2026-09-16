@@ -1,7 +1,8 @@
 import { addMonths, format, getDaysInMonth } from 'date-fns';
 import { nextCsnDueDate } from '@/engine/debts';
 import { BUNDLED_OUTLOOK, csnRateForYear } from '@/engine/rates';
-import { suggestionBySlug } from '@/engine/taxonomy';
+import { debtKindMeta, suggestionBySlug } from '@/engine/taxonomy';
+import { messages } from '@/i18n';
 import type { ExpenseItem, FinancialPlan, Frequency } from '@/engine/types';
 import { ONBOARDING_STEPS } from '@/engine/types';
 
@@ -11,6 +12,7 @@ import { ONBOARDING_STEPS } from '@/engine/types';
  */
 export function samplePlan(now: Date = new Date()): FinancialPlan {
   const iso = now.toISOString();
+  const t = messages().sample;
   const inMonths = (n: number, day = 12) => format(new Date(addMonths(now, n).setDate(day)), 'yyyy-MM-dd');
 
   let n = 0;
@@ -47,8 +49,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     income: [
       {
         id: id('inc'),
-        name: 'Salary',
-        note: 'Main job',
+        name: t.income.salary,
+        note: t.income.salaryNote,
         kind: 'salary',
         amount: 28000,
         frequency: 'monthly',
@@ -57,8 +59,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('inc'),
-        name: 'Bonus',
-        note: 'Annual (divided monthly)',
+        name: t.income.bonus,
+        note: t.income.bonusNote,
         kind: 'bonus',
         amount: 36000,
         frequency: 'yearly',
@@ -67,8 +69,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('inc'),
-        name: 'Freelance work',
-        note: 'Design projects',
+        name: t.income.freelance,
+        note: t.income.freelanceNote,
         kind: 'freelance',
         amount: 2700,
         frequency: 'monthly',
@@ -77,8 +79,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('inc'),
-        name: 'Gifts',
-        note: 'Estimated average',
+        name: t.income.gifts,
+        note: t.income.giftsNote,
         kind: 'other_irregular',
         amount: 6000,
         frequency: 'yearly',
@@ -89,10 +91,10 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     expenses: [
       // Home — 8,500
       exp('rent', 7300),
-      exp('electricity', 500, { range: { low: 250, high: 950 }, note: 'Rörligt pris' }),
+      exp('electricity', 500, { range: { low: 250, high: 950 }, note: t.expenses.variablePrice }),
       exp('internet', 350),
       exp('home_insurance', 350),
-      exp('water', 0, { includedElsewhere: true, note: 'Included in rent' }),
+      exp('water', 0, { includedElsewhere: true, note: t.expenses.includedInRent }),
       // Living — 4,800
       exp('groceries', 740, { range: { low: 650, high: 880 } }),
       exp('restaurants', 450),
@@ -122,23 +124,23 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       exp('christmas', 6000, { nextDate: christmasFrom(now) }),
       exp('gifts', 3000, { nextDate: inMonths(2, 20) }),
       exp('electronics', 6000, { nextDate: inMonths(7, 1) }),
-      exp('annual_insurance', 1800, { name: 'Annual home insurance', nextDate: inMonths(2, 3) }),
+      exp('annual_insurance', 1800, { name: t.expenses.annualHomeInsurance, nextDate: inMonths(2, 3) }),
       exp('annual_subscriptions', 3600, { nextDate: inMonths(4, 1) }),
       exp('birthdays', 400),
     ],
     accounts: [
-      { id: id('acc'), name: 'Everyday account', institution: 'Swedbank', kind: 'everyday', balance: 14500 },
-      { id: id('acc'), name: 'Salary account', institution: 'SEB', kind: 'salary', balance: 32000 },
-      { id: id('acc'), name: 'Savings account', institution: 'Avanza', kind: 'savings', balance: 86000 },
-      { id: id('acc'), name: 'Emergency fund', institution: 'Nordnet', kind: 'emergency', balance: 40000 },
-      { id: id('acc'), name: 'Joint account', institution: 'Swedbank', kind: 'joint', balance: 18000 },
-      { id: id('acc'), name: 'Investments', institution: 'Avanza', kind: 'investment', balance: 120000 },
+      { id: id('acc'), name: t.accounts.everyday, institution: 'Swedbank', kind: 'everyday', balance: 14500 },
+      { id: id('acc'), name: t.accounts.salary, institution: 'SEB', kind: 'salary', balance: 32000 },
+      { id: id('acc'), name: t.accounts.savings, institution: 'Avanza', kind: 'savings', balance: 86000, interestRate: 2 },
+      { id: id('acc'), name: t.accounts.emergency, institution: 'Nordnet', kind: 'emergency', balance: 40000 },
+      { id: id('acc'), name: t.accounts.joint, institution: 'Swedbank', kind: 'joint', balance: 18000 },
+      { id: id('acc'), name: 'ISK', institution: 'Avanza', kind: 'isk', balance: 120000, expectedReturn: 6, monthlyDeposit: 1500 },
     ],
     // Loans — 4,200 a month
     debts: [
       {
         id: id('debt'),
-        name: 'CSN',
+        name: debtKindMeta('csn').name,
         lender: 'CSN',
         kind: 'csn',
         csnType: 'annuity',
@@ -151,7 +153,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('debt'),
-        name: 'Billån',
+        name: debtKindMeta('car').name,
         lender: 'Santander Consumer Bank',
         kind: 'car',
         secured: true,
@@ -162,7 +164,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('debt'),
-        name: 'Credit card',
+        name: debtKindMeta('credit_card').name,
         lender: 'Nordea',
         kind: 'credit_card',
         balance: 7800,
@@ -174,8 +176,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     goals: [
       {
         id: id('goal'),
-        name: 'Emergency fund',
-        description: "Financial security for life's uncertainties.",
+        name: t.goals.emergency,
+        description: t.goals.emergencyDescription,
         kind: 'emergency',
         purpose: 'long_term',
         currentAmount: 68000,
@@ -185,8 +187,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('goal'),
-        name: 'House deposit',
-        description: 'Our first home.',
+        name: t.goals.house,
+        description: t.goals.houseDescription,
         kind: 'general',
         purpose: 'long_term',
         currentAmount: 120000,
@@ -196,8 +198,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('goal'),
-        name: 'Holiday',
-        description: 'Explore more of the world.',
+        name: t.goals.holiday,
+        description: t.goals.holidayDescription,
         kind: 'purchase',
         purpose: 'future_spending',
         currentAmount: 12000,
@@ -207,8 +209,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('goal'),
-        name: 'Car fund',
-        description: 'For a more flexible tomorrow.',
+        name: t.goals.car,
+        description: t.goals.carDescription,
         kind: 'purchase',
         purpose: 'future_spending',
         currentAmount: 2300,
@@ -218,8 +220,8 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
       },
       {
         id: id('goal'),
-        name: 'New laptop',
-        description: 'Upgrade for work and creativity.',
+        name: t.goals.laptop,
+        description: t.goals.laptopDescription,
         kind: 'purchase',
         purpose: 'future_spending',
         currentAmount: 8500,
@@ -231,7 +233,7 @@ export function samplePlan(now: Date = new Date()): FinancialPlan {
     household: { members: [{ id: 'hh_001', age: '25-50', lunchAway: false }] },
     // Drives in three days a week and packs lunch.
     commute: {
-      people: [{ id: 'cm_001', name: 'You', days: 3, mode: 'car', parking: true, passages: 0, buysLunch: false }],
+      people: [{ id: 'cm_001', name: t.you, days: 3, mode: 'car', parking: true, passages: 0, buysLunch: false }],
       prices: { parking: 25 },
     },
     // Food runs a little above plan, so the demo shows the pace and the "your months say" hint.

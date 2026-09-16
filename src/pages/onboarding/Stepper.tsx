@@ -28,7 +28,7 @@ export function DesktopStepper({ current, completed }: { current: OnboardingStep
               className={clsx(
                 'relative z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border-2 text-[12.5px] font-semibold transition',
                 active
-                  ? 'border-brand-600 bg-brand-600 text-white'
+                  ? 'border-brand-solid bg-brand-solid text-white'
                   : done
                     ? 'border-brand-500 bg-brand-500 text-white'
                     : 'border-line bg-card text-muted hover:border-line-strong',
@@ -74,7 +74,7 @@ export function MobileStepper({ current }: { current: OnboardingStep }) {
             >
               {STEP_META[step].shortLabel}
             </span>
-            <span className={clsx('h-1 w-1 rounded-full', active ? 'bg-brand-600' : 'bg-transparent')} />
+            <span className={clsx('h-1 w-1 rounded-full', active ? 'bg-brand-solid' : 'bg-transparent')} />
           </Link>
         );
       })}
@@ -87,7 +87,7 @@ export function StepDots({ current }: { current: OnboardingStep }) {
   return (
     <div className="flex items-center gap-1">
       {ONBOARDING_STEPS.map((s, i) => (
-        <span key={s} className={clsx('h-1.5 rounded-full', i === idx ? 'w-4 bg-brand-600' : 'w-1.5 bg-line-strong')} />
+        <span key={s} className={clsx('h-1.5 rounded-full', i === idx ? 'w-4 bg-brand-solid' : 'w-1.5 bg-line-strong')} />
       ))}
     </div>
   );

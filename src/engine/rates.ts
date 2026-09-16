@@ -18,15 +18,27 @@ export interface RateOutlook {
   policyHistory: { month: string; value: number }[];
   /** The Riksbank's latest policy rate forecast: quarterly averages, each dated at the quarter's end. */
   forecast: { round: string; published: string; path: { date: string; value: number }[] };
+  /** Riksgälden's statslåneränta, which sets the ISK and KF tax. Absent from copies cached before it existed. */
+  govBondRate?: GovBondRate;
+}
+
+export interface GovBondRate {
+  /** The weekly rate in force today, percent, and the date it took effect. */
+  date: string;
+  value: number;
+  /** The rate in force on 30 November, by year ("2025" → 2.55). Sets the ISK and KF tax for the year after. */
+  nov30: Record<string, number>;
 }
 
 /**
  * Shipped with the app so forecasts work offline and when the Riksbank API is down. Riksbank SWEA
  * (SECBREPOEFF) up to 16 Sep 2026, and the forecast from policy round 2026:2 (June 2026).
+ * Statslåneränta from Riksgälden's weekly series up to 11 Sep 2026.
  */
 export const BUNDLED_OUTLOOK: RateOutlook = {
   source: 'bundled',
   fetchedAt: '2026-09-16T00:00:00.000Z',
+  govBondRate: { date: '2026-09-11', value: 2.99, nov30: { '2023': 2.62, '2024': 1.96, '2025': 2.55 } },
   policyRate: { date: '2026-09-16', value: 1.75 },
   policyHistory: [
     ['2022-11', 1.784], ['2022-12', 2.5], ['2023-01', 2.5], ['2023-02', 2.75], ['2023-03', 3], ['2023-04', 3],

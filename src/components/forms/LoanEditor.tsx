@@ -14,7 +14,7 @@ import {
   paymentsPerYear,
   repaymentStart,
 } from '@/engine/debts';
-import { formatDate, formatDuration, formatMoney, formatMonthYear } from '@/engine/format';
+import { formatDate, formatDuration, formatMoney, formatMonthYear, formatNumber } from '@/engine/format';
 import {
   BUNDLED_OUTLOOK,
   csnRateDecided,
@@ -23,8 +23,9 @@ import {
   forecastRates,
   type RateOutlook,
 } from '@/engine/rates';
-import { DEBT_KINDS, debtKindMeta } from '@/engine/taxonomy';
+import { DEBT_KINDS, debtKindMeta, debtName } from '@/engine/taxonomy';
 import type { CsnLoanType, Debt, DebtFrequency, DebtKind, MortgageRateType } from '@/engine/types';
+import { allMessages, messages, useT } from '@/i18n';
 import { useRateOutlook } from '@/lib/rateOutlook';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan, useViewDate } from '@/store/selectors';
@@ -99,8 +100,9 @@ function finalize(d: Draft, now: Date): Draft {
 function payoffText(d: Debt, now: Date): string | null {
   const p = debtPayoff(d, now);
   if (!p) return null;
-  if (!Number.isFinite(p.months)) return 'Never paid off at this rate';
-  return `Debt-free ${formatMonthYear(p.date!)}`;
+  const t = messages().loans.editor;
+  if (!Number.isFinite(p.months)) return t.neverPaidOff;
+  return t.debtFree(formatMonthYear(p.date!));
 }
 
 export function LoanEditor({
@@ -117,6 +119,7 @@ export function LoanEditor({
   const { updateDebt, removeDebt } = usePlanStore();
   const loans = useLoanSheet();
   const debts = plan.debts ?? [];
+  const t = useT().loans;
 
   useEffect(() => {
     if (autoOpenAdd) loans.openNew();
@@ -127,10 +130,10 @@ export function LoanEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12.5px] text-muted">
-          {debts.length === 0 ? 'No loans yet.' : `${debts.length} loan${debts.length === 1 ? '' : 's'}`}
+          {debts.length === 0 ? t.editor.noLoans : t.common.loanCount(debts.length)}
         </p>
         <Button variant="secondary" size="sm" icon={Plus} onClick={() => loans.openNew()}>
-          Add loan
+          {t.common.addLoan}
         </Button>
       </div>
 
@@ -143,16 +146,16 @@ export function LoanEditor({
               key={d.id}
               icon={DEBT_ICON[d.kind]}
               accent={DEBT_ACCENT[d.kind]}
-              title={d.name}
+              title={debtName(d)}
               onClick={() => loans.openEdit(d.id)}
               meta={
                 <>
                   <span>{d.lender || debtKindMeta(d.kind).label}</span>
-                  {d.rate !== undefined && <span>· {d.rate.toLocaleString('sv-SE', { maximumFractionDigits: 3 })} %</span>}
-                  {flow.monthly > 0 && <span>· {formatMoney(flow.monthly, currency)}/mo</span>}
-                  {payoff && <span className={payoff.startsWith('Never') ? 'text-warning' : undefined}>· {payoff}</span>}
+                  {d.rate !== undefined && <span>· {formatNumber(d.rate, 3)} %</span>}
+                  {flow.monthly > 0 && <span>· {t.common.perMonth(formatMoney(flow.monthly, currency))}</span>}
+                  {payoff && <span className={payoff === t.editor.neverPaidOff ? 'text-warning' : undefined}>· {payoff}</span>}
                   {d.kind === 'mortgage' && <Chip tone="neutral">{rateTypeLabel(d)}</Chip>}
-                  {isDeductible(d) && <Chip tone="brand">Ränteavdrag</Chip>}
+                  {isDeductible(d) && <Chip tone="brand">{t.editor.deductibleChip}</Chip>}
                   {previous && <Delta before={previous[d.id]} after={d.balance} invert className="ml-1" />}
                 </>
               }
@@ -161,14 +164,14 @@ export function LoanEditor({
                   size="sm"
                   currency={currency}
                   value={d.balance}
-                  aria-label="Balance owed"
+                  aria-label={t.editor.balanceOwed}
                   onValueChange={(balance) => updateDebt(d.id, { balance })}
                   className="min-w-0 flex-1 sm:w-40 sm:flex-none"
                 />
               }
               menu={[
-                { label: 'Edit details', icon: Pencil, onSelect: () => loans.openEdit(d.id) },
-                { label: 'Remove', icon: Trash2, danger: true, onSelect: () => removeDebt(d.id) },
+                { label: t.editor.editDetails, icon: Pencil, onSelect: () => loans.openEdit(d.id) },
+                { label: t.common.remove, icon: Trash2, danger: true, onSelect: () => removeDebt(d.id) },
               ]}
             />
           );
@@ -179,7 +182,7 @@ export function LoanEditor({
             onClick={() => loans.openNew()}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-page/60 px-3 py-5 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
           >
-            <Plus size={14} /> Add a loan: CSN, bolån, billån or credit
+            <Plus size={14} /> {t.editor.addFirst}
           </button>
         )}
       </div>
@@ -188,12 +191,18 @@ export function LoanEditor({
   );
 }
 
-const pct = (n: number) => `${n.toLocaleString('sv-SE', { maximumFractionDigits: 3 })} %`;
+const pct = (n: number) => `${formatNumber(n, 3)} %`;
 
 /** "Rörlig", or "Bunden till okt 2027" style label for a mortgage part. */
 export function rateTypeLabel(d: Pick<Debt, 'rateType' | 'rateFixedUntil'>): string {
-  if (mortgageRateType(d) === 'variable') return 'Rörlig';
-  return d.rateFixedUntil ? `Bunden till ${formatMonthYear(new Date(`${d.rateFixedUntil}T00:00:00`))}` : 'Bunden';
+  const t = messages().loans.editor;
+  if (mortgageRateType(d) === 'variable') return t.variable;
+  return d.rateFixedUntil ? t.fixedUntil(formatMonthYear(new Date(`${d.rateFixedUntil}T00:00:00`))) : t.fixed;
+}
+
+/** Whether a name is a loan kind's default name in any language, so switching language does not make it look typed. */
+function isDefaultName(name: string, kind: DebtKind): boolean {
+  return allMessages().some((m) => m.taxonomy.debtKinds[kind].name === name);
 }
 
 export function LoanSheet({
@@ -215,6 +224,7 @@ export function LoanSheet({
   const outlook = useRateOutlook();
   const [grossIncome, setGrossIncome] = useState(0);
   const money = (n: number) => formatMoney(n, currency);
+  const t = useT().loans;
 
   const setKind = (kind: DebtKind) => {
     if (!draft) return;
@@ -222,7 +232,7 @@ export function LoanSheet({
     onChange({
       ...fresh,
       id: draft.id,
-      name: draft.id || draft.name !== debtKindMeta(draft.kind).name ? draft.name : fresh.name,
+      name: draft.id || !isDefaultName(draft.name, draft.kind) ? draft.name : fresh.name,
       balance: draft.balance,
       lender: draft.lender && draft.lender !== 'CSN' ? draft.lender : fresh.lender,
       rate: kind === 'csn' ? fresh.rate : draft.kind === 'csn' ? undefined : draft.rate,
@@ -247,22 +257,22 @@ export function LoanSheet({
     <Sheet
       open={draft !== null}
       onClose={onClose}
-      title={draft?.id ? 'Edit loan' : 'Add loan'}
+      title={draft?.id ? t.common.editLoan : t.common.addLoan}
       footer={
         <div className="flex items-center justify-between gap-2">
           {draft?.id && onRemove ? (
             <Button variant="danger" onClick={onRemove}>
-              Remove
+              {t.common.remove}
             </Button>
           ) : (
             <span />
           )}
           <div className="flex gap-2">
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button onClick={onSave} disabled={!draft?.name.trim()}>
-              {draft?.id ? 'Save' : 'Add loan'}
+              {draft?.id ? t.common.save : t.common.addLoan}
             </Button>
           </div>
         </div>
@@ -271,7 +281,7 @@ export function LoanSheet({
       {draft && d && flow && (
         <div className="space-y-4">
           <SelectField
-            label="Type"
+            label={t.sheet.type}
             value={draft.kind}
             onValueChange={setKind}
             options={DEBT_KINDS.map((k) => ({ value: k.id, label: k.label }))}
@@ -279,11 +289,11 @@ export function LoanSheet({
           <p className="-mt-2 text-[12px] text-muted">{debtKindMeta(draft.kind).description}</p>
 
           <div className="grid grid-cols-2 gap-3">
-            <TextField label="Name" value={draft.name} onChange={(e) => onChange({ ...draft, name: e.target.value })} />
+            <TextField label={t.sheet.name} value={draft.name} onChange={(e) => onChange({ ...draft, name: e.target.value })} />
             <TextField
-              label="Lender"
-              hint="(optional)"
-              placeholder={draft.kind === 'mortgage' ? 'e.g. SBAB, Swedbank' : 'e.g. Santander, Nordea'}
+              label={t.sheet.lender}
+              hint={t.sheet.optional}
+              placeholder={draft.kind === 'mortgage' ? t.sheet.lenderPlaceholderMortgage : t.sheet.lenderPlaceholder}
               value={draft.lender ?? ''}
               onChange={(e) => onChange({ ...draft, lender: e.target.value })}
             />
@@ -291,14 +301,14 @@ export function LoanSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <MoneyField
-              label="Balance owed"
+              label={t.editor.balanceOwed}
               currency={currency}
               value={draft.balance}
               onValueChange={(balance) => onChange({ ...draft, balance })}
             />
             <div>
               <MoneyField
-                label="Interest rate"
+                label={t.sheet.interestRate}
                 currency="%"
                 value={draft.rate ?? 0}
                 onValueChange={(v) =>
@@ -314,8 +324,8 @@ export function LoanSheet({
           {draft.kind !== 'csn' && draft.kind !== 'mortgage' && (
             <>
               <MoneyField
-                label="Monthly payment"
-                hint={draft.kind === 'credit_card' ? '(what you pay each month)' : '(interest and repayment together)'}
+                label={t.sheet.monthlyPayment}
+                hint={draft.kind === 'credit_card' ? t.sheet.monthlyPaymentCardHint : t.sheet.monthlyPaymentHint}
                 currency={currency}
                 value={draft.payment}
                 onValueChange={(payment) => onChange({ ...draft, payment, frequency: 'monthly' })}
@@ -324,12 +334,8 @@ export function LoanSheet({
                 <Switch
                   checked={!!draft.secured}
                   onChange={(secured) => onChange({ ...draft, secured })}
-                  label="Secured against the car or other property"
-                  description={
-                    draft.kind === 'car'
-                      ? 'Most billån through a dealer are secured by the car (the lender can take it back). A blancolån used to buy a car is not.'
-                      : 'Secured loans keep ränteavdrag; unsecured loans lost it from 2026.'
-                  }
+                  label={t.sheet.secured}
+                  description={draft.kind === 'car' ? t.sheet.securedCar : t.sheet.securedOther}
                 />
               )}
             </>
@@ -338,62 +344,52 @@ export function LoanSheet({
           <div className="rounded-xl bg-page px-3.5 py-3 text-[12.5px] text-ink-soft">
             {flow.monthly > 0 ? (
               <p>
-                <span className="font-semibold text-ink">{money(flow.monthly)}</span> a month
-                {flow.interest !== null && flow.principal !== null && (
-                  <>
-                    : {money(flow.interest)} interest, {money(flow.principal)} repays the loan
-                  </>
-                )}
+                <span className="font-semibold text-ink">{money(flow.monthly)}</span>
+                {t.sheet.aMonth}
+                {flow.interest !== null && flow.principal !== null && t.sheet.split(money(flow.interest), money(flow.principal))}
                 .
               </p>
             ) : (
-              <p>Enter the payment to see where it goes.</p>
+              <p>{t.sheet.enterPayment}</p>
             )}
-            {before && (
-              <p className="mt-1">
-                Repayment starts {formatDate(before.start)}. Until then about {money(before.interest)} in interest is added to what
-                you owe.
-              </p>
-            )}
+            {before && <p className="mt-1">{t.sheet.interestBefore(formatDate(before.start), money(before.interest))}</p>}
             {isDeductible(d) && flow.interest !== null && flow.interest > 0 && (
-              <p className="mt-1">
-                Ränteavdrag gives back about {money(interestTaxReduction(flow.interest * 12) / 12)} a month through your tax.
-              </p>
+              <p className="mt-1">{t.sheet.deduction(money(interestTaxReduction(flow.interest * 12) / 12))}</p>
             )}
-            {!isDeductible(d) && draft.kind !== 'csn' && (
-              <p className="mt-1">No ränteavdrag: unsecured loans lost it from income year 2026.</p>
-            )}
+            {!isDeductible(d) && draft.kind !== 'csn' && <p className="mt-1">{t.sheet.noDeduction}</p>}
             {payoff && (
               <p className="mt-1">
                 {Number.isFinite(payoff.months) ? (
-                  <>
-                    Debt-free in {formatDuration(payoff.months)} ({formatMonthYear(payoff.date!)}), with{' '}
-                    {money(payoff.totalInterest ?? 0)} interest left to pay
-                    {draft.kind === 'csn' && draft.csnType !== 'income_based' ? ', counting CSN’s yearly step-up' : ''}.
-                  </>
+                  t.sheet.payoff(
+                    formatDuration(payoff.months),
+                    formatMonthYear(payoff.date!),
+                    money(payoff.totalInterest ?? 0),
+                    draft.kind === 'csn' && draft.csnType !== 'income_based',
+                  )
                 ) : (
-                  <span className="text-warning">The payment does not cover the interest, so the balance never shrinks.</span>
+                  <span className="text-warning">{t.sheet.neverShrinks}</span>
                 )}
               </p>
             )}
             {payoff && ahead && Number.isFinite(payoff.months) && Math.abs((ahead.totalInterest ?? 0) - (payoff.totalInterest ?? 0)) >= 1 && (
               <p className="mt-1">
-                If rates follow the Riksbank's forecast:{' '}
-                {Number.isFinite(ahead.months) ? (
-                  <>
-                    {ahead.months !== payoff.months && <>debt-free {formatMonthYear(ahead.date!)}, </>}
-                    {money(ahead.totalInterest ?? 0)} interest left to pay.
-                  </>
-                ) : (
-                  'the payment stops covering the interest.'
-                )}
+                {Number.isFinite(ahead.months)
+                  ? t.sheet.forecastPayoff(
+                      ahead.months !== payoff.months ? formatMonthYear(ahead.date!) : null,
+                      money(ahead.totalInterest ?? 0),
+                    )
+                  : t.sheet.forecastNever}
               </p>
             )}
             {reset && (
               <p className="mt-1">
-                {reset.passed ? 'The fixed rate ended' : 'Bunden until'} {formatDate(reset.date)}. After that, expect about{' '}
-                {pct(Math.round(reset.newRate * 100) / 100)}: {money(Math.abs(reset.monthlyChange))} a month{' '}
-                {reset.monthlyChange >= 0 ? 'more' : 'less'} in interest at today's balance.
+                {t.sheet.reset(
+                  reset.passed,
+                  formatDate(reset.date),
+                  pct(Math.round(reset.newRate * 100) / 100),
+                  money(Math.abs(reset.monthlyChange)),
+                  reset.monthlyChange >= 0,
+                )}
               </p>
             )}
           </div>
@@ -420,7 +416,8 @@ function CsnRateHint({ draft, onChange }: { draft: Draft; onChange: (d: Draft) =
   // CSN charges everyone the same rate, so what is typed for this year does not change the next.
   const then = dueYear !== null ? csnRateForYear(outlook, dueYear) : undefined;
   const differs = draft.rate === undefined || Math.abs(draft.rate - current) >= 0.0005;
-  const about = (y: number, n: number) => (csnRateDecided(y) ? pct(n) : `about ${pct(Math.round(n * 100) / 100)}`);
+  const t = useT().loans;
+  const about = (y: number, n: number) => (csnRateDecided(y) ? pct(n) : t.common.about(pct(Math.round(n * 100) / 100)));
 
   return (
     <>
@@ -430,13 +427,12 @@ function CsnRateHint({ draft, onChange }: { draft: Draft; onChange: (d: Draft) =
           className="mt-1 text-left text-[12px] font-medium text-brand-700 hover:underline"
           onClick={() => onChange({ ...draft, rate: current, rateYear: year })}
         >
-          Use {year}'s {csnRateDecided(year) ? 'rate' : 'estimate'}, {about(year, current)}
+          {t.csn.useRate(year, csnRateDecided(year), about(year, current))}
         </button>
       )}
       {then !== undefined && dueYear !== null && (
         <p className="mt-1 text-[12px] text-muted">
-          {csnRateDecided(dueYear) ? 'CSN has set' : 'Expect'} {about(dueYear, then)} in {dueYear},{' '}
-          {repaymentStart(loan, now) ? 'when payments start' : 'when the next payment is due'}.
+          {t.csn.expect(csnRateDecided(dueYear), about(dueYear, then), dueYear, !!repaymentStart(loan, now))}
         </p>
       )}
     </>
@@ -468,18 +464,15 @@ function CsnFirstYearly({
   const estimate = Math.round(first.yearly);
   const age = plan.birthYear ? first.year - plan.birthYear : 0;
   const rate = pct(Math.round(first.rate * 100) / 100);
+  const t = useT().loans.csn;
 
   return (
     <div className="space-y-3 rounded-xl border border-line px-3.5 py-3">
       <div className="text-[12.5px] text-ink-soft">
-        <div className="font-medium text-ink">
-          First årsbelopp in {first.year}: about {money(estimate)}
-        </div>
+        <div className="font-medium text-ink">{t.firstYearly(first.year, money(estimate))}</div>
         <p className="mt-0.5 text-muted">
-          {first.minimum
-            ? `That is CSN's lowest årsbelopp, so your ${money(first.debt)} is repaid sooner than ${first.years} years.`
-            : `About ${money(first.debt)} owed by then, spread over ${first.years} years at about ${rate}, rising 2 % a year.`}{' '}
-          CSN sets the real amount; it shows on Mina sidor at csn.se.
+          {first.minimum ? t.minimum(money(first.debt), first.years) : t.spread(money(first.debt), first.years, rate)}{' '}
+          {t.realAmount}
         </p>
         {Math.abs(yearly - estimate) >= 1 && (
           <button
@@ -487,21 +480,21 @@ function CsnFirstYearly({
             className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
             onClick={() => setYearly(estimate)}
           >
-            Use {money(estimate)} a year
+            {t.useYearly(money(estimate))}
           </button>
         )}
       </div>
       {askBirthYear ? (
-        <BirthYearField hint="(optional: from 40, CSN gives fewer than 25 years; saved to your profile)" />
+        <BirthYearField hint={t.birthYearHint} />
       ) : (
-        <p className="text-[12px] text-muted">Born {plan.birthYear}, from your profile in Settings.</p>
+        <p className="text-[12px] text-muted">{t.born(plan.birthYear ?? '')}</p>
       )}
       {age > 36 && (
         <Switch
           checked={!!draft.csnBefore2022}
           onChange={(csnBefore2022) => onChange({ ...draft, csnBefore2022 })}
-          label="All my CSN loans were paid out before 2022"
-          description="Loans from July 2001 to 2021 must be repaid by 60 instead of 64."
+          label={t.before2022}
+          description={t.before2022Description}
         />
       )}
     </div>
@@ -530,28 +523,29 @@ function CsnFields({
   const loan = { ...draft, id: draft.id ?? 'draft' } as Debt;
   const birthYear = usePlan().birthYear;
   const first = csnFirstYearly(loan, now, forecastRates(loan, now, outlook, [loan]), birthYear);
+  const t = useT().loans.csn;
 
   return (
     <>
       <SelectField
-        label="Loan"
+        label={t.loan}
         value={draft.csnType ?? 'annuity'}
         onValueChange={(csnType: CsnLoanType) => onChange({ ...draft, csnType })}
         options={[
-          { value: 'annuity', label: 'Annuitetslån (from July 2001)' },
-          { value: 'income_based', label: 'Studielån (1989 to June 2001)' },
+          { value: 'annuity', label: t.annuity },
+          { value: 'income_based', label: t.incomeBased },
         ]}
       />
       <div className="grid grid-cols-2 gap-3">
         <MoneyField
-          label="Årsbelopp"
-          hint="(per year)"
+          label={t.yearly}
+          hint={t.perYear}
           currency={currency}
           value={Math.round(yearly * 100) / 100}
           onValueChange={(y) => setYearly(y)}
         />
         <SelectField
-          label="Paid"
+          label={t.paid}
           value={draft.frequency === 'monthly' ? 'monthly' : 'quarterly'}
           onValueChange={(f: DebtFrequency) =>
             onChange({
@@ -562,15 +556,15 @@ function CsnFields({
             })
           }
           options={[
-            { value: 'quarterly', label: 'Four times a year' },
-            { value: 'monthly', label: 'Every month' },
+            { value: 'quarterly', label: t.quarterly },
+            { value: 'monthly', label: t.monthly },
           ]}
         />
       </div>
       {draft.frequency !== 'monthly' && (
         <DateField
-          label="Next payment due"
-          hint={`(${formatMoney(draft.payment, currency)} each time)`}
+          label={t.nextPayment}
+          hint={t.eachTime(formatMoney(draft.payment, currency))}
           value={draft.nextDate ?? ''}
           onChange={(e) => onChange({ ...draft, nextDate: e.target.value || undefined })}
         />
@@ -579,8 +573,8 @@ function CsnFields({
       {draft.csnType === 'income_based' && (
         <div>
           <MoneyField
-            label="Income two years ago"
-            hint="(before tax, to work out the årsbelopp)"
+            label={t.income}
+            hint={t.incomeHint}
             currency={currency}
             value={grossIncome}
             onValueChange={setGrossIncome}
@@ -591,16 +585,13 @@ function CsnFields({
               className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
               onClick={() => setYearly(suggested)}
             >
-              Use 4 % of it: {formatMoney(suggested, currency)} a year
+              {t.useIncomeShare(formatMoney(suggested, currency))}
             </button>
           )}
         </div>
       )}
-      <Callout tone="info" icon="goal-graduation" title="CSN plays by its own rules">
-        No ränteavdrag on CSN interest. If your income drops you can apply for a lower payment (nedsättning, 5 % of
-        income, 7 % from age 50), and whatever is left is written off at death.
-        {draft.csnType !== 'income_based' && ' The årsbelopp rises about 2 % a year.'} Your exact amount is on Mina sidor
-        at csn.se.
+      <Callout tone="info" icon="goal-graduation" title={t.rulesTitle}>
+        {t.rules(draft.csnType !== 'income_based')}
       </Callout>
     </>
   );
@@ -615,14 +606,15 @@ function MortgageFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft
   const totalBalance = others.reduce((a, x) => a + x.balance, 0) + draft.balance;
   const share = req && totalBalance > 0 ? (req.monthly * draft.balance) / totalBalance : 0;
   const type = mortgageRateType(draft);
+  const t = useT().loans.mortgage;
 
   return (
     <>
       <div className="grid grid-cols-2 gap-3">
         <div>
           <MoneyField
-            label="Amortering"
-            hint="(per month)"
+            label={t.amortization}
+            hint={t.perMonth}
             currency={currency}
             value={draft.amortization ?? 0}
             onValueChange={(v) => onChange({ ...draft, amortization: v })}
@@ -633,38 +625,36 @@ function MortgageFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft
               className="mt-1 text-[12px] font-medium text-brand-700 hover:underline"
               onClick={() => onChange({ ...draft, amortization: Math.ceil(share) })}
             >
-              Use the requirement: {formatMoney(Math.ceil(share), currency)}
+              {t.useRequirement(formatMoney(Math.ceil(share), currency))}
             </button>
           )}
         </div>
         <MoneyField
-          label="Home value"
-          hint={others.some((x) => x.propertyValue) ? '(same home as your other part)' : '(for the amorteringskrav)'}
+          label={t.homeValue}
+          hint={others.some((x) => x.propertyValue) ? t.sameHome : t.forRequirement}
           currency={currency}
           value={draft.propertyValue ?? 0}
           onValueChange={(v) => onChange({ ...draft, propertyValue: v > 0 ? v : undefined })}
         />
       </div>
       <div>
-        <div className="mb-1 text-[12.5px] font-medium text-ink-soft">Ränta</div>
+        <div className="mb-1 text-[12.5px] font-medium text-ink-soft">{t.rate}</div>
         <SegmentedControl
           value={type}
           onChange={(rateType: MortgageRateType) => onChange({ ...draft, rateType })}
           options={[
-            { value: 'variable', label: 'Rörlig (3 mån)' },
-            { value: 'fixed', label: 'Bunden' },
+            { value: 'variable', label: t.variableOption },
+            { value: 'fixed', label: t.fixedOption },
           ]}
         />
         <p className="mt-1 text-[12px] text-muted">
-          {type === 'variable'
-            ? 'Follows the styrränta, usually within weeks. Extra amortering is free any time.'
-            : 'Fixed until the villkorsändringsdag. Paying extra before then can cost ränteskillnadsersättning.'}
+          {type === 'variable' ? t.variableDescription : t.fixedDescription}
         </p>
       </div>
       {type === 'fixed' && (
         <DateField
-          label="Bunden till"
-          hint="(villkorsändringsdag, on your loan statement)"
+          label={t.fixedUntil}
+          hint={t.fixedUntilHint}
           value={draft.rateFixedUntil ?? ''}
           onChange={(e) => onChange({ ...draft, rateFixedUntil: e.target.value || undefined })}
         />
@@ -678,20 +668,19 @@ function MortgageRequirement({ draft }: { draft: Debt }) {
   const currency = useCurrency();
   const all = [...(plan.debts ?? []).filter((x) => x.id !== draft.id), draft];
   const req = amortizationRequirement(all);
+  const t = useT().loans.mortgage;
   if (!req) return null;
   const ltv = `${Math.round(req.ltv * 100)} %`;
   if (req.percent === 0) {
     return (
-      <Callout tone="success" title={`Belåningsgrad ${ltv}`}>
-        At 50 % or less there is no amorteringskrav.
+      <Callout tone="success" title={t.ltvTitle(ltv)}>
+        {t.noRequirement}
       </Callout>
     );
   }
   return (
-    <Callout tone={req.short ? 'warning' : 'success'} title={`Belåningsgrad ${ltv}: amortise ${req.percent} % a year`}>
-      That is {formatMoney(req.monthly, currency)} a month across your mortgages; you amortise{' '}
-      {formatMoney(req.current, currency)}.{req.ltv > 0.9 && ' Above 90 % is more than the bolånetak allows for a new loan.'}{' '}
-      Loans taken before June 2016 can be exempt.
+    <Callout tone={req.short ? 'warning' : 'success'} title={t.requirementTitle(ltv, req.percent)}>
+      {t.requirement(formatMoney(req.monthly, currency), formatMoney(req.current, currency), req.ltv > 0.9)}
     </Callout>
   );
 }
@@ -708,7 +697,7 @@ export function useLoanSheet() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const openEdit = (id: string) => {
     const d = (plan.debts ?? []).find((x) => x.id === id);
-    if (d) setDraft({ ...d });
+    if (d) setDraft({ ...d, name: debtName(d) });
   };
   const openNew = (kind?: DebtKind) => setDraft(blankLoan(kind, now, outlook));
   const close = () => setDraft(null);
