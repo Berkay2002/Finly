@@ -1,11 +1,33 @@
+import { addMonths } from 'date-fns';
 import clsx from 'clsx';
-import { amortizationRequirement, CSN_RATE_2026, isDeductible, repaymentOrder } from '@/engine/debts';
-import { formatDuration, formatMoney, formatMonths, formatPercent } from '@/engine/format';
+import { useMemo } from 'react';
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  amortizationRequirement,
+  CSN_RATE_2026,
+  debtPayoff,
+  debtSchedule,
+  isDeductible,
+  mortgageRateType,
+  repaymentOrder,
+} from '@/engine/debts';
+import {
+  formatCompact,
+  formatDate,
+  formatDuration,
+  formatMoney,
+  formatMonths,
+  formatMonthYear,
+  formatPercent,
+  formatShortMonthYear,
+} from '@/engine/format';
 import type { DebtLine } from '@/engine/metrics';
+import { csnRateForYear, fixedRateResets, forecastRates, policyRateAt, rateShock, type RateOutlook } from '@/engine/rates';
 import { debtKindMeta } from '@/engine/taxonomy';
 import type { Debt } from '@/engine/types';
+import { useRateOutlook } from '@/lib/rateOutlook';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot, useViewDate } from '@/store/selectors';
 import { DEBT_ACCENT, DEBT_ICON, LoanEditor, useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -18,8 +40,10 @@ import { StatCard } from '@/components/ui/StatCard';
 
 const pct = (n: number) => `${n.toLocaleString('sv-SE', { maximumFractionDigits: 2 })} %`;
 
+const rateText = (n: number) => pct(Math.round(n * 100) / 100);
+
 /** Why a loan sits where it does in the payoff order. */
-function orderReason(d: Debt, line: DebtLine | undefined): string {
+function orderReason(d: Debt, line: DebtLine | undefined, now: Date): string {
   const rate = line?.effectiveRate;
   const cost = rate !== undefined ? `${pct(rate)}${isDeductible(d) ? ' after ränteavdrag' : ''}` : 'rate not entered';
   switch (d.kind) {
@@ -31,8 +55,14 @@ function orderReason(d: Debt, line: DebtLine | undefined): string {
       return `${cost}. Unsecured, so no ränteavdrag.`;
     case 'car':
       return isDeductible(d) ? `${cost}. Secured by the car.` : `${cost}. Unsecured, so no ränteavdrag.`;
-    case 'mortgage':
-      return `${cost}. Secured by your home, usually the cheapest bank loan.`;
+    case 'mortgage': {
+      if (mortgageRateType(d) === 'variable') return `${cost}. Rörlig, so extra amortering is free any time.`;
+      const until = d.rateFixedUntil ? new Date(`${d.rateFixedUntil}T00:00:00`) : null;
+      if (until && until > now) {
+        return `${cost}. Bunden until ${formatMonthYear(until)}: paying extra before then can cost ränteskillnadsersättning, so do it on the villkorsändringsdag.`;
+      }
+      return `${cost}. Bunden: extra amortering before the villkorsändringsdag can cost ränteskillnadsersättning.`;
+    }
     default:
       return cost;
   }
@@ -45,6 +75,8 @@ export function LoansPage() {
   const prev = usePreviousSnapshot();
   const autoAdd = useAutoAdd();
   const loans = useLoanSheet();
+  const now = useViewDate();
+  const outlook = useRateOutlook();
   const money = (n: number) => formatMoney(n, currency);
 
   const debts = plan.debts ?? [];
@@ -55,6 +87,7 @@ export function LoansPage() {
   const unsecured = debts.filter((d) => d.kind !== 'csn' && !isDeductible(d) && d.balance > 0);
   const interestAfterAvdrag = m.debt.interest - m.debt.taxReduction;
   const interestLeft = m.debt.lines.reduce((a, l) => a + (l.interestLeft ?? 0), 0);
+  const resets = fixedRateResets(debts, now, outlook);
 
   return (
     <div>
@@ -152,9 +185,34 @@ export function LoansPage() {
               )}
             </Card>
           )}
+
+          <RatesCard debts={debts} now={now} outlook={outlook} currency={currency} />
         </div>
 
         <div className="space-y-4 self-start">
+          {resets.map((r) => (
+            <Callout
+              key={r.debt.id}
+              tone={r.passed || r.monthlyChange > 0 ? 'warning' : 'info'}
+              icon="goal-home"
+              title={r.passed ? `Update the rate on ${r.debt.name}` : `${r.debt.name}: new rate ${formatDate(r.date)}`}
+            >
+              {r.passed ? (
+                <>
+                  The fixed rate ended {formatDate(r.date)}, so {rateText(r.debt.rate ?? 0)} is probably out of date. Enter the
+                  rate from your bank; Finly's estimate is about {rateText(r.newRate)}.
+                </>
+              ) : (
+                <>
+                  Bunden at {rateText(r.debt.rate ?? 0)} until then. A rörlig rate would be about {rateText(r.newRate)} by that
+                  date: {money(Math.abs(r.monthlyChange))} a month {r.monthlyChange >= 0 ? 'more' : 'less'} (
+                  {money(Math.abs(r.monthlyChangeAfterDeduction))} after ränteavdrag). Compare rörlig with a new bindningstid,
+                  and pay any extra amortering that day, when it costs no ränteskillnadsersättning.
+                </>
+              )}
+            </Callout>
+          ))}
+
           {order.length > 1 && (
             <Card>
               <CardHeader
@@ -179,7 +237,7 @@ export function LoansPage() {
                         <IconTile icon={DEBT_ICON[d.kind]} accent={DEBT_ACCENT[d.kind]} size="sm" />
                         <div className="min-w-0 flex-1">
                           <EditableTitle className="text-[13px] font-medium text-ink">{d.name}</EditableTitle>
-                          <div className="text-[11.5px] text-muted">{orderReason(d, line)}</div>
+                          <div className="text-[11.5px] text-muted">{orderReason(d, line, now)}</div>
                         </div>
                         {line?.payoffMonths !== null && line?.payoffMonths !== undefined && (
                           <span className="hidden shrink-0 text-right text-[11.5px] text-muted sm:block">
@@ -234,5 +292,148 @@ export function LoansPage() {
       </div>
       {loans.sheet}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* If rates change                                                     */
+/* ------------------------------------------------------------------ */
+
+const CHART_MONTHS = 36;
+
+function RatesCard({ debts, now, outlook, currency }: { debts: Debt[]; now: Date; outlook: RateOutlook; currency: string }) {
+  const money = (n: number) => formatMoney(n, currency);
+  const moving = debts.filter((d) => (d.kind === 'mortgage' || d.kind === 'csn') && d.rate !== undefined && d.balance > 0);
+
+  const data = useMemo(() => {
+    const rows = Array.from({ length: CHART_MONTHS }, (_, i) => ({ date: addMonths(now, i + 1), today: 0, forecast: 0 }));
+    let interestToday = 0;
+    let interestAhead = 0;
+    for (const d of debts) {
+      const rates = forecastRates(d, now, outlook, debts);
+      debtSchedule(d, now, CHART_MONTHS).forEach((r, i) => (rows[i].today += r.payment));
+      debtSchedule(d, now, CHART_MONTHS, rates).forEach((r, i) => (rows[i].forecast += r.payment));
+      const flat = debtPayoff(d, now);
+      const ahead = debtPayoff(d, now, rates);
+      // Compare like with like: only loans that clear in both cases count towards interest left.
+      if (flat && ahead && Number.isFinite(flat.months) && Number.isFinite(ahead.months)) {
+        interestToday += flat.totalInterest ?? 0;
+        interestAhead += ahead.totalInterest ?? 0;
+      }
+    }
+    return {
+      rows: rows.map((r) => ({ name: formatShortMonthYear(r.date), today: Math.round(r.today), forecast: Math.round(r.forecast) })),
+      interestToday,
+      interestAhead,
+    };
+  }, [debts, now, outlook]);
+
+  if (moving.length === 0) return null;
+
+  const policyNow = policyRateAt(outlook, now);
+  const policyYear = policyRateAt(outlook, addMonths(now, 12));
+  const shock = rateShock(debts, now);
+  const mortgageBalance = debts.filter((d) => d.kind === 'mortgage').reduce((a, d) => a + d.balance, 0);
+  const hasCsn = moving.some((d) => d.kind === 'csn');
+  const nextYear = now.getFullYear() + 1;
+  const inAYear =
+    Math.abs(policyYear - policyNow) < 0.05
+      ? 'about the same'
+      : `about ${rateText(policyYear)}, ${policyYear > policyNow ? 'up' : 'down'} from today`;
+
+  return (
+    <Card>
+      <CardHeader
+        icon={<IconTile icon="card-expensive-months" accent="orange" size="sm" />}
+        title="If rates change"
+        subtitle={`Styrräntan is ${rateText(policyNow)}; in a year the Riksbank expects ${inAYear}. Rörliga bolån follow it within weeks, bundna at the villkorsändringsdag, and CSN a year or more later.`}
+      />
+
+      <div className="h-44 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data.rows} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
+            <CartesianGrid vertical={false} stroke="#e6eaf0" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7a90' }} axisLine={false} tickLine={false} interval={11} />
+            <YAxis
+              tick={{ fontSize: 11, fill: '#6b7a90' }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={formatCompact}
+              width={52}
+              domain={['auto', 'auto']}
+            />
+            <Tooltip
+              content={({ active, payload }) => {
+                const row = payload?.[0]?.payload as { name: string; today: number; forecast: number } | undefined;
+                return active && row ? (
+                  <div className="rounded-lg border border-line bg-card px-3 py-2 text-[12px] shadow">
+                    <div className="text-muted">{row.name}</div>
+                    <div className="tabular text-ink">
+                      With the forecast <span className="font-semibold">{money(row.forecast)}</span>
+                    </div>
+                    <div className="tabular text-muted">At today's rates {money(row.today)}</div>
+                  </div>
+                ) : null;
+              }}
+            />
+            <Line dataKey="today" stroke="#9aa6b8" strokeDasharray="4 4" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+            <Line dataKey="forecast" stroke="#f2994a" strokeWidth={2} dot={false} isAnimationActive={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="mt-1 text-[11.5px] text-muted">
+        Loan payments per month over three years: <span className="font-medium text-orange-800">with the forecast</span>, and at
+        today's rates (dashed).
+      </p>
+
+      <ul className="mt-3 divide-y divide-line text-[13px]">
+        {mortgageBalance > 0 && (
+          <li className="flex items-start justify-between gap-3 py-2">
+            <span className="text-ink-soft">
+              If rates rose 1 percentage point
+              <span className="block text-[11.5px] text-muted">
+                {shock.exposedBalance >= mortgageBalance
+                  ? 'All your bolån can change rate within a year.'
+                  : `${money(shock.exposedBalance)} of ${money(mortgageBalance)} in bolån is rörlig or resets within a year.`}
+              </span>
+            </span>
+            <span className="tabular shrink-0 text-right text-ink">
+              +{money(shock.monthlyAfterDeduction)}/mo
+              <span className="block text-[11.5px] text-muted">after ränteavdrag</span>
+            </span>
+          </li>
+        )}
+        {data.interestToday > 0 && (
+          <li className="flex items-start justify-between gap-3 py-2">
+            <span className="text-ink-soft">
+              Interest left to pay
+              <span className="block text-[11.5px] text-muted">{money(data.interestToday)} at today's rates</span>
+            </span>
+            <span className="tabular shrink-0 text-right text-ink">
+              {money(data.interestAhead)}
+              <span className="block text-[11.5px] text-muted">with the forecast</span>
+            </span>
+          </li>
+        )}
+        {hasCsn && (
+          <li className="flex items-start justify-between gap-3 py-2">
+            <span className="text-ink-soft">
+              CSN rate {nextYear}
+              <span className="block text-[11.5px] text-muted">Set in December from rates over the last three years</span>
+            </span>
+            <span className="tabular shrink-0 text-right text-ink">about {rateText(csnRateForYear(outlook, nextYear))}</span>
+          </li>
+        )}
+      </ul>
+
+      <p className="mt-3 border-t border-line pt-3 text-[11.5px] text-muted">
+        An estimate: the Riksbank revises its forecast at every policy meeting and is often wrong. Riksbank forecast from policy
+        round {outlook.forecast.round}, published {formatDate(outlook.forecast.published)};{' '}
+        {outlook.source === 'riksbank'
+          ? `updated ${formatDate(new Date(outlook.fetchedAt))}`
+          : `the copy shipped with Finly (${formatDate(new Date(outlook.fetchedAt))})`}
+        . Other loans are assumed to keep their rate.
+      </p>
+    </Card>
   );
 }

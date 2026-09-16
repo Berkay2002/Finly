@@ -169,6 +169,8 @@ export type CsnLoanType = 'annuity' | 'income_based';
 
 export type DebtFrequency = 'monthly' | 'quarterly' | 'yearly';
 
+export type MortgageRateType = 'variable' | 'fixed';
+
 export interface Debt {
   id: string;
   name: string;
@@ -195,7 +197,12 @@ export interface Debt {
   amortization?: number;
   /** Mortgage: market value of the home, for loan-to-value and the amortisation requirement. */
   propertyValue?: number;
-  /** Mortgage: end of the fixed-rate period (YYYY-MM-DD). Absent means a variable rate. */
+  /**
+   * Mortgage: rörlig (follows the market, usually reset every three months) or bunden (fixed until
+   * `rateFixedUntil`). Missing on mortgages saved before the choice existed: a date means bunden.
+   */
+  rateType?: MortgageRateType;
+  /** Mortgage with a bunden ränta: villkorsändringsdag, when the fixed period ends (YYYY-MM-DD). */
   rateFixedUntil?: string;
   /** CSN only. */
   csnType?: CsnLoanType;

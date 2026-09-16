@@ -1,6 +1,6 @@
 import { addMonths, format, lastDayOfMonth } from 'date-fns';
 import { toMonthly } from './frequency';
-import type { Debt, DebtFrequency, DebtKind, ExpenseItem, FinancialPlan } from './types';
+import type { Debt, DebtFrequency, DebtKind, ExpenseItem, FinancialPlan, MortgageRateType } from './types';
 
 /*
  * Swedish loan rules. Every figure here is checked against the source named next to it; see
@@ -144,16 +144,37 @@ export interface Payoff {
   date: Date | null;
 }
 
+/** Yearly rate in percent for the month starting at `date`; undefined keeps the loan's own rate. */
+export type RateAt = (date: Date) => number | undefined;
+
+export interface ScheduleRow {
+  date: Date;
+  /** Yearly rate used that month, in percent. */
+  rate: number;
+  payment: number;
+  interest: number;
+  principal: number;
+  /** Balance after the payment. */
+  balance: number;
+}
+
 const MAX_MONTHS = 100 * 12;
 
 /**
- * Month-by-month run of the loan at today's rate. CSN annuity payments step up by about 2 % a year
- * the way CSN recalculates them. Null when balance, rate or payment is missing.
+ * Month-by-month run of a loan. CSN annuity payments step up by about 2 % a year the way CSN
+ * recalculates them. With `rateAt` the rate can change over time; without it today's rate holds.
+ * Null when balance, rate or payment is missing.
  */
-export function debtPayoff(d: Debt, now: Date = new Date()): Payoff | null {
+function simulate(
+  d: Debt,
+  now: Date,
+  maxMonths: number,
+  rateAt?: RateAt,
+  onRow?: (row: ScheduleRow) => void,
+): { months: number; interest: number; cleared: boolean } | null {
   let balance = pos(d.balance);
-  const r = monthlyRateOf(d);
-  if (balance <= 0 || r === undefined) return null;
+  const own = monthlyRateOf(d);
+  if (balance <= 0 || own === undefined) return null;
 
   const amort = d.kind === 'mortgage' ? amortizationOf(d) : undefined;
   let payment = amort === undefined ? toMonthly(pos(d.payment), d.frequency) : 0;
@@ -161,21 +182,65 @@ export function debtPayoff(d: Debt, now: Date = new Date()): Payoff | null {
   const stepUp = d.kind === 'csn' && d.csnType !== 'income_based' ? CSN_STEP_UP : 0;
 
   let interest = 0;
-  for (let m = 1; m <= MAX_MONTHS; m += 1) {
+  for (let m = 1; m <= maxMonths; m += 1) {
+    const date = addMonths(now, m);
+    const pct = rateAt?.(date);
+    const r = pct === undefined || !Number.isFinite(pct) ? own : Math.max(0, pct) / 100 / 12;
     const due = balance * r;
     if (amort !== undefined) {
-      if (amort <= 0) break;
+      // An interest-only mortgage never clears; a schedule still wants its rows.
+      if (amort <= 0 && !onRow) break;
+      const principal = Math.min(amort, balance);
       interest += due;
-      balance -= Math.min(amort, balance);
+      balance -= principal;
+      onRow?.({ date, rate: r * 1200, payment: due + principal, interest: due, principal, balance });
     } else {
-      if (payment <= due && stepUp === 0) break;
+      // With a fixed rate a payment that does not cover the interest never will; a changing rate might.
+      if (payment <= due && stepUp === 0 && !rateAt && !onRow) break;
+      const paid = Math.min(payment, balance + due);
       interest += due;
-      balance = balance + due - payment;
+      balance = balance + due - paid;
+      onRow?.({ date, rate: r * 1200, payment: paid, interest: due, principal: paid - due, balance: Math.max(0, balance) });
       if (m % 12 === 0) payment *= 1 + stepUp;
     }
-    if (balance <= 0.5) return { months: m, totalInterest: interest, date: addMonths(now, m) };
+    if (balance <= 0.5) return { months: m, interest, cleared: true };
   }
-  return { months: Infinity, totalInterest: null, date: null };
+  return { months: maxMonths, interest, cleared: false };
+}
+
+/** When the loan is paid off and the interest on the way, at today's rate or along `rateAt`. */
+export function debtPayoff(d: Debt, now: Date = new Date(), rateAt?: RateAt): Payoff | null {
+  const run = simulate(d, now, MAX_MONTHS, rateAt);
+  if (!run) return null;
+  if (!run.cleared) return { months: Infinity, totalInterest: null, date: null };
+  return { months: run.months, totalInterest: run.interest, date: addMonths(now, run.months) };
+}
+
+/**
+ * Payment, interest and repayment for each of the next `months` months. A loan without balance or
+ * rate pays its entered payment every month; a loan paid off pays nothing after that.
+ */
+export function debtSchedule(d: Debt, now: Date, months: number, rateAt?: RateAt): ScheduleRow[] {
+  const rows: ScheduleRow[] = [];
+  const run = simulate(d, now, months, rateAt, (row) => rows.push(row));
+  if (!run) {
+    const flow = debtFlow(d);
+    for (let m = 1; m <= months; m += 1) {
+      rows.push({
+        date: addMonths(now, m),
+        rate: d.rate ?? 0,
+        payment: flow.monthly,
+        interest: flow.interest ?? 0,
+        principal: flow.principal ?? 0,
+        balance: pos(d.balance),
+      });
+    }
+    return rows;
+  }
+  for (let m = rows.length + 1; m <= months; m += 1) {
+    rows.push({ date: addMonths(now, m), rate: 0, payment: 0, interest: 0, principal: 0, balance: 0 });
+  }
+  return rows;
 }
 
 /* ------------------------------------------------------------------ */
@@ -269,6 +334,11 @@ const TYPICAL_RATE: Record<Exclude<DebtKind, 'csn'>, { unsecured: number; secure
   mortgage: { unsecured: 3, secured: 3 },
 };
 
+/** A mortgage's rate type; mortgages saved before the choice existed are bunden when they have an end date. */
+export function mortgageRateType(d: Pick<Debt, 'rateType' | 'rateFixedUntil'>): MortgageRateType {
+  return d.rateType ?? (d.rateFixedUntil ? 'fixed' : 'variable');
+}
+
 export function kindRank(d: Pick<Debt, 'kind' | 'secured'>): number {
   if (d.kind === 'csn') return 99;
   return KIND_RANK[d.kind][isSecured(d) ? 'secured' : 'unsecured'];
@@ -276,7 +346,7 @@ export function kindRank(d: Pick<Debt, 'kind' | 'secured'>): number {
 
 /**
  * Order to put extra money towards loans: highest interest after ränteavdrag first, ties (within a
- * quarter of a percentage point) broken by security. CSN always last: its rate is low, payments can
+ * quarter of a percentage point) broken by security, rörliga mortgage parts before bundna. CSN always last: its rate is low, payments can
  * be lowered if income falls (nedsättning) and whatever is left is written off at death.
  */
 export function repaymentOrder(debts: Debt[]): Debt[] {
@@ -290,6 +360,11 @@ export function repaymentOrder(debts: Debt[]): Debt[] {
   };
   return [...open].sort((a, b) => {
     if ((a.kind === 'csn') !== (b.kind === 'csn')) return a.kind === 'csn' ? 1 : -1;
+    // Between mortgage parts, extra money goes to the rörliga first: repaying a bunden del before its
+    // villkorsändringsdag can cost ränteskillnadsersättning.
+    if (a.kind === 'mortgage' && b.kind === 'mortgage' && mortgageRateType(a) !== mortgageRateType(b)) {
+      return mortgageRateType(a) === 'variable' ? -1 : 1;
+    }
     const diff = key(b) - key(a);
     if (Number.isFinite(diff) && Math.abs(diff) >= 0.25) return diff;
     return kindRank(a) - kindRank(b);

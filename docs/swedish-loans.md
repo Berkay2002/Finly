@@ -24,12 +24,15 @@ are checked against the sources at the end. Update the constants marked *yearly*
 
 Payoff priority, from pay first to pay last, is the interest rate **after ränteavdrag**, with CSN always last.
 Within 0.25 percentage points the tie goes to the less secure loan: credit card → personal loan → unsecured
-other/car → secured other/car → mortgage.
+other/car → secured other/car → mortgage. Between two mortgage parts, a rörlig del comes before a bunden one
+whatever the rates, because paying a bunden del early can cost ränteskillnadsersättning.
 
 ### CSN (`csn`)
 
-- **Rate** (*yearly*): 2.135 % in 2026 (`CSN_RATE_2026`). The government sets it each year as the average
-  statslåneränta over the three previous years, reduced by 30 %. No ränteavdrag on top of that.
+- **Rate** (*yearly*): 2.135 % in 2026 (`CSN_RATE_2026`, and `CSN_RATES` in `rates.ts`). Set each December for
+  the next year: a base rate (the state's average borrowing cost on statsobligationer and statsskuldväxlar,
+  except three-month bills, from November three years back to October that year; 1.736 % for 2026) plus a
+  markup for credit losses (0.399 %), subsidised by 30 % for the borrower. No ränteavdrag on top of that.
 - **Annuitetslån** (loans from July 2001, `csnType: 'annuity'`): CSN sets an årsbelopp that rises about 2 %
   a year (`CSN_STEP_UP`); the payoff simulation steps the payment up every 12 months. Lowest årsbelopp 2026:
   8,880 kr (*yearly*). Loans from 2001–2021 must be repaid by 60 and are written off at 68; loans from 2022
@@ -50,6 +53,11 @@ other/car → secured other/car → mortgage.
   can be exempt. `amortizationRequirement` adds every mortgage part together against the highest home value
   entered.
 - Always secured, so it gives **ränteavdrag**.
+- **Rörlig or bunden** (`rateType`, per mortgage part). Rörlig (three-month fixation) follows the styrränta
+  within weeks, and extra amortering is free at any time. Bunden keeps its rate until the
+  **villkorsändringsdag** (`rateFixedUntil`); repaying early before then can cost **ränteskillnadsersättning**,
+  so extra money goes to rörliga delar first and to a bunden del on its villkorsändringsdag. Mortgages saved
+  before the choice existed count as bunden when they have a date and rörlig otherwise.
 
 ### Car loan (`car`)
 
@@ -78,8 +86,14 @@ Secured or not, as the user says.
 
 - `debtFlow(d)` gives `{ monthly, interest, principal }`. Interest is balance × rate ÷ 12; the rest of the
   payment is repayment. Without balance and rate the split is `null` and the payment still counts in full.
-- `debtPayoff(d, now)` runs the loan month by month at today's rate (capped at 100 years) and returns months,
-  total interest left and the debt-free date. `Infinity` months means the payment does not cover the interest.
+- `debtPayoff(d, now, rateAt?)` runs the loan month by month (capped at 100 years) and returns months, total
+  interest left and the debt-free date. `Infinity` months means the payment does not cover the interest.
+  Without `rateAt` it uses today's rate; with one (`forecastRates`, see "Rates ahead") the rate can change
+  each month.
+- `debtSchedule(d, now, months, rateAt?)` gives the same run as monthly rows (rate, payment, interest,
+  repayment, balance), zero once the loan is paid off. Loans without balance or rate repeat today's payment.
+- Everywhere except the "If rates change" card and the forecast line in the loan sheet, figures use today's
+  rate.
 
 ## Plans from before loans had their own model
 
@@ -97,11 +111,77 @@ months keep their frozen plans as they were.
   valuation.
 - **The 100,000 kr ränteavdrag limit is per person.** A couple sharing a mortgage has two limits; Finly applies
   one to the whole household, so above 100,000 kr of interest it slightly understates the reduction.
-- **Rates stay where they are.** Payoff dates and interest left assume today's rate for the whole life of the
-  loan. A rörlig bolåneränta follows the Riksbank policy rate; the CSN rate follows the three-year average
-  statslåneränta with a lag.
+- **The main figures keep today's rate.** Payoff dates, interest left and monthly costs assume today's rate.
+  The forecast in "Rates ahead" is shown next to them, never instead of them.
 - **Typical rates** (`TYPICAL_RATE`) only place a loan whose rate is missing in the payoff order. They are never
   shown.
+
+## Rates ahead
+
+`src/engine/rates.ts`, shown on the Loans page ("If rates change") and in the loan sheet. It is an estimate:
+the Riksbank changes its forecast at every policy meeting and has often been wrong.
+
+### Data: `RateOutlook`
+
+- **Policy rate** today and its monthly average back to November four years ago (Riksbank SWEA, series
+  `SECBREPOEFF`).
+- **Forecast path**: the latest policy round's forecast of the policy rate, as quarterly averages (Riksbank
+  monetary policy data, series `SEQRATENAYNA`).
+- Fetched by `GET /api/rates` (a Vercel Function, see [technical-plan.md](technical-plan.md#server-functions)),
+  cached a day on the CDN and a day in the browser. `BUNDLED_OUTLOOK` is the copy shipped with the app. It is
+  used offline, before the fetch returns, and when the Riksbank is down.
+
+### The policy rate over time (`policyRateAt`)
+
+Past months use the monthly average; this month uses today's rate. Months ahead use today's rate moved by the
+forecast's change from this quarter to that quarter, so the path starts from where the rate really is. After
+the last forecast quarter the rate stays flat.
+
+### Each loan (`rateAt`, `forecastRates`)
+
+| Loan | Rate in a future month |
+| --- | --- |
+| Rörlig bolån | your rate + (policy rate then − policy rate now) |
+| Bunden bolån | your rate until the villkorsändringsdag, then policy rate then + rörlig margin |
+| CSN | your rate + (CSN rate that year − CSN rate this year) |
+| Car, personal, credit card, other | your rate (lenders price these only loosely against the market) |
+
+The **rörlig margin** is your own rörliga delar's rate over the policy rate, weighted by balance. Without a
+rörlig del it is SCB's average rate on new rörliga bolån over that month's policy rate
+(`MORTGAGE_VARIABLE_AVERAGE`: 2.74 % in July 2026, a margin of about 1 percentage point).
+
+### CSN's rate for a coming year (`csnRateForYear`)
+
+The real base is the state's borrowing cost, which Finly does not have. The policy rate stands in for it, but
+only for the **change**:
+
+    rate(year) = last decided rate
+               + 0.7 × (average policy rate over the year's window − average over the last decided year's window)
+
+The window runs from November four years before to October the year before (2027: Nov 2023 to Oct 2026).
+Anchoring on the last decided rate cancels most of the gap between the policy rate and bond yields, but not
+all of it. Predicting each of 2024, 2025 and 2026 from the year before came out 0.11, 0.14 and 0.35
+percentage points too high, using the policy rate from 2019 on. Treat it as a direction, not a figure. With the bundled
+data: 2027 about 1.81 %, 2028 1.37 %, 2029 1.32 %, 2030 1.41 %. The credit-loss markup is assumed unchanged.
+
+### Warnings and sensitivity
+
+- **A bunden del resets** (`fixedRateResets`): within three months, or passed in the last three months (the
+  sheet looks a year ahead). Shows the expected new rate and the monthly change at today's balance, before and
+  after ränteavdrag. A passed date asks for the real rate from the bank.
+- **+1 percentage point** (`rateShock`): the mortgage balance that can move within a year (rörliga delar,
+  bundna ending within a year, bundna without a date) × 1 % ÷ 12, and × 0.7 after ränteavdrag. CSN and other
+  loans are left out: CSN moves a year or more later, other loans only loosely.
+
+### Keeping it current
+
+| What | When | Where |
+| --- | --- | --- |
+| `CSN_RATES` and `CSN_RATE_2026` | each December, when CSN publishes next year's rate | `rates.ts`, `debts.ts` |
+| `MORTGAGE_VARIABLE_AVERAGE` | a few times a year (SCB publishes monthly) | `rates.ts` |
+| `BUNDLED_OUTLOOK` | after each monetary policy report (four a year) | `rates.ts` |
+
+The live outlook updates itself; the bundled copy only matters when the function cannot reach the Riksbank.
 
 ## Sources (checked September 2026)
 
@@ -110,3 +190,10 @@ months keep their frozen plans as they were.
   plus csn.se pages on avskrivning, nedsättning, how long you pay and loans from 1989–2001.
 - Ränteavdrag from 2026: guides from Länsförsäkringar, Swedbank, Handelsbanken and SEB.
 - Amorteringskrav from 1 April 2026: regeringen.se and Handelsbanken.
+- CSN rate components: csn.se on the 2026 rate (base 1.736 %, markup 0.399 %) and CSN's decisions for 2023
+  and 2024.
+- Riksbank: [API portal](https://developer.api.riksbank.se/), SWEA (policy rate `SECBREPOEFF`) and monetary
+  policy data (forecast `SEQRATENAYNA`, policy round 2026:2, 17 June 2026).
+- SCB: interest rates on new mortgages to households, July 2026.
+- Vercel: [Hobby plan limits](https://vercel.com/docs/plans/hobby) and
+  [Functions usage and pricing](https://vercel.com/docs/functions/usage-and-pricing).

@@ -8,12 +8,15 @@ import {
   debtPayoff,
   interestTaxReduction,
   isDeductible,
+  mortgageRateType,
   nextCsnDueDate,
   paymentsPerYear,
 } from '@/engine/debts';
 import { formatDate, formatDuration, formatMoney, formatMonthYear } from '@/engine/format';
+import { fixedRateResets, forecastRates } from '@/engine/rates';
 import { DEBT_KINDS, debtKindMeta } from '@/engine/taxonomy';
-import type { CsnLoanType, Debt, DebtFrequency, DebtKind } from '@/engine/types';
+import type { CsnLoanType, Debt, DebtFrequency, DebtKind, MortgageRateType } from '@/engine/types';
+import { useRateOutlook } from '@/lib/rateOutlook';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan, useViewDate } from '@/store/selectors';
 import type { Accent } from '@/components/ui/accent';
@@ -22,7 +25,7 @@ import { Callout } from '@/components/ui/Callout';
 import { Chip } from '@/components/ui/Chip';
 import { Delta } from '@/components/ui/Delta';
 import type { IconSource } from '@/components/ui/Icon';
-import { DateField, MoneyField, SelectField, Switch, TextField } from '@/components/ui/fields';
+import { DateField, MoneyField, SegmentedControl, SelectField, Switch, TextField } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
 import { ItemRow } from './ItemRow';
 
@@ -57,6 +60,7 @@ export function blankLoan(kind: DebtKind = 'csn', now: Date = new Date()): Draft
     payment: 0,
     frequency: meta.frequency,
     secured: kind === 'car' ? true : undefined,
+    rateType: kind === 'mortgage' ? 'variable' : undefined,
     ...(kind === 'csn' ? { rate: CSN_RATE_2026, csnType: 'annuity' as const, nextDate: nextCsnDueDate(now) } : {}),
   };
 }
@@ -64,7 +68,14 @@ export function blankLoan(kind: DebtKind = 'csn', now: Date = new Date()): Draft
 /** Keeps a draft consistent before saving: a mortgage's payment follows from amortering and interest. */
 function finalize(d: Draft): Draft {
   const out = { ...d, name: d.name.trim() };
-  if (out.kind === 'mortgage') out.payment = debtFlow({ ...out, id: '' }).monthly;
+  if (out.kind === 'mortgage') {
+    out.rateType = mortgageRateType(out);
+    if (out.rateType === 'variable') out.rateFixedUntil = undefined;
+    out.payment = debtFlow({ ...out, id: '' }).monthly;
+  } else {
+    out.rateType = undefined;
+    out.rateFixedUntil = undefined;
+  }
   if (out.frequency === 'monthly') out.nextDate = undefined;
   return out;
 }
@@ -124,6 +135,7 @@ export function LoanEditor({
                   {d.rate !== undefined && <span>· {d.rate.toLocaleString('sv-SE', { maximumFractionDigits: 3 })} %</span>}
                   {flow.monthly > 0 && <span>· {formatMoney(flow.monthly, currency)}/mo</span>}
                   {payoff && <span className={payoff.startsWith('Never') ? 'text-warning' : undefined}>· {payoff}</span>}
+                  {d.kind === 'mortgage' && <Chip tone="neutral">{rateTypeLabel(d)}</Chip>}
                   {isDeductible(d) && <Chip tone="brand">Ränteavdrag</Chip>}
                   {previous && <Delta before={previous[d.id]} after={d.balance} invert className="ml-1" />}
                 </>
@@ -162,6 +174,12 @@ export function LoanEditor({
 
 const pct = (n: number) => `${n.toLocaleString('sv-SE', { maximumFractionDigits: 3 })} %`;
 
+/** "Rörlig", or "Bunden till okt 2027" style label for a mortgage part. */
+export function rateTypeLabel(d: Pick<Debt, 'rateType' | 'rateFixedUntil'>): string {
+  if (mortgageRateType(d) === 'variable') return 'Rörlig';
+  return d.rateFixedUntil ? `Bunden till ${formatMonthYear(new Date(`${d.rateFixedUntil}T00:00:00`))}` : 'Bunden';
+}
+
 export function LoanSheet({
   draft,
   onChange,
@@ -177,6 +195,8 @@ export function LoanSheet({
 }) {
   const currency = useCurrency();
   const now = useViewDate();
+  const plan = usePlan();
+  const outlook = useRateOutlook();
   const [grossIncome, setGrossIncome] = useState(0);
   const money = (n: number) => formatMoney(n, currency);
 
@@ -198,6 +218,13 @@ export function LoanSheet({
   const d = draft ? ({ ...draft, id: draft.id ?? 'draft' } as Debt) : null;
   const flow = d ? debtFlow(d) : null;
   const payoff = d ? debtPayoff(d, now) : null;
+  // Only mortgages and CSN follow the policy rate; other loans keep today's rate in the forecast too.
+  const household = d ? [...(plan.debts ?? []).filter((x) => x.id !== d.id), d] : [];
+  const ahead =
+    d && (d.kind === 'mortgage' || d.kind === 'csn') && d.rate !== undefined
+      ? debtPayoff(d, now, forecastRates(d, now, outlook, household))
+      : null;
+  const reset = d && d.kind === 'mortgage' ? fixedRateResets(household, now, outlook, 12).find((r) => r.debt.id === d.id) : undefined;
 
   return (
     <Sheet
@@ -332,6 +359,26 @@ export function LoanSheet({
                 )}
               </p>
             )}
+            {payoff && ahead && Number.isFinite(payoff.months) && Math.abs((ahead.totalInterest ?? 0) - (payoff.totalInterest ?? 0)) >= 1 && (
+              <p className="mt-1">
+                If rates follow the Riksbank's forecast:{' '}
+                {Number.isFinite(ahead.months) ? (
+                  <>
+                    {ahead.months !== payoff.months && <>debt-free {formatMonthYear(ahead.date!)}, </>}
+                    {money(ahead.totalInterest ?? 0)} interest left to pay.
+                  </>
+                ) : (
+                  'the payment stops covering the interest.'
+                )}
+              </p>
+            )}
+            {reset && (
+              <p className="mt-1">
+                {reset.passed ? 'The fixed rate ended' : 'Bunden until'} {formatDate(reset.date)}. After that, expect about{' '}
+                {pct(Math.round(reset.newRate * 100) / 100)}: {money(Math.abs(reset.monthlyChange))} a month{' '}
+                {reset.monthlyChange >= 0 ? 'more' : 'less'} in interest at today's balance.
+              </p>
+            )}
           </div>
 
           {draft.kind === 'mortgage' && <MortgageRequirement draft={d} />}
@@ -442,6 +489,7 @@ function MortgageFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft
   // The requirement covers all parts of the mortgage; this part's share of it follows its balance.
   const totalBalance = others.reduce((a, x) => a + x.balance, 0) + draft.balance;
   const share = req && totalBalance > 0 ? (req.monthly * draft.balance) / totalBalance : 0;
+  const type = mortgageRateType(draft);
 
   return (
     <>
@@ -472,14 +520,29 @@ function MortgageFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft
           onValueChange={(v) => onChange({ ...draft, propertyValue: v > 0 ? v : undefined })}
         />
       </div>
-      <DateField
-        label="Rate fixed until"
-        hint="(leave empty for rörlig ränta)"
-        value={draft.rateFixedUntil ?? ''}
-        onChange={(e) => onChange({ ...draft, rateFixedUntil: e.target.value || undefined })}
-      />
-      {draft.rateFixedUntil && (
-        <p className="-mt-3 text-[12px] text-muted">The rate can change after {formatDate(draft.rateFixedUntil)}.</p>
+      <div>
+        <div className="mb-1 text-[12.5px] font-medium text-ink-soft">Ränta</div>
+        <SegmentedControl
+          value={type}
+          onChange={(rateType: MortgageRateType) => onChange({ ...draft, rateType })}
+          options={[
+            { value: 'variable', label: 'Rörlig (3 mån)' },
+            { value: 'fixed', label: 'Bunden' },
+          ]}
+        />
+        <p className="mt-1 text-[12px] text-muted">
+          {type === 'variable'
+            ? 'Follows the styrränta, usually within weeks. Extra amortering is free any time.'
+            : 'Fixed until the villkorsändringsdag. Paying extra before then can cost ränteskillnadsersättning.'}
+        </p>
+      </div>
+      {type === 'fixed' && (
+        <DateField
+          label="Bunden till"
+          hint="(villkorsändringsdag, on your loan statement)"
+          value={draft.rateFixedUntil ?? ''}
+          onChange={(e) => onChange({ ...draft, rateFixedUntil: e.target.value || undefined })}
+        />
       )}
     </>
   );

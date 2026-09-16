@@ -7,7 +7,7 @@ The PRD defines *what*; this document defines *how* for the first build.
 
 | Area | Decision | Why |
 | --- | --- | --- |
-| Stack | React 19, TypeScript, Vite, Tailwind CSS v4 | One responsive codebase covers both the desktop and mobile designs. No server required. |
+| Stack | React 19, TypeScript, Vite, Tailwind CSS v4 | One responsive codebase covers both the desktop and mobile designs. No server required, apart from one cached function for rate data (see Server functions). |
 | Routing | react-router v7 | Each onboarding step and each sidebar section is a URL, so the browser back button and deep links work. |
 | State | Zustand with `persist` to `localStorage` | Planning Mode needs no backend. The store is the only place a sync layer would later plug in. |
 | Charts | Recharts | Donut and bar charts in the design; small API surface. |
@@ -27,10 +27,15 @@ src/
     metrics.ts     Core numbers: essential/lifestyle/planned cost, breathing room, safe to spend, runways, position
     projections.ts Upcoming expenses, expensive months, goal completion, 12-month projection
     scenarios.ts   "Can I afford this?" and income-change what-ifs, with before/after comparison
+    debts.ts       Loans: interest/repayment split, payoff simulation, amorteringskrav, ränteavdrag, payoff order
+    rates.ts       Where loan rates are heading: policy rate path, projected CSN rate, bunden resets, +1 pp shock
     format.ts      Money, percent, month formatting
   store/         Zustand store, selectors, sample data
   components/    ui primitives, layout (sidebar, bottom nav, top bar), forms, charts
   pages/         Onboarding steps, dashboard, section pages, accounts, savings, planning tools, insights, settings
+  lib/rateOutlook.ts  Fetches /api/rates once a day per browser; falls back to the outlook bundled in rates.ts
+api/
+  rates.ts       Vercel Function: Riksbank policy rate and forecast, cached a day on Vercel's CDN
 ```
 
 The engine is the product. The UI is a thin projection of `computeMetrics(plan)`.
@@ -46,7 +51,7 @@ Everything hangs off one `FinancialPlan`:
   - `actuals` records real bills keyed by the month they are paid (`YYYY-MM`). Until entered, a variable item is only an estimate.
   - `engine/actuals.ts` summarises recorded bills and, after three or more, suggests a rounded typical amount and range when the estimate on file is more than 5% off. The edit sheet shows the history and a one-tap "Use these".
 - **Account** — kind (everyday | salary | savings | emergency | joint | cash | investment | other) and balance. Kind determines whether the balance counts as spendable, cash savings, emergency, or investment.
-- **Debt** — kind (csn | mortgage | car | personal | credit_card | other), balance with month-keyed `balances`, `rate` (percent), `payment` + `frequency` (monthly | quarterly | yearly), `secured`, and kind-specific fields: `amortization` and `propertyValue` for a mortgage, `csnType` and `nextDate` for CSN. Rules, formulas and sources: [swedish-loans.md](swedish-loans.md).
+- **Debt** — kind (csn | mortgage | car | personal | credit_card | other), balance with month-keyed `balances`, `rate` (percent), `payment` + `frequency` (monthly | quarterly | yearly), `secured`, and kind-specific fields: `amortization` and `propertyValue` for a mortgage, `rateType` (variable | fixed) and `rateFixedUntil` (villkorsändringsdag) for a mortgage part, `csnType` and `nextDate` for CSN. Rules, formulas and sources: [swedish-loans.md](swedish-loans.md).
 - **SavingsGoal** — kind, `purpose` (future_spending | long_term, PRD §2.4), current amount, monthly contribution, optional target amount and date.
 
 All amounts are stored as entered with their frequency. Monthly equivalents are computed, never stored.
@@ -90,7 +95,7 @@ All amounts are stored as entered with their frequency. Monthly equivalents are 
 | `/income`, `/home`, `/living`, `/transport`, `/finance`, `/leisure`, `/planned` | Editable section pages with a stat strip and the same line-item editor as onboarding |
 | `/savings` | Goals list, savings split donut, 12-month projection |
 | `/accounts` | Accounts list, allocation donut, financial position |
-| `/loans` | Loans list, interest vs repayment, payoff order, amorteringskrav and CSN notes |
+| `/loans` | Loans list, interest vs repayment, payoff order, amorteringskrav and CSN notes, "If rates change" (forecast payments, +1 pp, CSN next year), warnings before a bunden del resets |
 | `/planning` | Can I afford this?, income-change scenario, daily/weekly allowance |
 | `/insights` | Subscriptions, true car cost, annualised costs, reducible spending, allocation |
 | `/settings` | Name, currency, export/import JSON, reset, load sample data |
@@ -173,6 +178,26 @@ is the whole identity.
 A real schema is only worth it if server-side features arrive (shared households, reminders). Data can be
 decrypted and migrated at that point.
 
+## Server functions
+
+The app is static apart from one Vercel Function (Node runtime; Edge Functions are deprecated).
+
+- **`GET /api/rates`** (`api/rates.ts`). The Riksbank APIs send no CORS headers, so the browser cannot call them.
+  The function makes two upstream calls (SWEA `SECBREPOEFF` from November four years back, and the
+  monetary policy forecasts for `SEQRATENAYNA`) and returns a `RateOutlook`. It has no imports so Vercel runs
+  it as-is.
+- **Caching keeps it inside the Hobby plan.** Success: `s-maxage=86400, stale-while-revalidate=604800`, so
+  the CDN runs it about once a day per region whatever the traffic. Failure: 502 with `s-maxage=900`. The
+  client stores the answer in `localStorage` (`finly:rates:v1`) for 24 h and never waits on it: until it
+  arrives, or when it fails, the outlook bundled in `src/engine/rates.ts` is used. Expected use is a few
+  hundred invocations and well under a CPU-minute a month, against 1M invocations and 4 CPU-hours.
+- **Riksbank limits.** The anonymous API answers 429 after a handful of quick calls. The CDN cache is what
+  keeps us under it; do not call the function in a loop while testing.
+- **Routing.** `vercel.json` rewrites everything except `/api/` to the SPA.
+- **Local dev.** A small Vite plugin in `vite.config.ts` serves `/api/rates` by loading `api/rates.ts` with
+  `ssrLoadModule`, so `npm run dev` behaves like production without `vercel dev`. `vite preview` has no
+  `/api`; the app then uses the bundled outlook.
+
 ## Build order
 
 1. Engine + tests
@@ -187,3 +212,4 @@ decrypted and migrated at that point.
 10. Type-check, tests, production build
 11. Tracking Mode: local history (frozen months, month-keyed balances, automatic close)
 12. Sync phrase on Convex (encrypted blob, conflict banner)
+13. Loans as their own model (CSN, bolån, billån, credit), then rate forecasts through `/api/rates`
