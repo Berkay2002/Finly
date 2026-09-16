@@ -178,3 +178,27 @@ describe('profile picture', () => {
     expect(usePlanStore.getState().plan.avatar).toBeUndefined();
   });
 });
+
+describe('electricity tariffs', () => {
+  const tariff = { kwh: 400, energyPrice: 30, surcharge: 45, monthlyFee: 330 };
+
+  it('recomputes the amount on save and passes usage to the other bill', () => {
+    const store = usePlanStore.getState();
+    const net = store.addExpense({ ...expense({ name: 'Elnät', amount: 0 }), id: undefined, tariff: { part: 'grid', ...tariff } });
+    expect(usePlanStore.getState().plan.expenses[0]).toMatchObject({ amount: 630, fixed: false });
+
+    const el = store.addExpense({
+      ...expense({ name: 'Electricity', amount: 0 }),
+      id: undefined,
+      tariff: { part: 'supply', kwh: 400, energyPrice: 80, surcharge: 5, monthlyFee: 49 },
+    });
+    store.updateExpense(el, {
+      tariff: { part: 'supply', kwh: 800, kwhHigh: 1500, energyPrice: 80, surcharge: 5, monthlyFee: 49 },
+    });
+
+    const byId = Object.fromEntries(usePlanStore.getState().plan.expenses.map((e) => [e.id, e]));
+    expect(byId[el]).toMatchObject({ amount: 729, range: { low: 729, high: 1324 } });
+    expect(byId[net].tariff).toMatchObject({ kwh: 800, kwhHigh: 1500 });
+    expect(byId[net]).toMatchObject({ amount: 930, range: { low: 930, high: 1455 } });
+  });
+});

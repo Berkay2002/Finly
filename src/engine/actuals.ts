@@ -49,15 +49,16 @@ const roundTo = (n: number, step: number) => Math.round(n / step) * step;
 
 /**
  * Suggests a typical amount and range from recorded bills once there are enough of them.
- * Returns null while fewer than `minBills` exist, for fixed or non-monthly items, or when the
+ * Returns null while fewer than `minBills` exist, for fixed, tariff-calculated or non-monthly items, or when the
  * current estimate already sits within `tolerance` of what the bills say.
  */
 export function suggestFromActuals(
-  e: Pick<ExpenseItem, 'fixed' | 'frequency' | 'amount' | 'range' | 'actuals'>,
+  e: Pick<ExpenseItem, 'fixed' | 'frequency' | 'amount' | 'range' | 'actuals' | 'tariff'>,
   opts: { minBills?: number; tolerance?: number; window?: number } = {},
 ): EstimateSuggestion | null {
   const { minBills = 3, tolerance = 0.05, window = 12 } = opts;
-  if (e.fixed || e.frequency !== 'monthly') return null;
+  // A calculated bill is corrected through its usage, not by overwriting the amount.
+  if (e.fixed || e.tariff || e.frequency !== 'monthly') return null;
   const history = actualsHistory(e);
   if (!history || history.count < minBills) return null;
 

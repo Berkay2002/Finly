@@ -1,12 +1,33 @@
-import { Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
+import { CloudDownload, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { actualsHistory, suggestFromActuals } from '@/engine/actuals';
 import { amountSpread, monthlySpread, varies } from '@/engine/amounts';
+import {
+  ENERGY_TAX_ORE,
+  REDUCED_ENERGY_TAX_ORE,
+  defaultTariff,
+  energyTaxFor,
+  impliedKwh,
+  perKwh,
+  tariffPartFor,
+  withTariffAmounts,
+} from '@/engine/electricity';
+import { homeKommunCode, homePriceArea } from '@/engine/home';
+import { findKommun } from '@/engine/tax/kommuner';
 import { FREQUENCIES, FREQUENCY_LABELS, isIrregular, toMonthly } from '@/engine/frequency';
-import { formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
+import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
 import { CATEGORY_META, groupsFor, suggestionBySlug, suggestionsFor, type ExpenseSuggestion } from '@/engine/taxonomy';
-import { EXPENSE_CATEGORIES, type ExpenseCategory, type ExpenseItem, type ExpenseTag, type Frequency } from '@/engine/types';
+import {
+  EXPENSE_CATEGORIES,
+  type ElectricityTariff,
+  type ExpenseCategory,
+  type ExpenseItem,
+  type ExpenseTag,
+  type Frequency,
+} from '@/engine/types';
+import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
+import { HomeFields } from './HomeFields';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
@@ -131,6 +152,7 @@ export function ExpenseEditor({
         meta={
           <>
             {e.note && <span>{e.note}</span>}
+            {e.tariff && !e.includedElsewhere && <span className="tabular">{formatAmount(e.tariff.kwh)} kWh/month</span>}
             {e.frequency !== 'monthly' && monthly > 0 && !e.includedElsewhere && (
               <span className="tabular">≈ {formatMoney(monthly, currency)}/month</span>
             )}
@@ -154,10 +176,10 @@ export function ExpenseEditor({
               currency={currency}
               value={e.amount}
               placeholder={ranged && e.amount === 0 ? String(Math.round(amountSpread(e).typical)) : undefined}
-              title={ranged ? 'Typical amount' : undefined}
+              title={e.tariff ? 'Calculated from usage and prices' : ranged ? 'Typical amount' : undefined}
               onValueChange={(amount) => updateExpense(e.id, { amount })}
               className="min-w-0 flex-1 sm:w-36 sm:flex-none"
-              disabled={e.includedElsewhere}
+              disabled={e.includedElsewhere || !!e.tariff}
             />
             <SelectField
               size="sm"
@@ -165,7 +187,7 @@ export function ExpenseEditor({
               onValueChange={(frequency: Frequency) => updateExpense(e.id, { frequency })}
               options={freqOptions}
               className="w-32 shrink-0"
-              disabled={e.includedElsewhere}
+              disabled={e.includedElsewhere || !!e.tariff}
             />
           </>
         }
@@ -320,8 +342,16 @@ function ExpenseDetailForm({
     const next = { low: draft.range?.low ?? 0, high: draft.range?.high ?? 0, ...patch };
     set({ range: next.low > 0 || next.high > 0 ? next : undefined });
   };
+  const plan = usePlan();
   const spread = amountSpread(draft);
   const hasRange = !draft.fixed && spread.high > spread.low;
+  const tariffPart = tariffPartFor(draft.subcategory);
+  const setTariff = (tariff: ElectricityTariff | undefined) => onChange(withTariffAmounts({ ...draft, tariff }));
+  const startTariff = () => {
+    if (!tariffPart) return;
+    const sibling = plan.expenses.find((x) => x.tariff && x.id !== draft.id)?.tariff;
+    setTariff(defaultTariff(tariffPart, { sibling, kommunCode: homeKommunCode(plan) }));
+  };
   const toggleTag = (t: ExpenseTag) =>
     set({ tags: draft.tags.includes(t) ? draft.tags.filter((x) => x !== t) : [...draft.tags, t] });
   return (
@@ -345,49 +375,70 @@ function ExpenseDetailForm({
       />
       <div className="grid grid-cols-2 gap-3">
         <MoneyField
-          label={draft.fixed ? 'Amount' : 'Typical amount'}
-          hint={!draft.fixed && hasRange ? '(what you budget for)' : undefined}
+          label={draft.tariff ? 'Calculated amount' : draft.fixed ? 'Amount' : 'Typical amount'}
+          hint={draft.tariff ? '(average month)' : !draft.fixed && hasRange ? '(what you budget for)' : undefined}
           currency={currency}
-          value={draft.amount}
+          value={draft.tariff ? spread.typical : draft.amount}
           placeholder={hasRange && draft.amount === 0 ? String(Math.round(spread.typical)) : undefined}
           onValueChange={(amount) => set({ amount })}
+          disabled={!!draft.tariff}
         />
         <SelectField
           label="Frequency"
           value={draft.frequency}
           onValueChange={(frequency: Frequency) => set({ frequency })}
           options={freqOptions}
+          disabled={!!draft.tariff}
         />
       </div>
       {!draft.fixed && (
         <div className="rounded-xl border border-dashed border-line bg-page/40 p-3">
-          <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
-            Usual range
-            <span className="ml-1 font-normal text-faint">(per {periodNoun(draft.frequency)}, optional)</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <MoneyField
-              label="Cheapest"
-              currency={currency}
-              value={draft.range?.low ?? 0}
-              onValueChange={(low) => setRange({ low })}
+          {tariffPart && (
+            <Switch
+              checked={!!draft.tariff}
+              onChange={(on) => (on ? startTariff() : setTariff(undefined))}
+              label="Calculate from usage and prices"
+              description={
+                tariffPart === 'supply'
+                  ? 'kWh × (spot price + påslag) + månadsavgift'
+                  : 'kWh × (överföring + energiskatt) + abonnemang'
+              }
             />
-            <MoneyField
-              label="Most expensive"
-              currency={currency}
-              value={draft.range?.high ?? 0}
-              onValueChange={(high) => setRange({ high })}
-            />
-          </div>
-          <p className="mt-2 text-[12px] text-muted">
-            {hasRange
-              ? `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
-              : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
-          </p>
+          )}
+          {draft.tariff ? (
+            <TariffFields tariff={draft.tariff} onChange={setTariff} currency={currency} />
+          ) : (
+            <>
+              <div className={clsx('mb-2 text-[12.5px] font-medium text-ink-soft', tariffPart && 'mt-3')}>
+                Usual range
+                <span className="ml-1 font-normal text-faint">(per {periodNoun(draft.frequency)}, optional)</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <MoneyField
+                  label="Cheapest"
+                  currency={currency}
+                  value={draft.range?.low ?? 0}
+                  onValueChange={(low) => setRange({ low })}
+                />
+                <MoneyField
+                  label="Most expensive"
+                  currency={currency}
+                  value={draft.range?.high ?? 0}
+                  onValueChange={(high) => setRange({ high })}
+                />
+              </div>
+              <p className="mt-2 text-[12px] text-muted">
+                {hasRange
+                  ? `Budgets for ${formatMoney(spread.typical, currency)}; a normal ${periodNoun(draft.frequency)} lands between ${formatMoneyRange(spread.low, spread.high, currency)}.`
+                  : 'For bills on a floating tariff, like electricity on rörligt pris. Leave the typical amount empty to budget for the midpoint.'}
+              </p>
+            </>
+          )}
           <RecordedBills
             draft={draft}
             currency={currency}
             onApply={(s) => set({ amount: s.typical, range: { low: s.low, high: s.high } })}
+            onUseKwh={(kwh) => draft.tariff && setTariff({ ...draft.tariff, kwh })}
           />
           {draft.frequency === 'monthly' && (
             <SelectField
@@ -423,7 +474,9 @@ function ExpenseDetailForm({
             help="Does it cost the same each time?"
             value={draft.fixed ? 'fixed' : 'variable'}
             onChange={(v) =>
-              v === 'fixed' ? set({ fixed: true, range: undefined, billingLag: undefined }) : set({ fixed: false })
+              v === 'fixed'
+                ? set({ fixed: true, range: undefined, billingLag: undefined, tariff: undefined })
+                : set({ fixed: false })
             }
             options={[
               { value: 'fixed', label: 'Fixed' },
@@ -493,15 +546,18 @@ function RecordedBills({
   draft,
   currency,
   onApply,
+  onUseKwh,
 }: {
   draft: Draft;
   currency: string;
   onApply: (s: { typical: number; low: number; high: number }) => void;
+  onUseKwh: (kwh: number) => void;
 }) {
   const history = actualsHistory(draft);
   if (!history) return null;
   const suggestion = suggestFromActuals(draft);
   const recent = history.entries.slice(0, 6);
+  const usage = draft.tariff ? usageFromBills(draft.tariff, history.entries) : null;
   return (
     <div className="mt-3 border-t border-line pt-3">
       <div className="mb-1.5 flex items-center justify-between text-[12px]">
@@ -535,7 +591,204 @@ function RecordedBills({
           </Button>
         </div>
       )}
+      {usage && (
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
+          <Sparkles size={14} className="shrink-0 text-orange-500" />
+          <span className="min-w-0 flex-1">
+            At these prices your last {usage.basedOn} bills mean about{' '}
+            <span className="tabular font-semibold">{formatAmount(usage.kwh)} kWh</span> a month.
+          </span>
+          <Button size="sm" variant="soft" onClick={() => onUseKwh(usage.kwh)}>
+            Use {formatAmount(usage.kwh)} kWh
+          </Button>
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * Usage implied by the average of the recent bills, when there are enough of them and it differs
+ * noticeably from the usage on file.
+ */
+function usageFromBills(tariff: ElectricityTariff, entries: { amount: number }[]) {
+  const recent = entries.slice(0, 12);
+  if (recent.length < 3) return null;
+  const average = recent.reduce((a, b) => a + b.amount, 0) / recent.length;
+  const kwh = impliedKwh(tariff, average);
+  if (kwh === null || Math.abs(kwh - tariff.kwh) <= Math.max(20, tariff.kwh * 0.1)) return null;
+  return { kwh, basedOn: recent.length };
+}
+
+const formatOre = (ore: number) => String(Math.round(ore * 10) / 10);
+
+/** Usage and price inputs for a calculated electricity bill, with the arithmetic shown underneath. */
+function TariffFields({
+  tariff,
+  onChange,
+  currency,
+}: {
+  tariff: ElectricityTariff;
+  onChange: (t: ElectricityTariff) => void;
+  currency: string;
+}) {
+  const plan = usePlan();
+  const set = (patch: Partial<ElectricityTariff>) => onChange({ ...tariff, ...patch });
+  const supply = tariff.part === 'supply';
+  const optional = (n: number) => (n > 0 ? n : undefined);
+  const kommunCode = homeKommunCode(plan);
+  const kommun = findKommun(kommunCode, new Date().getFullYear());
+  const expectedTax = energyTaxFor(kommunCode);
+  return (
+    <div className="mt-3 space-y-3">
+      <div>
+        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
+          Where you live
+        </div>
+        <HomeFields compact />
+      </div>
+
+      <div>
+        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
+          Usage
+          <span className="ml-1 font-normal text-faint">(shared with your other electricity bill)</span>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <MoneyField
+            label="Per year"
+            currency="kWh"
+            value={Math.round(tariff.kwh * 12)}
+            onValueChange={(year) => set({ kwh: year / 12 })}
+          />
+          <MoneyField
+            label="Light month"
+            currency="kWh"
+            value={tariff.kwhLow ?? 0}
+            onValueChange={(n) => set({ kwhLow: optional(n) })}
+          />
+          <MoneyField
+            label="Heavy month"
+            currency="kWh"
+            value={tariff.kwhHigh ?? 0}
+            onValueChange={(n) => set({ kwhHigh: optional(n) })}
+          />
+        </div>
+        <p className="mt-1.5 text-[12px] text-muted">
+          {tariff.kwh > 0 ? `${formatAmount(tariff.kwh)} kWh in an average month. ` : ''}
+          Your grid company shows the yearly figure as "Årsförbrukning" or "Estimated annual consumption".
+        </p>
+      </div>
+
+      <div>
+        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">
+          {supply ? 'Your electricity deal' : 'Your grid tariff'}
+          <span className="ml-1 font-normal text-faint">(incl. moms)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <MoneyField
+            label={supply ? 'Spot price' : 'Överföringsavgift'}
+            currency="öre/kWh"
+            inputClassName="pr-20!"
+            value={tariff.energyPrice}
+            onValueChange={(energyPrice) => set({ energyPrice, priceMonth: undefined })}
+          />
+          <MoneyField
+            label={supply ? 'Påslag' : 'Energiskatt'}
+            currency="öre/kWh"
+            inputClassName="pr-20!"
+            value={tariff.surcharge}
+            onValueChange={(surcharge) => set({ surcharge })}
+          />
+          <MoneyField
+            label={supply ? 'Månadsavgift' : 'Abonnemang'}
+            hint={supply ? undefined : '(+ effektavgift)'}
+            currency={`${currency}/mo`}
+            inputClassName="pr-20!"
+            value={tariff.monthlyFee}
+            onValueChange={(monthlyFee) => set({ monthlyFee })}
+          />
+        </div>
+        {supply ? (
+          <SpotPriceFetch tariff={tariff} onChange={onChange} />
+        ) : (
+          <p className="mt-2 text-[12px] text-muted">
+            {kommun
+              ? `Energiskatt in ${kommun.name} is ${expectedTax} öre/kWh in 2026${expectedTax === REDUCED_ENERGY_TAX_ORE ? ', with the northern Sweden deduction' : ''}.`
+              : `Energiskatt is ${ENERGY_TAX_ORE} öre/kWh in 2026, ${REDUCED_ENERGY_TAX_ORE} öre in Norrbotten, Västerbotten, Jämtland and a few kommuner nearby.`}
+            {kommun && tariff.surcharge !== expectedTax && (
+              <>
+                {' '}
+                <button type="button" className="font-medium text-brand-700 hover:underline" onClick={() => set({ surcharge: expectedTax })}>
+                  Use {expectedTax} öre
+                </button>
+              </>
+            )}
+          </p>
+        )}
+      </div>
+
+      <TariffBreakdown tariff={tariff} currency={currency} />
+    </div>
+  );
+}
+
+/**
+ * Fills the spot price with last month's average for the chosen price area. Only runs on a tap, and
+ * offers nothing to fetch when the plan already holds that month's figure; lib/spotPrice.ts caches
+ * the rest.
+ */
+function SpotPriceFetch({ tariff, onChange }: { tariff: ElectricityTariff; onChange: (t: ElectricityTariff) => void }) {
+  const month = previousMonthKey();
+  const { area } = homePriceArea(usePlan());
+  const [state, setState] = useState<{ loading: boolean; error?: string }>({ loading: false });
+  const current = tariff.priceMonth === month && tariff.priceArea === area;
+
+  const load = async () => {
+    setState({ loading: true });
+    try {
+      const avg = await fetchSpotAverage(area, month);
+      onChange({ ...tariff, priceArea: area, energyPrice: avg.oreInclVat, priceMonth: month });
+      setState({ loading: false });
+    } catch (err) {
+      setState({ loading: false, error: err instanceof Error ? err.message : 'Could not load spot prices.' });
+    }
+  };
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-muted">
+      {current ? (
+        <span>
+          {formatMonthKey(month)} average for {area}, incl. moms.
+        </span>
+      ) : (
+        <>
+          <Button size="sm" variant="soft" icon={CloudDownload} onClick={load} disabled={state.loading}>
+            {state.loading ? 'Loading…' : `Use ${formatMonthKey(month)} average`}
+          </Button>
+          {tariff.priceMonth && (
+            <span>
+              Now using the {formatMonthKey(tariff.priceMonth)} average for {tariff.priceArea}.
+            </span>
+          )}
+        </>
+      )}
+      {state.error && <span className="text-red-500">{state.error}</span>}
+      <span className="w-full text-faint">Spot prices from elprisetjustnu.se. Add your supplier's påslag on top.</span>
+    </div>
+  );
+}
+
+function TariffBreakdown({ tariff, currency }: { tariff: ElectricityTariff; currency: string }) {
+  const s = amountSpread({ amount: 0, frequency: 'monthly', tariff });
+  if (s.typical <= 0) {
+    return <p className="text-[12px] text-muted">Enter your usage and prices to calculate the bill.</p>;
+  }
+  return (
+    <p className="tabular rounded-lg bg-card px-3 py-2 text-[12px] text-muted">
+      {formatAmount(tariff.kwh)} kWh × {formatOre(perKwh(tariff) * 100)} öre + {formatMoney(tariff.monthlyFee, currency)} ={' '}
+      <span className="font-semibold text-ink">{formatMoney(s.typical, currency)}</span> in an average month
+      {s.high > s.low && <>, {formatMoneyRange(s.low, s.high, currency)} from light to heavy months</>}.
+    </p>
   );
 }
 

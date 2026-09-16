@@ -1,6 +1,7 @@
 export * from './types';
 export * from './frequency';
 export * from './amounts';
+export * from './electricity';
 export * from './actuals';
 export * from './format';
 export * from './taxonomy';
@@ -8,5 +9,6 @@ export * from './metrics';
 export * from './projections';
 export * from './scenarios';
 export * from './history';
+export * from './home';
 export * from './tax/sweden';
 export * from './tax/kommuner';

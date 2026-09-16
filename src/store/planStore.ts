@@ -1,12 +1,15 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { newId } from '@/lib/id';
+import { shareUsage, withTariffAmounts } from '@/engine/electricity';
+import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
 import type {
   Account,
   ExpenseItem,
   FinancialPlan,
+  HomeLocation,
   IncomeSource,
   OnboardingStep,
   SavingsGoal,
@@ -33,6 +36,8 @@ interface PlanState {
   /** A small data URL from `fileToAvatar`, or undefined to remove the picture. */
   setAvatar: (avatar: string | undefined) => void;
   setCurrency: (currency: string) => void;
+  /** Where the household lives; salaries and electricity bills that followed the old home follow the new one. */
+  setHome: (home: HomeLocation) => void;
 
   addIncome: (draft: Draft<IncomeSource>) => string;
   updateIncome: (id: string, patch: Partial<IncomeSource>) => void;
@@ -70,6 +75,12 @@ interface PlanState {
   setHydrated: () => void;
 }
 
+/** Recompute a calculated electricity bill after it changed and pass its kWh on to the other half. */
+function withElectricity(expenses: ExpenseItem[], id: string): ExpenseItem[] {
+  const changed = expenses.map((x) => (x.id === id ? withTariffAmounts(x) : x));
+  return shareUsage(changed, id);
+}
+
 function touch(plan: FinancialPlan): FinancialPlan {
   return { ...plan, updatedAt: new Date().toISOString() };
 }
@@ -88,6 +99,7 @@ export const usePlanStore = create<PlanState>()(
         setUserName: (userName) => mutate((p) => ({ ...p, userName })),
         setAvatar: (avatar) => mutate((p) => ({ ...p, avatar })),
         setCurrency: (currency) => mutate((p) => ({ ...p, currency })),
+        setHome: (home) => mutate((p) => applyHome(p, home)),
 
         addIncome: (draft) => {
           const id = draft.id ?? newId('inc');
@@ -100,11 +112,17 @@ export const usePlanStore = create<PlanState>()(
 
         addExpense: (draft) => {
           const id = draft.id ?? newId('exp');
-          mutate((p) => ({ ...p, expenses: [...p.expenses, { ...draft, id }] }));
+          mutate((p) => ({ ...p, expenses: withElectricity([...p.expenses, { ...draft, id }], id) }));
           return id;
         },
         updateExpense: (id, patch) =>
-          mutate((p) => ({ ...p, expenses: p.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+          mutate((p) => ({
+            ...p,
+            expenses: withElectricity(
+              p.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+              id,
+            ),
+          })),
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
           set((s) => {

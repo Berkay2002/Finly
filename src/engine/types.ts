@@ -81,6 +81,34 @@ export interface AmountRange {
   high: number;
 }
 
+/** Nord Pool bidding area. Spot prices differ between them, most in winter. */
+export type PriceArea = 'SE1' | 'SE2' | 'SE3' | 'SE4';
+
+/** `supply` is the elhandel bill, `grid` the elnät bill. */
+export type TariffPart = 'supply' | 'grid';
+
+/**
+ * How an electricity bill is calculated, so the budget can run on usage × price instead of a guessed
+ * range. See engine/electricity.ts. Prices include moms.
+ */
+export interface ElectricityTariff {
+  part: TariffPart;
+  /** Average usage per month, kWh. */
+  kwh: number;
+  /** Usage in a light (summer) and a heavy (winter) month, kWh. Optional; they set the range. */
+  kwhLow?: number;
+  kwhHigh?: number;
+  /** öre/kWh. Supply: average spot price. Grid: överföringsavgift. */
+  energyPrice: number;
+  /** öre/kWh. Supply: påslag (incl. elcertifikat). Grid: energiskatt. */
+  surcharge: number;
+  /** kr/month. Supply: månadsavgift. Grid: abonnemang, plus any effektavgift. */
+  monthlyFee: number;
+  /** Supply only: price area and month (YYYY-MM) of the spot price, when it came from the price feed. */
+  priceArea?: PriceArea;
+  priceMonth?: string;
+}
+
 export interface ExpenseItem {
   id: string;
   name: string;
@@ -112,6 +140,11 @@ export interface ExpenseItem {
    * that figure instead.
    */
   actuals?: Record<string, number>;
+  /**
+   * Electricity and elnät only: calculate the bill from usage and prices. While set, it decides the
+   * amount and range and the item is treated as a monthly variable cost.
+   */
+  tariff?: ElectricityTariff;
   /** Required to maintain basic obligations vs optional. */
   essential: boolean;
   /** Hard to change in the short term vs realistically adjustable. */
@@ -176,12 +209,24 @@ export type OnboardingStep =
   | 'accounts'
   | 'summary';
 
+/** Where the household lives. Salary tax and electricity costs both depend on it. */
+export interface HomeLocation {
+  /** Four-digit kommun code, e.g. "0581" for Norrköping. */
+  kommunCode?: string;
+  /**
+   * Chosen electricity price area. Only needed where the kommun does not settle it (see
+   * `priceAreaFor`); when left out the area follows the kommun.
+   */
+  priceArea?: PriceArea;
+}
+
 export interface FinancialPlan {
   version: 1;
   currency: string;
   userName: string;
   /** Profile picture as a small JPEG data URL (see `lib/image.ts`). Syncs with the plan; not kept in frozen months. */
   avatar?: string;
+  home?: HomeLocation;
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];

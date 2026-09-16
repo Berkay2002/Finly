@@ -7,6 +7,7 @@ import { usePlan } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
 import { ExpenseEditor } from '@/components/forms/ExpenseEditor';
 import { GoalEditor } from '@/components/forms/GoalEditor';
+import { HomeFields } from '@/components/forms/HomeFields';
 import { IncomeEditor } from '@/components/forms/IncomeEditor';
 import { MonthSelector, Avatar, NotificationsButton } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -51,7 +52,19 @@ export function OnboardingPage() {
   };
 
   const content = (() => {
-    if (step === 'income') return <IncomeEditor />;
+    if (step === 'income')
+      return (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-line bg-page/60 p-3 sm:p-4">
+            <h3 className="text-[15px] font-semibold text-ink">Where do you live?</h3>
+            <p className="mb-3 mt-0.5 text-[12.5px] text-muted">
+              Needed for things like your net salary and electricity costs.
+            </p>
+            <HomeFields />
+          </div>
+          <IncomeEditor />
+        </div>
+      );
     if (step === 'savings') return <GoalEditor />;
     if (step === 'accounts') return <AccountEditor />;
     if (step === 'summary') return <SummaryStep />;

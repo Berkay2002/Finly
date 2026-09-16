@@ -1,5 +1,6 @@
 import { toMonthly } from './frequency';
-import type { AmountRange, Frequency } from './types';
+import { tariffSpread } from './electricity';
+import type { AmountRange, ElectricityTariff, Frequency } from './types';
 
 /**
  * Low / typical / high reading of one amount. For a fixed item all three are the same number;
@@ -16,18 +17,21 @@ export interface Rangeable {
   frequency: Frequency;
   fixed?: boolean;
   range?: AmountRange;
+  tariff?: ElectricityTariff;
 }
 
 const pos = (n: number) => (Number.isFinite(n) && n > 0 ? n : 0);
 
 /**
  * Per-period spread of an item. Rules:
+ * - An electricity tariff, when present, decides all three figures.
  * - `fixed` items and items without a range collapse to `amount`.
  * - `typical` is `amount`, or the midpoint of the range when no typical amount was entered.
  * - A bound left at 0 means "same as typical".
  * - Bounds are ordered and widened so that low ≤ typical ≤ high always holds.
  */
 export function amountSpread(item: Rangeable): AmountSpread {
+  if (item.tariff) return tariffSpread(item.tariff);
   const amount = pos(item.amount);
   const range = item.fixed === false || item.fixed === undefined ? item.range : undefined;
   if (!range) return { low: amount, typical: amount, high: amount };

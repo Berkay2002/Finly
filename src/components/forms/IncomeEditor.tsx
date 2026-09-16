@@ -4,7 +4,8 @@ import { FREQUENCIES, FREQUENCY_LABELS } from '@/engine/frequency';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { toMonthly } from '@/engine/frequency';
 import { INCOME_KINDS, incomeKindMeta } from '@/engine/taxonomy';
-import { kommunerFor } from '@/engine/tax/kommuner';
+import { homeKommunCode } from '@/engine/home';
+import { findKommun, kommunerFor } from '@/engine/tax/kommuner';
 import { DEFAULT_TAX_PROFILE, isTaxYearStale, resolveTaxYear, withholdingForGross } from '@/engine/tax/sweden';
 import type { Frequency, GrossIncome, IncomeKind, IncomeSource, Reliability } from '@/engine/types';
 import { usePlanStore } from '@/store/planStore';
@@ -36,8 +37,15 @@ function blankDraft(reliability: Reliability): Draft {
   };
 }
 
-function blankGross(amount = 0): GrossIncome {
-  return { amount, taxYear: resolveTaxYear().year, profile: { ...DEFAULT_TAX_PROFILE } };
+/** A new before-tax entry, taxed where the household lives when the plan knows that. */
+function blankGross(amount = 0, kommunCode?: string): GrossIncome {
+  const year = resolveTaxYear().year;
+  const kommun = findKommun(kommunCode, year);
+  return {
+    amount,
+    taxYear: year,
+    profile: { ...DEFAULT_TAX_PROFILE, kommunCode: kommun?.code, kommunalRate: kommun?.rate },
+  };
 }
 
 /** Recompute `amount` (net) from the gross block unless the user has pinned a payslip figure. */
@@ -214,7 +222,7 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                   value={editing.gross ? 'gross' : 'net'}
                   onChange={(mode) => {
                     if (mode === 'net') setEditing({ ...editing, gross: undefined });
-                    else setEditing(withNet(editing, blankGross(editing.amount)));
+                    else setEditing(withNet(editing, blankGross(editing.amount, homeKommunCode(plan))));
                   }}
                   options={[
                     { value: 'net', label: 'After tax (net)' },
