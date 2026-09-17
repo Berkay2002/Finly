@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -b --noEmit",
-    "tax:kommuner": "node scripts/fetch-kommuner.mjs"
+    "tax:kommuner": "node scripts/fetch-kommuner.mjs",
+    "food:prices": "node scripts/fetch-food-prices.mjs"
   },
   "dependencies": {
     "@scure/bip39": "^2.4.0",

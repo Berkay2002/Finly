@@ -186,12 +186,18 @@ decrypted and migrated at that point.
 
 ## Server functions
 
-The app is static apart from one Vercel Function (Node runtime; Edge Functions are deprecated).
+The app is static apart from two Vercel Functions (Node runtime; Edge Functions are deprecated).
 
 - **`GET /api/rates`** (`api/rates.ts`). The Riksbank APIs send no CORS headers, so the browser cannot call them.
   The function makes two upstream calls (SWEA `SECBREPOEFF` from November four years back, and the
   monetary policy forecasts for `SEQRATENAYNA`) and returns a `RateOutlook`. It has no imports so Vercel runs
   it as-is.
+- **`GET /api/food-prices`** (`api/food-prices.ts`). Two SCB PxWeb calls: the KPI for food by COICOP group and
+  month (`KPI2020COICOPM`, four years) and grocery sales by group for the latest year (`LivsNN`). The engine
+  uses them to move Konsumentverket's yearly food table from the month it was priced to the newest month, and
+  to split groceries by food group (`src/engine/foodPrices.ts`). SCB allows 30 calls per 10 s per IP and
+  changes the data monthly, so the same day-long CDN cache applies; the client stores it as
+  `finly:food-prices:v1` and falls back to `src/engine/foodPricesSnapshot.ts` (`npm run food:prices` regenerates it).
 - **Caching keeps it inside the Hobby plan.** Success: `s-maxage=86400, stale-while-revalidate=604800`, so
   the CDN runs it about once a day per region whatever the traffic. Failure: 502 with `s-maxage=900`. The
   client stores the answer in `localStorage` (`finly:rates:v1`) for 24 h and never waits on it: until it

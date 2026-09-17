@@ -18,6 +18,12 @@ export const AGE_GROUPS: { id: AgeGroup; readonly label: string }[] = AGE_GROUP_
 }));
 
 interface FoodCostTable {
+  /**
+   * Month (YYYY-MM) the table's prices are from. Konsumentverket measures prices over the autumn and
+   * publishes in mid-November; September is taken as the midpoint. SCB's food index moves the figures
+   * on from here (engine/foodPrices.ts).
+   */
+  pricedAt: string;
   /** All meals cooked at home, kr per month. */
   atHome: Record<AgeGroup, number>;
   /** All meals at home except lunch on five weekdays (school lunch, or lunch bought at work). */
@@ -32,6 +38,7 @@ interface FoodCostTable {
  */
 export const FOOD_COSTS: Record<number, FoodCostTable> = {
   2026: {
+    pricedAt: '2025-09',
     atHome: {
       '0': 1030,
       '1-3': 1100,
@@ -63,6 +70,11 @@ export const FOOD_COSTS: Record<number, FoodCostTable> = {
 export function foodCostYear(year: number): number {
   const years = Object.keys(FOOD_COSTS).map(Number).sort((a, b) => a - b);
   return [...years].reverse().find((y) => y <= year) ?? years[0];
+}
+
+/** When the table used for `year` was priced (YYYY-MM). */
+export function foodCostPricedAt(year: number): string {
+  return FOOD_COSTS[foodCostYear(year)].pricedAt;
 }
 
 export function isAdult(age: AgeGroup): boolean {

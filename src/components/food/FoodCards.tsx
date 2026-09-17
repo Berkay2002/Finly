@@ -96,6 +96,7 @@ export function FoodCard() {
       <Sheet
         open={estimating}
         onClose={() => setEstimating(false)}
+        size="lg"
         title={t.sheetTitle}
         subtitle={t.sheetSubtitle}
       >

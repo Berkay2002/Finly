@@ -327,16 +327,42 @@ export interface HomeLocation {
 /** Konsumentverket's age bands for food costs. See engine/food.ts. */
 export type AgeGroup = '0' | '1-3' | '4-6' | '7-10' | '11-14' | '15-17' | '18-24' | '25-50' | '51-70' | '71+';
 
+export type Sex = 'female' | 'male';
+
+/** Physical activity level, relative to the median person Konsumentverket's menu feeds (`average`). */
+export type ActivityLevel = 'low' | 'average' | 'high' | 'veryHigh';
+
+export type WeightGoal = 'lose' | 'maintain' | 'gain';
+
+export type Diet = 'omnivore' | 'flexitarian' | 'pescatarian' | 'vegetarian' | 'vegan' | 'highProtein' | 'lowCarb';
+
+/** Where the household shops: discount chains, a normal supermarket, or premium and organic. */
+export type ShoppingStyle = 'budget' | 'normal' | 'premium';
+
 export interface HouseholdMember {
   id: string;
   age: AgeGroup;
   /** Eats weekday lunch away from home: school lunch, or lunch bought at work. */
   lunchAway: boolean;
+  /* The rest is optional detail for the personalised estimate; see engine/foodProfile.ts. */
+  sex?: Sex;
+  /** Exact age for the energy need; the age band's midpoint is used when left out. */
+  birthYear?: number;
+  heightCm?: number;
+  weightKg?: number;
+  activity?: ActivityLevel;
+  goal?: WeightGoal;
+  diet?: Diet;
+  /** Gluten- or lactose-free products, which cost more. */
+  freeFrom?: boolean;
 }
 
 /** Who the household feeds. Used to estimate groceries. */
 export interface Household {
   members: HouseholdMember[];
+  shopping?: ShoppingStyle;
+  /** Whether the groceries estimate is personalised from the members' detail, or is Konsumentverket's plain figure. */
+  personalised?: boolean;
 }
 
 /**

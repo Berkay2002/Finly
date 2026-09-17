@@ -320,7 +320,7 @@ describe('money set aside for quarterly and yearly bills', () => {
       expense({ id: 'fuel', name: 'Fuel', category: 'transport', amount: 1000 }),
     ];
     p.debts = [
-      { id: 'csn', kind: 'csn', csnType: 'annuity', balance: 440_000, rate: 2.135, payment: 4407, frequency: 'quarterly', nextDate: '2027-02-26' },
+      { id: 'csn', name: 'CSN', kind: 'csn', csnType: 'annuity', balance: 440_000, rate: 2.135, payment: 4407, frequency: 'quarterly', nextDate: '2027-02-26' },
     ];
     return p;
   };
