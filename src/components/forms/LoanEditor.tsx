@@ -715,7 +715,7 @@ export function useLoanSheet() {
     const d = (plan.debts ?? []).find((x) => x.id === id);
     if (d) setDraft({ ...d, name: debtName(d) });
   };
-  const openNew = (kind?: DebtKind) => setDraft(blankLoan(kind, now, outlook));
+  const openNew = (kind?: DebtKind, patch?: Partial<Draft>) => setDraft({ ...blankLoan(kind, now, outlook), ...patch });
   const close = () => setDraft(null);
   const save = () => {
     if (!draft) return;

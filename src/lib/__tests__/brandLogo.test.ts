@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { brandedExpenseName, logoDevEnabled, logoUrlForName } from '../brandLogo';
+import { bankDomain, brandedExpenseName, logoDevEnabled, logoUrlForName } from '../brandLogo';
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -55,5 +55,15 @@ describe('brandedExpenseName', () => {
 
   it('returns nothing for an empty name', () => {
     expect(brandedExpenseName({ name: '   ', subcategory: 'custom' })).toBeNull();
+  });
+});
+
+describe('bankDomain', () => {
+  it('knows common banks however they are typed, and nothing else', () => {
+    expect(bankDomain('Länsförsäkringar')).toBe('lansforsakringar.se');
+    expect(bankDomain('avanza bank')).toBe('avanza.com');
+    expect(bankDomain(' SEB ')).toBe('seb.se');
+    expect(bankDomain('Sebastian')).toBeUndefined();
+    expect(bankDomain(undefined)).toBeUndefined();
   });
 });

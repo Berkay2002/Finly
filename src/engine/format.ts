@@ -93,6 +93,10 @@ export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return dateFormat({ day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
+/** "14:32". */
+export function formatTime(date: Date | number): string {
+  return dateFormat({ hour: '2-digit', minute: '2-digit' }).format(date);
+}
 export function formatShortMonth(date: Date): string {
   return dateFormat({ month: 'short' }).format(date);
 }

@@ -1,9 +1,11 @@
 import { ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatDuration, formatMoney, formatNumber, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
 import { goalForAccount, isSavingsAccount, savingsPots } from '@/engine/savings';
+import { wrapperOf } from '@/engine/tax/capital';
 import { GOAL_KINDS, goalKindMeta } from '@/engine/taxonomy';
 import type { GoalKind, SavingsPurpose } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -178,7 +180,8 @@ export function GoalSheet({
 }) {
   const plan = usePlan();
   const currency = useCurrency();
-  const t = useT().goals.sheet;
+  const tAll = useT();
+  const t = tAll.goals.sheet;
   // A savings account with no goal yet: its account is fixed, and there is no goal to remove.
   const accountPot = !!draft?.id && !draft.goalId && !!draft.accountId;
   const account = draft?.linkedAccountId ? plan.accounts.find((a) => a.id === draft.linkedAccountId) : undefined;
@@ -307,7 +310,8 @@ export function GoalSheet({
                 <MoneyField
                   label={t.savedSoFar}
                   currency={currency}
-                  value={draft.currentAmount}
+                  readOnly={!!account?.holdings?.length}
+                  value={account?.holdings?.length ? Math.round(draft.currentAmount) : draft.currentAmount}
                   onValueChange={(currentAmount) => onChange({ ...draft, currentAmount })}
                 />
                 <MoneyField
@@ -317,7 +321,19 @@ export function GoalSheet({
                   onValueChange={(monthlyContribution) => onChange({ ...draft, monthlyContribution })}
                 />
               </div>
-              {account && <p className="mt-1 text-[12px] text-muted">{t.syncedWith(account.name)}</p>}
+              {account && (
+                <p className="mt-1 text-[12px] text-muted">
+                  {t.syncedWith(account.name)}
+                  {wrapperOf(account.kind) !== 'cash' && (
+                    <>
+                      {' '}
+                      <Link to={`/accounts/${account.id}`} className="font-medium text-brand-700 hover:underline">
+                        {tAll.accounts.editor.openHoldings} →
+                      </Link>
+                    </>
+                  )}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <MoneyField

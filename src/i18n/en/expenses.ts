@@ -80,6 +80,9 @@ export default {
     averageMonthHint: '(average month)',
     budgetForHint: '(what you budget for)',
     howOften: 'How often',
+    currency: 'Currency',
+    converted: (planCurrency: string, rate: string | null) =>
+      `Counted in ${planCurrency} at the rate of the month it's paid${rate ? `. Today ${rate}.` : ', once the rate has loaded.'}`,
     times: 'Times',
     per: 'Per',
     week: 'Week',

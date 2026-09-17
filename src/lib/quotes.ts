@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import type { QuoteResult } from '@/engine/holdings';
 import type { Holding, HoldingType } from '@/engine/types';
 
@@ -11,6 +12,7 @@ export interface Instrument {
   type: HoldingType;
   currency: string;
   price?: number;
+  market?: string;
 }
 
 export async function searchInstruments(q: string, signal?: AbortSignal): Promise<Instrument[] | null> {
@@ -42,4 +44,39 @@ export async function fetchQuotes(query: string): Promise<QuoteResult | null> {
   } catch {
     return null;
   }
+}
+
+/** How the last price refresh on this device went. Kept in memory, not in the plan, so it never counts as an edit. */
+export interface QuoteStatus {
+  fetchedAt?: number;
+  failed: boolean;
+  refreshing: boolean;
+}
+
+let status: QuoteStatus = { failed: false, refreshing: false };
+const listeners = new Set<() => void>();
+const setStatus = (patch: Partial<QuoteStatus>) => {
+  status = { ...status, ...patch };
+  listeners.forEach((l) => l());
+};
+
+export const getQuoteStatus = () => status;
+
+export function useQuoteStatus(): QuoteStatus {
+  return useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    getQuoteStatus,
+  );
+}
+
+/** `fetchQuotes` that records the outcome. `fresh` skips the cached answer (a tap on Refresh). */
+export async function refreshQuotes(query: string, fresh = false): Promise<QuoteResult | null> {
+  if (!query) return null;
+  setStatus({ refreshing: true });
+  const result = await fetchQuotes(fresh ? `${query}&fresh=${Date.now()}` : query);
+  setStatus(result ? { refreshing: false, failed: false, fetchedAt: Date.now() } : { refreshing: false, failed: true });
+  return result;
 }

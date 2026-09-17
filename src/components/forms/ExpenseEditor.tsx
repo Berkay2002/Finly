@@ -24,6 +24,8 @@ import {
   monthlyToWeekly,
 } from '@/engine/frequency';
 import { amountForMonthly } from '@/engine/everyday';
+import { fxRate } from '@/engine/fx';
+import { monthKeyOf } from '@/engine/metrics';
 import { latestMonth } from '@/engine/foodPrices';
 import { foodPriceLink } from '@/engine/priceLinks';
 import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey, formatNumber } from '@/engine/format';
@@ -46,9 +48,10 @@ import {
   type Frequency,
   type Occurrences,
 } from '@/engine/types';
-import { messages, useT } from '@/i18n';
+import { locale, messages, useT } from '@/i18n';
 import { brandedExpenseName } from '@/lib/brandLogo';
 import { useFoodPrices } from '@/lib/foodPrices';
+import { FX_CURRENCIES } from '@/lib/fx';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
 import { HomeFields } from './HomeFields';
 import { HouseholdFoodEstimator } from './HouseholdFood';
@@ -147,6 +150,18 @@ const lagOptions = (): { value: '0' | '1' | '2'; label: string }[] => {
 // Loans have their own model and page; the `debt` tag only survives on plans from before that.
 const TAG_IDS: Exclude<ExpenseTag, 'debt'>[] = ['car', 'subscription', 'insurance', 'utility', 'public_transport'];
 
+/** The plan currency first, then the currencies Frankfurter has rates for; the current pick is always kept. */
+function currencyOptions(planCurrency: string, current: string) {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([locale()], { type: 'currency' });
+  } catch {
+    // Old browser: codes alone.
+  }
+  const codes = [...new Set([planCurrency, current, ...FX_CURRENCIES])];
+  return codes.map((c) => ({ value: c, label: names ? `${c} · ${names.of(c)}` : c }));
+}
+
 export type ExpenseDraft = Omit<ExpenseItem, 'id'> & { id?: string };
 type Draft = ExpenseDraft;
 
@@ -236,6 +251,8 @@ export function ExpenseEditor({
     const monthly = spread.typical;
     const ranged = varies(e);
     const notMonthly = !!e.occurrences || e.frequency !== 'monthly';
+    const itemCurrency = e.currency ?? currency;
+    const rate = fxRate(plan.fx, itemCurrency, currency, monthKeyOf(new Date()));
     const suggestion = suggestFromActuals(e);
     const subscription = e.tags.includes('subscription');
     const brandDomain = subscription ? e.brandDomain : undefined;
@@ -254,12 +271,12 @@ export function ExpenseEditor({
           <>
             {e.note && <span>{e.note}</span>}
             {e.tariff && !e.includedElsewhere && <span className="tabular">{t.expenses.row.kwhPerMonth(formatAmount(e.tariff.kwh))}</span>}
-            {notMonthly && monthly > 0 && !e.includedElsewhere && (
-              <span className="tabular">{t.expenses.row.approxPerMonth(formatMoney(monthly, currency))}</span>
+            {(notMonthly || itemCurrency !== currency) && rate !== undefined && monthly > 0 && !e.includedElsewhere && (
+              <span className="tabular">{t.expenses.row.approxPerMonth(formatMoney(monthly * rate, currency))}</span>
             )}
             {ranged && !e.includedElsewhere && (
               <span className="tabular">
-                {t.expenses.row.varies(formatMoneyRange(spread.low, spread.high, currency), notMonthly)}
+                {t.expenses.row.varies(formatMoneyRange(spread.low, spread.high, itemCurrency), notMonthly)}
               </span>
             )}
             {isIrregular(e.frequency, e.occurrences) && e.nextDate && <span>{t.expenses.row.next(formatDate(e.nextDate))}</span>}
@@ -273,7 +290,7 @@ export function ExpenseEditor({
           <>
             <MoneyField
               size="sm"
-              currency={currency}
+              currency={itemCurrency}
               value={e.amount}
               placeholder={ranged && e.amount === 0 ? String(Math.round(amountSpread(e).typical)) : undefined}
               title={
@@ -466,7 +483,10 @@ function ExpenseDetailForm({
   const hasRange = !draft.fixed && spread.high > spread.low;
   const everyday = isEverydaySpend(draft);
   const perPurchaseHint = suggestionBySlug(draft.subcategory)?.hint;
-  const monthly = monthlySpread(draft).typical;
+  const amountCurrency = draft.currency ?? currency;
+  const rate = fxRate(plan.fx, amountCurrency, currency, monthKeyOf(new Date()));
+  // Everything below shows the monthly figure in the plan currency; unknown until the rate has loaded.
+  const monthly = monthlySpread(draft).typical * (rate ?? 0);
   const [estimating, setEstimating] = useState(false);
   const tariffPart = tariffPartFor(draft.subcategory);
   const setTariff = (tariff: ElectricityTariff | undefined) => onChange(withTariffAmounts({ ...draft, tariff }));
@@ -521,7 +541,7 @@ function ExpenseDetailForm({
                   ? tf.budgetForHint
                   : undefined
           }
-          currency={currency}
+          currency={amountCurrency}
           value={draft.tariff ? spread.typical : draft.amount}
           placeholder={hasRange && draft.amount === 0 ? String(Math.round(spread.typical)) : undefined}
           onValueChange={(amount) => set({ amount })}
@@ -535,6 +555,21 @@ function ExpenseDetailForm({
           disabled={!!draft.tariff}
         />
       </div>
+      {!draft.tariff && !draft.priceLink && (
+        <div>
+          <SelectField
+            label={tf.currency}
+            value={amountCurrency}
+            onValueChange={(c) => set({ currency: c === currency ? undefined : c })}
+            options={currencyOptions(currency, amountCurrency)}
+          />
+          {amountCurrency !== currency && (
+            <p className="mt-1.5 text-[12px] text-muted">
+              {tf.converted(currency, rate === undefined ? null : `1 ${amountCurrency} = ${formatNumber(rate)} ${currency}`)}
+            </p>
+          )}
+        </div>
+      )}
       {draft.occurrences && (
         <div className="grid grid-cols-2 gap-3">
           <CountField
@@ -599,13 +634,13 @@ function ExpenseDetailForm({
               <div className="grid grid-cols-2 gap-3">
                 <MoneyField
                   label={tf.cheapest}
-                  currency={currency}
+                  currency={amountCurrency}
                   value={draft.range?.low ?? 0}
                   onValueChange={(low) => setRange({ low })}
                 />
                 <MoneyField
                   label={tf.mostExpensive}
-                  currency={currency}
+                  currency={amountCurrency}
                   value={draft.range?.high ?? 0}
                   onValueChange={(high) => setRange({ high })}
                 />
@@ -613,11 +648,11 @@ function ExpenseDetailForm({
               <p className="mt-2 text-[12px] text-muted">
                 {hasRange
                   ? draft.occurrences
-                    ? tf.budgetsEachTime(formatMoney(spread.typical, currency), formatMoneyRange(spread.low, spread.high, currency))
+                    ? tf.budgetsEachTime(formatMoney(spread.typical, amountCurrency), formatMoneyRange(spread.low, spread.high, amountCurrency))
                     : tf.budgetsPeriod(
-                        formatMoney(spread.typical, currency),
+                        formatMoney(spread.typical, amountCurrency),
                         draft.frequency,
-                        formatMoneyRange(spread.low, spread.high, currency),
+                        formatMoneyRange(spread.low, spread.high, amountCurrency),
                       )
                   : draft.occurrences
                     ? tf.rangeHelpEachTime
@@ -653,7 +688,7 @@ function ExpenseDetailForm({
           onChange={(e) => set({ nextDate: e.target.value || undefined })}
         />
       )}
-      {(draft.frequency !== 'monthly' || draft.occurrences || everyday) && monthly > 0 && !draft.tariff && (
+      {(draft.frequency !== 'monthly' || draft.occurrences || everyday || amountCurrency !== currency) && monthly > 0 && !draft.tariff && (
         <p className="tabular -mt-2 text-[12px] text-muted">
           {tf.approxMonthly(formatMoney(monthly, currency))}
           {everyday && tf.approxWeekDay(formatMoney(monthlyToWeekly(monthly), currency), formatMoney(monthlyToDaily(monthly), currency))}

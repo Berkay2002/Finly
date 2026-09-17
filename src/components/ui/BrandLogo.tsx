@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { logoUrlForDomain, logoUrlForName } from '@/lib/brandLogo';
+import { logoUrlForDomain, logoUrlForName, logoUrlForSecurity } from '@/lib/brandLogo';
 
 const SIZES = {
   xs: 'h-6 w-6 rounded-md p-0.5',
@@ -15,24 +15,34 @@ const ROUND = {
 } as const;
 
 /**
- * A company logo by brand domain or name, in the same footprint as an icon tile. A domain wins when
- * both are given. Renders nothing without a key; `frame={false}` drops the tile chrome for use
+ * A company logo by brand domain, a listed company's ISIN or ticker, or name, in the same footprint as an
+ * icon tile, in that order of preference. Renders nothing without a key; `frame={false}` drops the tile chrome for use
  * inside chips that are already framed.
  */
 export function BrandLogo({
   name,
   domain,
+  isin,
+  ticker,
   size = 'sm',
   frame = true,
   className,
 }: {
   name?: string;
   domain?: string;
+  isin?: string;
+  ticker?: string;
   size?: 'xs' | 'sm' | 'md';
   frame?: boolean;
   className?: string;
 }) {
-  const url = domain ? logoUrlForDomain(domain) : name ? logoUrlForName(name) : undefined;
+  const url = domain
+    ? logoUrlForDomain(domain)
+    : isin || ticker
+      ? logoUrlForSecurity({ isin, ticker })
+      : name
+        ? logoUrlForName(name)
+        : undefined;
   if (!url) return null;
   return (
     <span

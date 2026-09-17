@@ -461,7 +461,8 @@ const KIND_RANK: Record<Exclude<DebtKind, 'csn'>, { unsecured: number; secured: 
 };
 
 /**
- * Typical 2026 rates used only to place a loan whose rate is not entered yet. Never shown.
+ * Typical 2026 rates: they place a loan whose rate is not entered yet, and stand in for an unknown rate
+ * when testing a purchase on loan.
  */
 const TYPICAL_RATE: Record<Exclude<DebtKind, 'csn'>, { unsecured: number; secured: number }> = {
   credit_card: { unsecured: 18, secured: 18 },
@@ -470,6 +471,10 @@ const TYPICAL_RATE: Record<Exclude<DebtKind, 'csn'>, { unsecured: number; secure
   car: { unsecured: 8, secured: 6 },
   mortgage: { unsecured: 3, secured: 3 },
 };
+
+export function typicalRate(kind: Exclude<DebtKind, 'csn'>, secured: boolean): number {
+  return TYPICAL_RATE[kind][secured ? 'secured' : 'unsecured'];
+}
 
 /** A mortgage's rate type; mortgages saved before the choice existed are bunden when they have an end date. */
 export function mortgageRateType(d: Pick<Debt, 'rateType' | 'rateFixedUntil'>): MortgageRateType {

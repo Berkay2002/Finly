@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { EXPENSE_CATEGORIES } from '@/engine/types';
 import { CATEGORY_ROUTE } from '@/nav';
+import { AccountDetailPage } from '@/pages/AccountDetailPage';
 import { AccountsPage } from '@/pages/AccountsPage';
 import { LoansPage } from '@/pages/LoansPage';
 import { Dashboard } from '@/pages/Dashboard';
@@ -31,6 +32,7 @@ export default function App() {
           ))}
           <Route path="savings" element={<SavingsPage />} />
           <Route path="accounts" element={<AccountsPage />} />
+          <Route path="accounts/:id" element={<AccountDetailPage />} />
           <Route path="loans" element={<LoansPage />} />
           <Route path="planning" element={<PlanningPage />} />
           <Route path="insights" element={<InsightsPage />} />

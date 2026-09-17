@@ -1,23 +1,26 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { formatMoney, formatNumber } from '@/engine/format';
-import { holdingsPatch } from '@/engine/holdings';
+import { holdingsGain, holdingsPatch } from '@/engine/holdings';
 import { goalForAccount, isSavingsAccount } from '@/engine/savings';
 import { capitalTaxSummary, SUGGESTED_RETURN, wrapperOf } from '@/engine/tax/capital';
 import { ACCOUNT_KINDS, accountKindMeta } from '@/engine/taxonomy';
 import type { Account, AccountKind } from '@/engine/types';
 import { useT } from '@/i18n';
+import { bankDomain } from '@/lib/brandLogo';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, useGovBondRate, usePlan, useViewDate } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
-import { Delta } from '@/components/ui/Delta';
+import { Delta, DeltaBadge } from '@/components/ui/Delta';
 import { ACCOUNT_ACCENT, ACCOUNT_ICON } from '@/components/ui/icons';
 import { MoneyField, SelectField, TextField } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
-import { HoldingsEditor } from './HoldingsEditor';
+import { BrandPicker } from './BrandPicker';
 import { ItemRow } from './ItemRow';
 
-type Draft = Omit<Account, 'id'> & { id?: string };
+export type AccountDraft = Omit<Account, 'id'> & { id?: string };
+type Draft = AccountDraft;
 
 function blank(kind: AccountKind = 'everyday'): Draft {
   return { name: accountKindMeta(kind).label, institution: '', kind, balance: 0 };
@@ -30,14 +33,18 @@ const percent = (n: number) => `${formatNumber(n, 2)} %`;
 export function AccountEditor({
   autoOpenAdd = false,
   previous,
+  linkInvestments = false,
 }: {
   autoOpenAdd?: boolean;
   /** Balances at the previous month's close, by account id, for a "vs last month" hint per row. */
   previous?: Record<string, number>;
+  /** Open ISK, KF and AF accounts on their own page (with holdings) instead of the edit sheet. */
+  linkInvestments?: boolean;
 }) {
   const plan = usePlan();
   const currency = useCurrency();
-  const { addAccount, updateAccount, removeAccount } = usePlanStore();
+  const navigate = useNavigate();
+  const { updateAccount, removeAccount } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
   const t = useT().accounts.editor;
 
@@ -45,14 +52,8 @@ export function AccountEditor({
     if (autoOpenAdd) setEditing(blank());
   }, [autoOpenAdd]);
 
-  const save = () => {
-    if (!editing) return;
-    if (editing.id) {
-      const { id, ...patch } = editing;
-      updateAccount(id, patch);
-    } else addAccount(editing);
-    setEditing(null);
-  };
+  const open = (a: Account) =>
+    linkInvestments && wrapperOf(a.kind) !== 'cash' ? navigate(`/accounts/${a.id}`) : setEditing({ ...a });
 
   return (
     <div className="space-y-3">
@@ -72,12 +73,15 @@ export function AccountEditor({
             icon={ACCOUNT_ICON[a.kind]}
             accent={ACCOUNT_ACCENT[a.kind]}
             title={a.name}
-            onClick={() => setEditing({ ...a })}
+            brand={a.institution?.trim() || null}
+            brandDomain={a.institutionDomain ?? bankDomain(a.institution)}
+            onClick={() => open(a)}
+            opens={linkInvestments && wrapperOf(a.kind) !== 'cash'}
             meta={
               <>
                 {a.institution && <span>{a.institution}</span>}
                 <span>· {accountKindMeta(a.kind).label}</span>
-                {!!a.holdings?.length && <span>· {t.holdingCount(a.holdings.length)}</span>}
+                {!!a.holdings?.length && <HoldingsMeta account={a} />}
                 {wrapperOf(a.kind) === 'unknown' ? (
                   <span className="text-warning">{t.pickWrapper}</span>
                 ) : (
@@ -118,25 +122,55 @@ export function AccountEditor({
         )}
       </div>
 
-      <Sheet
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={editing?.id ? t.editAccount : t.addAccount}
-        size="sm"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setEditing(null)}>
-              {t.cancel}
-            </Button>
-            <Button onClick={save} disabled={!editing?.name.trim()}>
-              {editing?.id ? t.save : t.addAccount}
-            </Button>
-          </div>
-        }
-      >
-        {editing && <AccountFields draft={editing} onChange={setEditing} />}
-      </Sheet>
+      <AccountSheet draft={editing} onChange={setEditing} />
     </div>
+  );
+}
+
+/** Add or edit an account. Pass null to close. */
+export function AccountSheet({ draft, onChange }: { draft: Draft | null; onChange: (d: Draft | null) => void }) {
+  const { addAccount, updateAccount } = usePlanStore();
+  const t = useT().accounts.editor;
+
+  const save = () => {
+    if (!draft) return;
+    if (draft.id) {
+      const { id, ...patch } = draft;
+      updateAccount(id, patch);
+    } else addAccount(draft);
+    onChange(null);
+  };
+
+  return (
+    <Sheet
+      open={draft !== null}
+      onClose={() => onChange(null)}
+      title={draft?.id ? t.editAccount : t.addAccount}
+      size="sm"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => onChange(null)}>
+            {t.cancel}
+          </Button>
+          <Button onClick={save} disabled={!draft?.name.trim()}>
+            {draft?.id ? t.save : t.addAccount}
+          </Button>
+        </div>
+      }
+    >
+      {draft && <AccountFields draft={draft} onChange={onChange} />}
+    </Sheet>
+  );
+}
+
+function HoldingsMeta({ account: a }: { account: Account }) {
+  const t = useT().accounts.editor;
+  const gain = holdingsGain(a.holdings ?? []);
+  return (
+    <span>
+      · {t.holdingCount(a.holdings?.length ?? 0)}
+      {gain && Math.abs(gain.share) >= 0.005 && <DeltaBadge c={gain.share} className="ml-1" />}
+    </span>
   );
 }
 
@@ -197,6 +231,14 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
         value={draft.institution ?? ''}
         onChange={(e) => onChange({ ...draft, institution: e.target.value })}
       />
+      {!bankDomain(draft.institution) && (
+        <BrandPicker
+          name={draft.institution ?? ''}
+          domain={draft.institutionDomain}
+          hint={t.bankLogoHint}
+          onPick={(institutionDomain) => onChange({ ...draft, institutionDomain })}
+        />
+      )}
       {holdings.length > 0 ? (
         <MoneyField label={t.totalValue} hint={t.totalValueHint} currency={currency} value={draftAccount.balance} onValueChange={() => {}} disabled />
       ) : (
@@ -207,14 +249,15 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
           onValueChange={(balance) => onChange({ ...draft, balance })}
         />
       )}
-      {invests && (
-        <HoldingsEditor
-          holdings={holdings}
-          cash={draft.cash ?? 0}
-          currency={currency}
-          onChange={(patch) => onChange({ ...draft, ...patch, ...(patch.holdings?.length === 0 ? { holdings: undefined, cash: undefined } : {}) })}
-        />
+      {invests && draft.id && wrapper !== 'unknown' && (
+        <p className="-mt-2 text-[12px] text-muted">
+          {holdings.length > 0 ? t.holdingCount(holdings.length) + ' · ' : ''}
+          <Link to={`/accounts/${draft.id}`} className="font-medium text-brand-700 hover:underline">
+            {t.openHoldings}
+          </Link>
+        </p>
       )}
+      {invests && !draft.id && <p className="-mt-2 text-[12px] text-muted">{t.holdingsLater}</p>}
 
       {(invests || saves || INTEREST_KINDS.includes(draft.kind)) && (
         <div className="grid grid-cols-2 gap-3">

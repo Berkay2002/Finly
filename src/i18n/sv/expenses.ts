@@ -103,6 +103,9 @@ export default {
     averageMonthHint: '(genomsnittlig månad)',
     budgetForHint: '(det du budgeterar för)',
     howOften: 'Hur ofta',
+    currency: 'Valuta',
+    converted: (planCurrency, rate) =>
+      `Räknas om till ${planCurrency} efter kursen den månad den betalas${rate ? `. I dag ${rate}.` : ', när kursen har hämtats.'}`,
     times: 'Antal gånger',
     per: 'Per',
     week: 'Vecka',

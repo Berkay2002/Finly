@@ -237,6 +237,10 @@ each other in silhouette.
 > Subject: a slightly open laptop seen from the front three-quarter, the screen a plain
 > off-white surface with a single soft bar chart shape on it.
 
+**`goal-phone.png`** · accent teal `#14B8A6`
+> Subject: a rounded smartphone standing slightly tilted, front three-quarter, the screen a
+> plain off-white surface with one soft app-tile grid shape. (Planning page, big purchase kind.)
+
 **`goal-plane.png`** · accent blue `#3B7DF5`
 > Subject: a chunky friendly passenger plane banking up-right, rounded nose, three round
 > windows, tiny soft cloud behind it.

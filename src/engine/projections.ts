@@ -6,6 +6,7 @@ import { isIrregular, monthsPerPeriod } from './frequency';
 import { withMonthValue } from './history';
 import type { PlanMetrics } from './metrics';
 import { activeExpenses, computeMetrics, monthKeyOf, typicalAmount } from './metrics';
+import { inPlanCurrency } from './fx';
 import type { GovBondRate } from './rates';
 import { ensureLandingAccount, landingAccount, savingsPots } from './savings';
 import { capitalTaxSummary, monthlyRate } from './tax/capital';
@@ -60,11 +61,13 @@ export function savingsTaxDue(plan: FinancialPlan, now: Date, gov?: GovBondRate)
 }
 
 export function upcomingExpenses(
-  plan: FinancialPlan,
+  source: FinancialPlan,
   now: Date = new Date(),
   horizonMonths = 12,
   gov?: GovBondRate,
 ): UpcomingExpense[] {
+  // Rates ahead are unknown: a payment in another currency is priced at the latest rate.
+  const plan = inPlanCurrency(source, monthKeyOf(now));
   const start = startOfMonth(now);
   const end = addMonths(start, horizonMonths);
   const out: UpcomingExpense[] = [];
@@ -358,7 +361,7 @@ export function projectPlan(
 ): FinancialPlan {
   const n = monthsAhead(from, to);
   if (n <= 0) return source;
-  const plan = ensureLandingAccount(source);
+  const plan = ensureLandingAccount(inPlanCurrency(source, monthKeyOf(from)));
   const keyAt = (i: number) => monthKeyOf(addMonths(startOfMonth(from), i));
   const returns = withReturns ? accountReturns(plan, from, gov) : new Map<string, number>();
   const landing = landingAccount(plan)!;

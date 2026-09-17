@@ -53,6 +53,10 @@ describe('balance history', () => {
     expect(usePlanStore.getState().plan.accounts[0]).toMatchObject({ balance: 4050, balances: { [thisMonth]: 4050 } });
     usePlanStore.getState().refreshHoldings({ quotes: { 5247: { price: 410 } }, fx: {} });
     expect(usePlanStore.getState().plan.accounts[0]).toMatchObject({ balance: 4150, balances: { [thisMonth]: 4150 } });
+    // The Savings sheet cannot type over a balance that follows the holdings.
+    const pot = savingsPots(usePlanStore.getState().plan)[0];
+    usePlanStore.getState().saveSavingsPot({ ...pot, currentAmount: 999, monthlyContribution: 1000 });
+    expect(usePlanStore.getState().plan.accounts[0]).toMatchObject({ balance: 4150, monthlyDeposit: 1000 });
   });
 
   it('records goal progress under the current month', () => {

@@ -1,6 +1,7 @@
 import { format, subMonths } from 'date-fns';
 import { useMemo } from 'react';
 import { buildSnapshot, endOfMonthDate, isFrozen, monthStart, type MetricsSnapshot } from '@/engine/history';
+import { mergeFx } from '@/engine/fx';
 import { computeMetrics, type PlanMetrics } from '@/engine/metrics';
 import { allGoalProgress, expectedReturnsBy, monthOutlook, projectPlan, savingsProjection, upcomingExpenses } from '@/engine/projections';
 import type { GovBondRate } from '@/engine/rates';
@@ -48,7 +49,8 @@ export function useEffectivePlan(): FinancialPlan {
   const gov = useGovBondRate();
   const todayKey = monthKey(new Date());
   return useMemo(() => {
-    if (frozen && snapshot?.plan) return snapshot.plan;
+    // Rates are facts, not edits: a closed month takes the newest ones known (its full-month average).
+    if (frozen && snapshot?.plan) return live.fx ? { ...snapshot.plan, fx: mergeFx(snapshot.plan.fx, live.fx) ?? snapshot.plan.fx } : snapshot.plan;
     if (key > todayKey) return projectPlan(live, new Date(), monthStart(key), gov);
     return live;
   }, [live, key, frozen, snapshot, gov, todayKey]);

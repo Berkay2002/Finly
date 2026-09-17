@@ -1,5 +1,6 @@
 import { IconTile } from '@/components/ui/IconTile';
 import { formatMoney, formatMonths, formatPercent } from '@/engine/format';
+import { holdingsGain } from '@/engine/holdings';
 import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
 import { useCurrency, useEffectivePlan, useExpectedReturns, useMetrics, usePreviousMonth, usePreviousSnapshot } from '@/store/selectors';
@@ -20,7 +21,8 @@ export function AccountsPage() {
   const closed = usePreviousSnapshot();
   const expectedReturns = useExpectedReturns();
   const autoAdd = useAutoAdd();
-  const t = useT().accounts.page;
+  const tAccounts = useT().accounts;
+  const t = tAccounts.page;
   const money = (n: number) => formatMoney(n, currency);
 
   const slices: DonutSlice[] = [...plan.accounts]
@@ -28,6 +30,8 @@ export function AccountsPage() {
     .map((a) => ({ key: a.id, label: a.name, value: a.balance, accent: ACCOUNT_ACCENT[a.kind] }));
 
   const investShare = m.position.totalAssets > 0 ? m.position.investments / m.position.totalAssets : 0;
+  const holdingGain = holdingsGain(plan.accounts.flatMap((a) => a.holdings ?? []));
+  const onHoldings = holdingGain && tAccounts.detail.onHoldings(formatMoney(holdingGain.amount, currency, { sign: true }));
   const emergencyMonths = m.resilience.emergencyMonths;
 
   const p = m.position;
@@ -89,8 +93,8 @@ export function AccountsPage() {
           accent="purple"
           label={t.investments}
           value={money(m.position.investments)}
-          trend={{ before: prev?.investments, after: m.position.investments }}
-          sub={t.ofAssets(formatPercent(investShare))}
+          trend={{ before: prev?.investments, after: m.position.investments, suffix: onHoldings || undefined }}
+          sub={onHoldings || t.ofAssets(formatPercent(investShare))}
         />
       </div>
 
@@ -98,7 +102,7 @@ export function AccountsPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title={t.yourAccounts} subtitle={t.yourAccountsSubtitle} />
-            <AccountEditor autoOpenAdd={autoAdd} previous={closed?.byAccount} />
+            <AccountEditor autoOpenAdd={autoAdd} previous={closed?.byAccount} linkInvestments />
           </Card>
 
           <SavingsTaxStrip />

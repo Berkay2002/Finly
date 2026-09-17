@@ -153,6 +153,12 @@ export interface ExpenseItem {
   amount: number;
   frequency: Frequency;
   /**
+   * Currency `amount` and `range` are in, when not the plan's (a subscription billed in EUR). The engine converts
+   * at the rate of the month being computed (engine/fx.ts), so the same bill costs more in a month the krona is
+   * weak. `actuals` stay in the plan currency: they are what left the account.
+   */
+  currency?: string;
+  /**
    * Priced per purchase. While set, `amount` and `range` are what one purchase costs and `frequency`
    * mirrors `per` (weekly, monthly or yearly). Such an item has no due date: a yearly one is spread
    * over the months like any other regular cost. See engine/frequency.ts.
@@ -281,6 +287,8 @@ export interface Account {
   id: string;
   name: string;
   institution?: string;
+  /** A logo picked for the institution; without it a known bank's logo is used (see `bankDomain`). */
+  institutionDomain?: string;
   kind: AccountKind;
   /** Current balance. */
   balance: number;
@@ -315,6 +323,8 @@ export interface Holding {
   isin?: string;
   name: string;
   type: HoldingType;
+  /** Where it trades, e.g. "Stockholmsbörsen", or "Nordnet" for a fund only Nordnet lists. */
+  market?: string;
   /** The instrument's own currency; `avgPrice` and `price` are in it. */
   currency: string;
   quantity: number;
@@ -326,6 +336,8 @@ export interface Holding {
   fx?: number;
   /** ISO date the price last moved. */
   priceAt?: string;
+  /** Today's move at the last refresh, as a fraction (0.012 = +1.2 %). */
+  dayChange?: number;
 }
 
 export type GoalKind = 'emergency' | 'general' | 'investment' | 'purchase' | 'pension' | 'custom';
@@ -484,6 +496,8 @@ export interface FinancialPlan {
   /** Missing on plans saved before loans had their own model; see `migrateLegacyDebts`. */
   debts?: Debt[];
   goals: SavingsGoal[];
+  /** Exchange rates by month for expenses in other currencies; see engine/fx.ts. Refreshed by `usePriceRefresh`. */
+  fx?: Record<string, Record<string, number>>;
   onboarding: {
     completedSteps: OnboardingStep[];
     completed: boolean;

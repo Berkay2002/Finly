@@ -12,7 +12,18 @@ import { BrandLogo } from '@/components/ui/BrandLogo';
  * go back to the best guess). Without it, a quiet preview of what the name resolves to. Picking
  * stores the brand's domain, which pins the logo even if the name changes later.
  */
-export function BrandPicker({ name, domain, onPick }: { name: string; domain?: string; onPick: (domain: string | undefined) => void }) {
+export function BrandPicker({
+  name,
+  domain,
+  hint,
+  onPick,
+}: {
+  name: string;
+  domain?: string;
+  /** Where the logo shows; subscriptions by default. */
+  hint?: string;
+  onPick: (domain: string | undefined) => void;
+}) {
   const t = useT();
   const tf = t.expenses.form;
   const [results, setResults] = useState<BrandResult[] | null>(null);
@@ -38,7 +49,7 @@ export function BrandPicker({ name, domain, onPick }: { name: string; domain?: s
 
   return (
     <div className="space-y-1.5">
-      <Label hint={tf.brandLogoHint}>{tf.brandLogo}</Label>
+      <Label hint={hint ?? tf.brandLogoHint}>{tf.brandLogo}</Label>
       {results === null ? (
         <p className="flex items-center gap-2 text-[12.5px] text-muted">
           <BrandLogo name={query} domain={domain} size="xs" />

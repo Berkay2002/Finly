@@ -7,6 +7,7 @@ import { migrateLegacyDebts } from '@/engine/debts';
 import { shareUsage, withTariffAmounts } from '@/engine/electricity';
 import { reconcilePriceLink, refreshPriceLinks, type PriceInputs } from '@/engine/priceLinks';
 import { applyQuotes, holdingsPatch, type QuoteResult } from '@/engine/holdings';
+import { mergeFx, type FxRates } from '@/engine/fx';
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
@@ -101,6 +102,8 @@ interface PlanState {
   refreshPriceLinks: (inputs: PriceInputs) => void;
   /** Move holdings to fresh prices; a no-op when nothing changed. */
   refreshHoldings: (result: QuoteResult, today?: Date) => void;
+  /** Lays fetched exchange rates over the plan's; no change, no write. */
+  refreshFx: (fx: FxRates) => void;
 
   /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
   saveSnapshot: (month: string, today?: Date) => void;
@@ -198,6 +201,10 @@ export const usePlanStore = create<PlanState>()(
             ...p,
             accounts: accounts.map((a, i) => (a === before[i] ? a : { ...a, balances: withMonthValue(a.balances, month, a.balance) })),
           }));
+        },
+        refreshFx: (fx) => {
+          const merged = mergeFx(get().plan.fx, fx);
+          if (merged) mutate((p) => ({ ...p, fx: merged }));
         },
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
@@ -409,7 +416,8 @@ export function applyPotDraft(plan: FinancialPlan, draft: PotDraft, newGoalId: (
   const accounts = plan.accounts.map((a) => {
     if (a.id !== account.id) return a;
     const next: Account = { ...a, monthlyDeposit: deposit > 0 ? deposit : undefined };
-    if (fields.currentAmount !== a.balance) {
+    // An account with holdings has its balance worked out from them.
+    if (!a.holdings?.length && fields.currentAmount !== a.balance) {
       next.balance = fields.currentAmount;
       next.balances = withMonthValue(a.balances, month, fields.currentAmount);
     }

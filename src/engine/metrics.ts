@@ -5,6 +5,7 @@ import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paymentsPerYear, paysInMonth } from './debts';
 import { lumpPayment, type LumpPayment } from './periods';
+import { inPlanCurrency } from './fx';
 import type { GovBondRate } from './rates';
 import { savingsPots } from './savings';
 import { capitalTaxSummary, type CapitalTaxSummary } from './tax/capital';
@@ -362,7 +363,8 @@ function isDatedInMonth(iso: string | undefined, now: Date): boolean {
 /* ------------------------------------------------------------------ */
 
 /** `gov`: the live statslåneränta, which only matters for a year whose 30 November rate is not in the tables yet. */
-export function computeMetrics(plan: FinancialPlan, now: Date = new Date(), gov?: GovBondRate): PlanMetrics {
+export function computeMetrics(source: FinancialPlan, now: Date = new Date(), gov?: GovBondRate): PlanMetrics {
+  const plan = inPlanCurrency(source, monthKeyOf(now));
   /* Income */
   const baseline = plan.income.filter((i) => i.includeInBaseline && i.amount > 0);
   const reliable = sum(baseline.filter((i) => i.reliability === 'reliable').map(monthlyOf));

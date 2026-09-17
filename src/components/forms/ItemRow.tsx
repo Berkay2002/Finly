@@ -1,4 +1,4 @@
-import { Pencil } from 'lucide-react';
+import { ChevronRight, Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import type { Accent } from '@/components/ui/accent';
@@ -7,6 +7,7 @@ import { IconTile } from '@/components/ui/IconTile';
 import type { IconSource } from '@/components/ui/Icon';
 import { KebabMenu, type MenuItem } from '@/components/ui/Menu';
 import { useT } from '@/i18n';
+import { logoDevEnabled } from '@/lib/brandLogo';
 
 /**
  * One editable line item: icon, name/meta on the left, fields in the middle, menu on the right.
@@ -23,6 +24,7 @@ export function ItemRow({
   onClick,
   brand,
   brandDomain,
+  opens = false,
 }: {
   icon: IconSource;
   accent: Accent;
@@ -36,6 +38,8 @@ export function ItemRow({
   brand?: string | null;
   /** A picked brand domain; wins over `brand` since it pins the exact company. */
   brandDomain?: string;
+  /** `onClick` goes to a page of its own rather than opening the editor: a chevron instead of the pencil. */
+  opens?: boolean;
 }) {
   const t = useT();
   return (
@@ -52,14 +56,14 @@ export function ItemRow({
         onClick={onClick}
         data-edit={onClick ? '' : undefined}
         disabled={!onClick}
-        title={onClick ? t.expenses.row.editDetails : undefined}
+        title={onClick && !opens ? t.expenses.row.editDetails : undefined}
         className={clsx(
           'group/edit order-1 -my-1 -ml-1.5 flex min-w-0 flex-1 items-center gap-3 rounded-lg py-1 pl-1.5 pr-2 text-left',
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200',
           onClick ? 'cursor-pointer' : 'cursor-default',
         )}
       >
-        {brand || brandDomain ? (
+        {(brand || brandDomain) && logoDevEnabled() ? (
           <BrandLogo name={brand ?? undefined} domain={brandDomain} size="sm" />
         ) : (
           <IconTile icon={icon} accent={accent} size="sm" />
@@ -69,7 +73,8 @@ export function ItemRow({
             <span className="truncate text-[13.5px] font-medium text-ink transition-colors group-hover/edit:text-brand-700">
               {title}
             </span>
-            {onClick && (
+            {onClick && opens && <ChevronRight size={14} aria-hidden className="shrink-0 text-muted group-hover/edit:text-brand-600" />}
+            {onClick && !opens && (
               <Pencil
                 size={12}
                 aria-hidden

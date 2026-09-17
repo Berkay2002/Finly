@@ -5,14 +5,14 @@
  * All three are unofficial and need a server-side hop (CORS).
  *
  *   GET /api/quotes?q=investor
- *     → [{ orderbookId, name, type, currency, price }]
+ *     → [{ orderbookId, name, type, currency, price, market }]
  *   GET /api/quotes?i=5247:SE0015811963:SEK&i=3323::USD&to=SEK
- *     → { quotes: { 5247: { price, isin } }, fx: { SEK: 1, USD: 9.83 } }
+ *     → { quotes: { 5247: { price, isin, change } }, fx: { SEK: 1, USD: 9.83 } }
  *
  * Each `i` is id : ISIN (optional) : the holding's currency. Ids are Avanza orderbook ids, or `nn` + a
  * Nordnet instrument id. Quotes come back in that currency
  * (the Yahoo backup may list the instrument elsewhere, so it is converted), `fx` turns each into `to`.
- * Ids that fail are left out; the app keeps their last price.
+ * `change` is today's move as a fraction (0.012 = +1.2 %). Ids that fail are left out; the app keeps their last price.
  *
  * Kept free of imports so Vercel can run it as-is; tested in src/lib/__tests__/quotes.test.ts.
  */
@@ -38,6 +38,7 @@ interface Price {
   price: number;
   currency: string;
   isin?: string;
+  change?: number;
 }
 export interface Instrument {
   orderbookId: string;
@@ -45,6 +46,8 @@ export interface Instrument {
   type: string;
   currency: string;
   price?: number;
+  /** Where it trades, e.g. "Stockholmsbörsen", so the same ETF on two exchanges can be told apart. */
+  market?: string;
 }
 
 /** A number from Avanza's search, written the Swedish way: "1 292,76", "−0,17". */
@@ -54,6 +57,16 @@ export function parseNumber(value: unknown): number | undefined {
   const n = Number(value.replace(/[\s\u00a0\u202f]/g, '').replace('\u2212', '-').replace(',', '.'));
   return Number.isFinite(n) ? n : undefined;
 }
+
+/** "1.29" (per cent) → 0.0129. */
+const percent = (value: unknown) => {
+  const n = parseNumber(value);
+  return n === undefined ? undefined : n / 100;
+};
+
+/** The move from `before` to `now` as a fraction. */
+const since = (now: number | undefined, before: number | undefined) =>
+  now !== undefined && before ? now / before - 1 : undefined;
 
 /** London quotes in pence. */
 function inMajorUnits(p: { price: number; currency: string }) {
@@ -90,7 +103,8 @@ async function searchAvanza(q: string, fetcher: Fetcher): Promise<Instrument[]> 
     if (!type || typeof hit.orderBookId !== 'string' || typeof currency !== 'string') continue;
     const price = parseNumber(hit.price.last);
     const major = price === undefined ? { price, currency } : inMajorUnits({ price, currency });
-    out.push({ orderbookId: hit.orderBookId, name: String(hit.title ?? hit.orderBookId), type, ...major });
+    const market = typeof hit.marketPlaceName === 'string' ? hit.marketPlaceName : undefined;
+    out.push({ orderbookId: hit.orderBookId, name: String(hit.title ?? hit.orderBookId), type, ...major, market });
     if (out.length >= 8) break;
   }
   return out;
@@ -105,7 +119,7 @@ async function searchNordnetFunds(q: string, fetcher: Fetcher): Promise<Instrume
   for (const r of Array.isArray(funds) ? funds : []) {
     if (typeof r?.instrument_id !== 'number' || typeof r.currency !== 'string') continue;
     const name = String(r.display_name ?? r.instrument_id);
-    out.push({ orderbookId: `nn${r.instrument_id}`, name, type: 'fund', currency: r.currency, price: parseNumber(r.last_price?.price) });
+    out.push({ orderbookId: `nn${r.instrument_id}`, name, type: 'fund', currency: r.currency, price: parseNumber(r.last_price?.price), market: 'Nordnet' });
   }
   return out;
 }
@@ -114,12 +128,14 @@ async function searchNordnetFunds(q: string, fetcher: Fetcher): Promise<Instrume
 async function nordnetPrice(id: string, fetcher: Fetcher): Promise<Price> {
   const [j] = await json(fetcher, `${NORDNET}/instruments/${id}`, { headers: NORDNET_HEADERS });
   let price = parseNumber(j?.last_nav);
+  let change = percent(j?.performance_one_day);
   if (price === undefined) {
     const [p] = await json(fetcher, `${NORDNET}/instruments/price/${id}`, { headers: NORDNET_HEADERS });
     price = parseNumber(p?.last);
+    change = since(price, parseNumber(p?.close));
   }
   if (price === undefined || typeof j?.currency !== 'string') throw new Error(`No Nordnet price for ${id}`);
-  return { price, currency: j.currency, isin: typeof j.isin_code === 'string' ? j.isin_code : undefined };
+  return { price, currency: j.currency, isin: typeof j.isin_code === 'string' ? j.isin_code : undefined, change };
 }
 
 async function avanzaPrice(id: string, fetcher: Fetcher): Promise<Price> {
@@ -127,7 +143,11 @@ async function avanzaPrice(id: string, fetcher: Fetcher): Promise<Price> {
   const price = parseNumber(j?.quote?.last);
   const currency = j?.listing?.currency;
   if (price === undefined || typeof currency !== 'string') throw new Error(`No Avanza price for ${id}`);
-  return { ...inMajorUnits({ price, currency }), isin: typeof j.isin === 'string' ? j.isin : undefined };
+  return {
+    ...inMajorUnits({ price, currency }),
+    isin: typeof j.isin === 'string' ? j.isin : undefined,
+    change: percent(j.quote.changePercent),
+  };
 }
 
 async function yahooPrice(symbol: string, fetcher: Fetcher): Promise<Price> {
@@ -135,7 +155,7 @@ async function yahooPrice(symbol: string, fetcher: Fetcher): Promise<Price> {
   const meta = j?.chart?.result?.[0]?.meta;
   const price = parseNumber(meta?.regularMarketPrice);
   if (price === undefined || typeof meta?.currency !== 'string') throw new Error(`No Yahoo price for ${symbol}`);
-  return inMajorUnits({ price, currency: meta.currency });
+  return { ...inMajorUnits({ price, currency: meta.currency }), change: since(price, parseNumber(meta.chartPreviousClose)) };
 }
 
 async function yahooByIsin(isin: string, fetcher: Fetcher): Promise<Price> {
@@ -165,7 +185,7 @@ export async function quotes(
   items: { id: string; isin?: string; currency: string }[],
   to: string,
   fetcher: Fetcher = fetch,
-): Promise<{ quotes: Record<string, { price: number; isin?: string }>; fx: Record<string, number> }> {
+): Promise<{ quotes: Record<string, { price: number; isin?: string; change?: number }>; fx: Record<string, number> }> {
   const found = await Promise.all(
     items.map((it) =>
       settle(
@@ -180,11 +200,11 @@ export async function quotes(
   const sek = Object.fromEntries(currencies.map((c, i) => [c, rates[i]]));
   const rate = (from: string, into: string) => (from === into ? 1 : sek[from] && sek[into] ? sek[from] / sek[into] : undefined);
 
-  const out: Record<string, { price: number; isin?: string }> = {};
+  const out: Record<string, { price: number; isin?: string; change?: number }> = {};
   items.forEach((it, i) => {
     const p = found[i];
     const r = p && rate(p.currency, it.currency);
-    if (p && r) out[it.id] = { price: p.price * r, ...(p.isin ? { isin: p.isin } : {}) };
+    if (p && r) out[it.id] = { price: p.price * r, ...(p.isin ? { isin: p.isin } : {}), ...(p.change !== undefined ? { change: p.change } : {}) };
   });
   const fx: Record<string, number> = {};
   for (const c of new Set(items.map((it) => it.currency))) {

@@ -1,6 +1,11 @@
+import { addMonths, startOfMonth } from 'date-fns';
 import { messages } from '@/i18n';
-import { computeMetrics, type PlanMetrics } from './metrics';
-import { allGoalProgress, type GoalProgress } from './projections';
+import { AMORTIZATION_TIERS, interestTaxReduction } from './debts';
+import { toMonthly } from './frequency';
+import { computeMetrics, monthKeyOf, type PlanMetrics } from './metrics';
+import { allGoalProgress, monthsAhead, projectPlan, type GoalProgress } from './projections';
+import type { GovBondRate } from './rates';
+import { landingAccount } from './savings';
 import type { AmountRange, ExpenseCategory, FinancialPlan, Frequency } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -74,30 +79,14 @@ export function applyScenario(plan: FinancialPlan, scenario: Scenario): Financia
           return { ...src, amount: src.amount * (1 + scenario.value / 100) };
         case 'absolute': {
           // value is per month; convert to the source's own frequency
-          const factor = monthlyFactor(src.frequency);
-          return { ...src, amount: Math.max(0, src.amount + scenario.value / factor) };
+          return { ...src, amount: Math.max(0, src.amount + scenario.value / toMonthly(1, src.frequency)) };
         }
         case 'set': {
-          const factor = monthlyFactor(src.frequency);
-          return { ...src, amount: Math.max(0, scenario.value / factor) };
+          return { ...src, amount: Math.max(0, scenario.value / toMonthly(1, src.frequency)) };
         }
       }
     }),
   };
-}
-
-function monthlyFactor(frequency: Frequency): number {
-  switch (frequency) {
-    case 'weekly':
-      return 52 / 12;
-    case 'monthly':
-      return 1;
-    case 'quarterly':
-      return 1 / 3;
-    case 'yearly':
-    case 'once':
-      return 1 / 12;
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -191,4 +180,171 @@ export function runScenario(plan: FinancialPlan, scenario: Scenario, now: Date =
 
 function d(key: string, label: string, before: number, after: number, unit: MetricDelta['unit']): MetricDelta {
   return { key, label, before, after, delta: after - before, unit };
+}
+
+/* ------------------------------------------------------------------ */
+/* One-off purchase                                                    */
+/* ------------------------------------------------------------------ */
+
+/** How many months a purchase is checked against: its own month and the eleven after it. */
+const WINDOW = 12;
+/** How far ahead the earliest month that fits is looked for. */
+const SEARCH_MONTHS = 60;
+
+export interface PurchaseResult {
+  /** Name of the account the purchase is paid from. */
+  account: string;
+  /** Month of the purchase (1st). */
+  month: Date;
+  /** Landing account at the end of the purchase month, without and with the purchase. */
+  landingBefore: number;
+  landingAfter: number;
+  /** Lowest landing balance with the purchase over the window from its month. */
+  lowest: { month: Date; balance: number };
+  /** The most that could be paid in that month without the landing account dipping below 0 over the window. */
+  room: number;
+  /** What would have to come from savings to keep the landing account at 0 or above. */
+  shortBy: number;
+  /** Essential runway in the purchase month, without and with the purchase. */
+  runwayBefore: number;
+  runwayAfter: number;
+  /** Cash and emergency savings in the purchase month, before it (what runway counts). */
+  savings: number;
+  /** First month from now the purchase fits without taking the landing account below 0; null within five years. */
+  earliest: Date | null;
+}
+
+/**
+ * A one-off purchase paid from the landing account, judged against the plan rolled forward (`projectPlan`):
+ * each month's leftover and dated one-offs move that balance, and the purchase lowers it from its month on.
+ */
+export function purchaseImpact(plan: FinancialPlan, purchase: { amount: number; date: Date }, now: Date = new Date(), gov?: GovBondRate): PurchaseResult {
+  const start = startOfMonth(now);
+  const at = (i: number) => addMonths(start, i);
+  const projected = projectPlan(plan, now, at(SEARCH_MONTHS + WINDOW - 1), gov);
+  const landing = landingAccount(projected)!;
+  // ponytail: the lost interest on the spent amount is ignored; add it if landing accounts earn real interest.
+  const b = (i: number) => landing.balances?.[monthKeyOf(at(i))] ?? landing.balance;
+  const lowestFrom = (m: number) => {
+    let low = { month: at(m), balance: b(m) - purchase.amount };
+    for (let k = m + 1; k < m + WINDOW; k += 1) if (b(k) - purchase.amount < low.balance) low = { month: at(k), balance: b(k) - purchase.amount };
+    return low;
+  };
+
+  const p = Math.min(SEARCH_MONTHS, Math.max(0, monthsAhead(now, purchase.date)));
+  const lowest = lowestFrom(p);
+  let earliest: Date | null = null;
+  for (let m = 0; m <= SEARCH_MONTHS && !earliest; m += 1) if (lowestFrom(m).balance >= 0) earliest = at(m);
+
+  const { resilience } = computeMetrics(projectPlan(plan, now, at(p), gov), p > 0 ? at(p) : now, gov);
+  const avail = resilience.availableForRunway;
+  const runwayBefore = resilience.essentialRunwayMonths;
+  const runwayAfter = !Number.isFinite(runwayBefore) || avail <= 0 ? runwayBefore : (runwayBefore * Math.max(0, avail - purchase.amount)) / avail;
+
+  return {
+    account: landing.name,
+    month: at(p),
+    landingBefore: b(p),
+    landingAfter: b(p) - purchase.amount,
+    lowest,
+    room: Math.max(0, lowest.balance + purchase.amount),
+    shortBy: Math.max(0, -lowest.balance),
+    runwayBefore,
+    runwayAfter,
+    savings: avail,
+    earliest,
+  };
+}
+
+/** Paying `amount` back in `months` equal payments (annuity) at a yearly nominal rate, with any fees. */
+export function installment(amount: number, months: number, aprPercent: number, setupFee = 0, monthlyFee = 0) {
+  const n = Math.max(1, Math.round(months));
+  const r = aprPercent / 1200;
+  const monthly = (r ? (amount * r) / (1 - Math.pow(1 + r, -n)) : amount / n) + monthlyFee;
+  const total = monthly * n + setupFee;
+  return { monthly, total, extra: total - amount };
+}
+
+/** Car loans with the car as security (ägarförbehåll) need at least a fifth paid in cash (kontantinsats). */
+export const CAR_MIN_DOWN_SHARE = 0.2;
+
+/** The down payment the landing account can spare, kept between the loan's minimum and the price, in whole hundreds. */
+export function suggestedDownPayment(room: number, price: number, minShare = 0): number {
+  return Math.min(price, Math.max(Math.ceil(price * minShare), Math.floor(room / 100) * 100));
+}
+
+/**
+ * The highest price where the landing account's spare `cash` covers the down payment (at least `minShare`)
+ * plus any `upfront` costs, and the loan for the rest costs at most `budget` a month. `loanMonthly` prices a
+ * loan (annuity, straight amortisation…); both it and `upfront` grow with the price, so the answer is found
+ * by halving. 0 when nothing is left a month.
+ */
+export function maxAffordablePrice({
+  cash,
+  budget,
+  minShare,
+  loanMonthly,
+  upfront = () => 0,
+}: {
+  cash: number;
+  budget: number;
+  minShare: number;
+  loanMonthly: (loan: number, price: number) => number;
+  upfront?: (price: number, loan: number) => number;
+}): number {
+  if (budget < 0) return 0;
+  const spare = Math.max(0, cash);
+  const fits = (price: number) => {
+    const forDown = spare - upfront(price, Math.max(0, price - spare));
+    const down = Math.min(price, forDown);
+    return down >= price * minShare && loanMonthly(price - down, price) <= budget;
+  };
+  let lo = 0;
+  let hi = minShare > 0 ? spare / minShare : spare + budget * 1200;
+  if (fits(hi)) return Math.floor(hi);
+  for (let i = 0; i < 60; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return Math.floor(lo);
+}
+
+/** A mortgage covers at most 90 % of the price from 1 April 2026 (lag 2026:226), so a tenth is paid in cash. */
+export const HOME_MIN_DOWN_SHARE = 0.1;
+
+/**
+ * One-off costs of buying a house: stamp duty on the title (lagfart, 1.5 % + 825 kr) and new mortgage deeds
+ * (pantbrev, 2 % + 375 kr) for what the loan needs beyond the deeds already taken out on the property. A
+ * bostadsrätt is not real property and has neither.
+ */
+export function homeBuyingCosts(price: number, loan: number, house: boolean, existingDeeds = 0): number {
+  if (!house || price <= 0) return 0;
+  const newDeeds = Math.max(0, loan - Math.max(0, existingDeeds));
+  return price * 0.015 + 825 + (newDeeds > 0 ? newDeeds * 0.02 + 375 : 0);
+}
+
+/** The 2026 ceiling on a house's property charge (kommunal fastighetsavgift); it follows inkomstbasbeloppet yearly. */
+export const PROPERTY_FEE_CAP = 10_425;
+
+/**
+ * Yearly property charge on a house: 0.75 % of the assessed value (taxeringsvärde), taken as 75 % of the price,
+ * capped. A bostadsrätt pays it through the association's fee.
+ */
+export function propertyFee(price: number): number {
+  // ponytail: new builds are exempt for 15 years; a toggle if that comes up.
+  return Math.min(PROPERTY_FEE_CAP, Math.max(0, price) * 0.75 * 0.0075);
+}
+
+/**
+ * First-year monthly cost of a new mortgage: interest, less the tax reduction on it (ränteavdrag), plus the
+ * amortisation the requirement sets from the loan-to-value (amorteringskrav). The cost falls as it is repaid.
+ */
+export function mortgageMonthly(loan: number, price: number, apr: number) {
+  const ltv = price > 0 ? loan / price : 0;
+  const percent = AMORTIZATION_TIERS.find((t) => ltv > t.aboveLtv)?.percent ?? 0;
+  const amortization = (loan * percent) / 100 / 12;
+  const interest = (loan * apr) / 100 / 12;
+  const deduction = interestTaxReduction(interest * 12) / 12;
+  return { interest, deduction, amortization, percent, monthly: interest - deduction + amortization };
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { parseNumber, quotes, searchInstruments } from '../../../api/quotes';
-import { quoteQuery } from '../quotes';
+import { getQuoteStatus, quoteQuery, refreshQuotes } from '../quotes';
 
 /** A fetch that answers by URL substring; anything unmatched is a 500. */
 function fetcher(routes: Record<string, unknown>) {
@@ -10,7 +10,7 @@ function fetcher(routes: Record<string, unknown>) {
   });
 }
 
-const avanza = (last: number, currency: string, isin: string) => ({ isin, quote: { last }, listing: { currency } });
+const avanza = (last: number, currency: string, isin: string, changePercent?: number) => ({ isin, quote: { last, changePercent }, listing: { currency } });
 
 describe('parseNumber', () => {
   it('reads Swedish-formatted figures', () => {
@@ -28,7 +28,7 @@ describe('searchInstruments', () => {
     const f = fetcher({
       'avanza.se/_api/search': {
         hits: [
-          { type: 'STOCK', orderBookId: '5247', title: 'Investor B (INVE B)', price: { last: '405,75', currency: 'SEK' } },
+          { type: 'STOCK', orderBookId: '5247', title: 'Investor B (INVE B)', price: { last: '405,75', currency: 'SEK' }, marketPlaceName: 'Stockholmsbörsen' },
           { type: 'FAQ', title: 'Vad är ISK?' },
           { type: 'FUND', orderBookId: '878733', title: 'Avanza Global', price: { last: '262,98', currency: 'SEK' } },
         ],
@@ -45,9 +45,9 @@ describe('searchInstruments', () => {
       ],
     });
     expect(await searchInstruments('x', f)).toEqual([
-      { orderbookId: '5247', name: 'Investor B (INVE B)', type: 'stock', currency: 'SEK', price: 405.75 },
-      { orderbookId: '878733', name: 'Avanza Global', type: 'fund', currency: 'SEK', price: 262.98 },
-      { orderbookId: 'nn16801084', name: 'Nordnet Sverige Index', type: 'fund', currency: 'SEK', price: 841.56 },
+      { orderbookId: '5247', name: 'Investor B (INVE B)', type: 'stock', currency: 'SEK', price: 405.75, market: 'Stockholmsbörsen' },
+      { orderbookId: '878733', name: 'Avanza Global', type: 'fund', currency: 'SEK', price: 262.98, market: undefined },
+      { orderbookId: 'nn16801084', name: 'Nordnet Sverige Index', type: 'fund', currency: 'SEK', price: 841.56, market: 'Nordnet' },
     ]);
   });
 
@@ -59,10 +59,10 @@ describe('searchInstruments', () => {
 describe('quotes', () => {
   it('prices Avanza and Nordnet holdings and converts currencies to the plan currency', async () => {
     const f = fetcher({
-      'market-guide/stock/5247': avanza(406, 'SEK', 'SE0015811963'),
+      'market-guide/stock/5247': avanza(406, 'SEK', 'SE0015811963', 1.5),
       'market-guide/stock/3323': avanza(300, 'USD', 'US0378331005'),
       'market-guide/stock/19000': avanza(10, 'SEK', 'USDSEK'),
-      'nordnet.se/api/2/instruments/16801084': [{ last_nav: 841.56, currency: 'SEK', isin_code: 'SE0014956371' }],
+      'nordnet.se/api/2/instruments/16801084': [{ last_nav: 841.56, currency: 'SEK', isin_code: 'SE0014956371', performance_one_day: -0.5 }],
     });
     const result = await quotes(
       [
@@ -74,9 +74,9 @@ describe('quotes', () => {
       f,
     );
     expect(result.quotes).toEqual({
-      5247: { price: 406, isin: 'SE0015811963' },
+      5247: { price: 406, isin: 'SE0015811963', change: 0.015 },
       3323: { price: 300, isin: 'US0378331005' },
-      nn16801084: { price: 841.56, isin: 'SE0014956371' },
+      nn16801084: { price: 841.56, isin: 'SE0014956371', change: -0.005 },
     });
     expect(result.fx).toEqual({ SEK: 1, USD: 10 });
   });
@@ -84,13 +84,14 @@ describe('quotes', () => {
   it('falls back to Yahoo by ISIN, converting a listing in another currency and pence', async () => {
     const f = fetcher({
       'finance/search?q=IE00B4L5Y983': { quotes: [{ symbol: 'IWDA.L' }] },
-      'chart/IWDA.L': { chart: { result: [{ meta: { regularMarketPrice: 11000, currency: 'GBp' } }] } },
+      'chart/IWDA.L': { chart: { result: [{ meta: { regularMarketPrice: 11000, chartPreviousClose: 10000, currency: 'GBp' } }] } },
       'chart/EURSEK%3DX': { chart: { result: [{ meta: { regularMarketPrice: 11, currency: 'SEK' } }] } },
       'chart/GBPSEK%3DX': { chart: { result: [{ meta: { regularMarketPrice: 13.2, currency: 'SEK' } }] } },
     });
     const result = await quotes([{ id: '384747', isin: 'IE00B4L5Y983', currency: 'EUR' }], 'SEK', f);
     // 110 GBP × 13.2 SEK/GBP ÷ 11 SEK/EUR = 132 EUR
     expect(result.quotes['384747'].price).toBeCloseTo(132);
+    expect(result.quotes['384747'].change).toBeCloseTo(0.1);
     expect(result.fx).toEqual({ EUR: 11 });
   });
 
@@ -105,5 +106,18 @@ describe('quoteQuery', () => {
     const b = { orderbookId: '3323', isin: 'US0378331005', currency: 'USD' };
     expect(quoteQuery([a, b, a], 'SEK')).toBe(quoteQuery([b, a], 'SEK'));
     expect(quoteQuery([], 'SEK')).toBe('');
+  });
+});
+
+describe('refreshQuotes', () => {
+  it('records when prices last came, and when they did not', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('down', { status: 502 })));
+    await refreshQuotes('i=1::SEK&to=SEK');
+    expect(getQuoteStatus()).toMatchObject({ failed: true, refreshing: false });
+
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json({ quotes: { 1: { price: 1 } }, fx: { SEK: 1 } })));
+    await refreshQuotes('i=1::SEK&to=SEK');
+    expect(getQuoteStatus()).toMatchObject({ failed: false, refreshing: false, fetchedAt: expect.any(Number) });
+    vi.unstubAllGlobals();
   });
 });

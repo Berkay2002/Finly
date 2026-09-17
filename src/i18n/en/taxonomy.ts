@@ -219,8 +219,14 @@ const accountKinds: Record<AccountKind, { label: string; description: string }> 
     label: 'ISK',
     description: 'Investment savings account. No tax on gains; a small yearly tax on the value, none on the first 300 000 kr',
   },
-  kf: { label: 'Kapitalförsäkring (KF)', description: 'Taxed like an ISK, but the insurer takes the tax from the account' },
-  af: { label: 'Aktie- och fondkonto (AF)', description: 'Brokerage account. 30 % tax on gains when you sell and on dividends' },
+  kf: {
+    label: 'Endowment insurance (KF)',
+    description: 'Kapitalförsäkring. Taxed like an ISK, but the insurer takes the tax from the account',
+  },
+  af: {
+    label: 'Brokerage account (AF)',
+    description: 'Aktie- och fondkonto. 30 % tax on gains when you sell and on dividends',
+  },
   investment: { label: 'Investment account (type not set)', description: 'Pick ISK, KF or AF so Finly can work out the tax' },
   other: { label: 'Other account', description: 'Anything else you track' },
 };

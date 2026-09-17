@@ -1,6 +1,7 @@
 import { endOfMonth, subMonths } from 'date-fns';
 import { computeMetrics, monthKeyOf } from './metrics';
 import { SPEND_GROUPS } from './everyday';
+import { fxForMonth } from './fx';
 import { savingsPots } from './savings';
 import type { FinancialPlan, SpendGroup } from './types';
 
@@ -77,8 +78,8 @@ export function withMonthValue(map: Record<string, number> | undefined, month: s
 }
 
 /**
- * A copy of the plan reduced to what that month's metrics need: the bill for that month only,
- * and no balance history (the snapshot's `byAccount` / `byGoal` hold those values).
+ * A copy of the plan reduced to what that month's metrics need: the bill and exchange rates for that month
+ * only, and no balance history (the snapshot's `byAccount` / `byGoal` hold those values).
  */
 export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
   const copy = structuredClone(plan);
@@ -95,6 +96,7 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
     const entry = copy.everydaySpend?.[g]?.[month];
     if (entry) spend[g] = { [month]: entry };
   }
+  if (copy.fx) copy.fx = fxForMonth(copy.fx, month);
   if (Object.keys(spend).length > 0) copy.everydaySpend = spend;
   else delete copy.everydaySpend;
   copy.accounts = copy.accounts.map(({ balances: _b, ...rest }) => {
