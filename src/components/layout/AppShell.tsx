@@ -11,6 +11,7 @@ import { Logo } from './Logo';
 import { NotificationsButton, ThemeToggleButton } from './PageHeader';
 import { MoreSheet, QuickAddSheet } from './Sheets';
 import { Sidebar } from './Sidebar';
+import { UpdateBanner } from './UpdateBanner';
 
 export function AppShell() {
   useMonthClose();
@@ -29,6 +30,7 @@ export function AppShell() {
           </div>
         </div>
         <main className="mx-auto w-full max-w-[1440px] px-4 pb-28 pt-4 sm:px-6 lg:px-6 lg:pb-10 lg:pt-6">
+          <UpdateBanner className="mb-4" />
           <SyncBanner className="mb-4" />
           <FrozenMonthBanner className="mb-4" />
           <Outlet />

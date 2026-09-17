@@ -31,6 +31,12 @@ export default {
     account: { label: 'Account', description: 'A bank or investment account' },
     loan: { label: 'Loan', description: 'CSN, mortgage, car loan or credit' },
   },
+  update: {
+    title: 'A new version of Finly is ready',
+    body: 'Reload to get the latest changes.',
+    reload: 'Reload',
+    later: 'Later',
+  },
   frozenMonth: {
     title: (month: string, closedOn: string) => `${month} as it was closed on ${closedOn}`,
     back: 'Back to this month',

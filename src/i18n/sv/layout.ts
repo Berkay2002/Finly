@@ -33,6 +33,12 @@ export default {
     account: { label: 'Konto', description: 'Ett bank- eller investeringskonto' },
     loan: { label: 'Lån', description: 'CSN, bolån, billån eller kredit' },
   },
+  update: {
+    title: 'En ny version av Finly �r klar',
+    body: 'Ladda om f�r att f� de senaste �ndringarna.',
+    reload: 'Ladda om',
+    later: 'Senare',
+  },
   frozenMonth: {
     title: (month, closedOn) => `Så såg ${month} ut när den stängdes ${closedOn}`,
     back: 'Tillbaka till den här månaden',
