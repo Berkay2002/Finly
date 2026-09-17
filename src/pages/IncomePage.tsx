@@ -3,6 +3,7 @@ import { formatMoney, formatPercent } from '@/engine/format';
 import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
 import { useCurrency, useMetrics } from '@/store/selectors';
+import { DepositsCard } from '@/components/bank/DepositsCard';
 import { IncomeEditor } from '@/components/forms/IncomeEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -42,6 +43,7 @@ export function IncomePage() {
         </Card>
 
         <div className="space-y-4 self-start">
+          <DepositsCard />
           <Card>
             <CardHeader icon={<IconTile icon="card-income-stability" accent="green" size="sm" />} title={t.stability} />
             <SplitBar a={m.income.reliable} b={m.income.variable} accentA="brand" accentB="purple" />

@@ -9,6 +9,7 @@ import sample from './sample';
 import layout from './layout';
 import ui from './ui';
 import sync from './sync';
+import bank from './bank';
 import expenses from './expenses';
 import bills from './bills';
 import household from './household';
@@ -35,6 +36,7 @@ const en = {
   layout,
   ui,
   sync,
+  bank,
   expenses,
   bills,
   household,

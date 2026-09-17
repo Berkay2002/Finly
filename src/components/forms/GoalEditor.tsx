@@ -310,7 +310,7 @@ export function GoalSheet({
                 <MoneyField
                   label={t.savedSoFar}
                   currency={currency}
-                  readOnly={!!account?.holdings?.length}
+                  readOnly={!!account?.holdings?.length || !!account?.bank}
                   value={account?.holdings?.length ? Math.round(draft.currentAmount) : draft.currentAmount}
                   onValueChange={(currentAmount) => onChange({ ...draft, currentAmount })}
                 />

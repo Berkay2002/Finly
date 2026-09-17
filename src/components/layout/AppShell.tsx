@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
+import { useBankSync } from '@/bank/useBankSync';
 import { useMonthClose } from '@/store/useMonthClose';
 import { usePriceRefresh } from '@/store/usePriceRefresh';
 import { convex } from '@/sync/convexClient';
@@ -16,6 +17,7 @@ import { UpdateBanner } from './UpdateBanner';
 export function AppShell() {
   useMonthClose();
   usePriceRefresh();
+  useBankSync();
   return (
     <div className="min-h-screen lg:flex">
       {convex && <SyncController />}

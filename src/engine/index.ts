@@ -6,6 +6,7 @@ export * from './everyday';
 export * from './commute';
 export * from './food';
 export * from './actuals';
+export * from './bankActuals';
 export * from './fx';
 export * from './format';
 export * from './taxonomy';

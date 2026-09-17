@@ -92,6 +92,12 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
     void _drop;
     return typeof bill === 'number' ? { ...rest, actuals: { [month]: bill } } : rest;
   });
+  copy.income = copy.income.map((i) => {
+    const received = i.actuals?.[month];
+    const { actuals: _drop, ...rest } = i;
+    void _drop;
+    return typeof received === 'number' ? { ...rest, actuals: { [month]: received } } : rest;
+  });
   const spend: NonNullable<FinancialPlan['everydaySpend']> = {};
   for (const g of SPEND_GROUPS) {
     const entry = copy.everydaySpend?.[g]?.[month];

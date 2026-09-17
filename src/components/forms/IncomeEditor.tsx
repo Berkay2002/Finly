@@ -1,11 +1,14 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { reconcileIncome } from '@/bank/useBankSync';
+import { incomeStatus } from '@/engine/bankActuals';
 import { FREQUENCIES, FREQUENCY_LABELS } from '@/engine/frequency';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { toMonthly } from '@/engine/frequency';
 import { INCOME_KINDS, incomeKindMeta } from '@/engine/taxonomy';
 import { homeKommunCode } from '@/engine/home';
 import { findKommun, kommunerFor } from '@/engine/tax/kommuner';
+import { monthKeyOf } from '@/engine/metrics';
 import { DEFAULT_TAX_PROFILE, isTaxYearStale, resolveTaxYear, withholdingForGross } from '@/engine/tax/sweden';
 import type { Frequency, GrossIncome, IncomeKind, IncomeSource, Reliability } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -62,6 +65,10 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
   const { addIncome, updateIncome, removeIncome } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
   const t = useT().income.editor;
+  const tb = useT().bank.income;
+  // Nothing below shows for a plan without a connected bank.
+  const bankAccounts = plan.accounts.filter((a) => a.bank);
+  const status = bankAccounts.length ? incomeStatus(plan, monthKeyOf(new Date())) : [];
 
   useEffect(() => {
     if (autoOpenAdd) setEditing(blankDraft('reliable'));
@@ -75,6 +82,8 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
     } else {
       addIncome(editing);
     }
+    // Where it lands or how it is recognised may have changed what counts as received.
+    if (bankAccounts.length) reconcileIncome();
     setEditing(null);
   };
 
@@ -114,6 +123,14 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                     <span className="tabular">{t.perMonthApprox(formatMoney(toMonthly(src.amount, src.frequency), currency))}</span>
                   )}
                   {!src.includeInBaseline && <Chip tone="orange">{t.notInBaseline}</Chip>}
+                  {status
+                    .filter((s) => s.id === src.id && (s.received > 0 || src.bankMatch))
+                    .map((s) => (
+                      <span key="bank" className="tabular">
+                        {s.received > 0 ? tb.received(formatMoney(s.received, currency)) : tb.notYet}
+                        {s.received > 0 && s.remaining > 0 && ` · ${tb.stillExpected(formatMoney(s.remaining, currency))}`}
+                      </span>
+                    ))}
                 </>
               }
               fields={
@@ -267,6 +284,25 @@ export function IncomeEditor({ autoOpenAdd = false }: { autoOpenAdd?: boolean })
                 {t.reliabilityHint}
               </p>
             </div>
+            {bankAccounts.length > 0 && (
+              <div className="space-y-2">
+                <SelectField
+                  label={tb.landsIn}
+                  hint={tb.landsInHint}
+                  value={bankAccounts.some((a) => a.id === editing.destinationAccountId) ? editing.destinationAccountId! : ''}
+                  onValueChange={(id) => setEditing({ ...editing, destinationAccountId: id || undefined })}
+                  options={[{ value: '', label: tb.anyAccount }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name }))]}
+                />
+                {editing.bankMatch && (
+                  <div className="flex items-center justify-between gap-3 text-[12.5px] text-muted">
+                    <span>{editing.bankMatch.counterparty ? tb.recognised(editing.bankMatch.counterparty) : tb.recognisedByDay(editing.bankMatch.day ?? 1)}</span>
+                    <Button variant="secondary" size="sm" onClick={() => setEditing({ ...editing, bankMatch: undefined })}>
+                      {tb.forgetMatch}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
             <Switch
               checked={editing.includeInBaseline}
               onChange={(includeInBaseline) => setEditing({ ...editing, includeInBaseline })}

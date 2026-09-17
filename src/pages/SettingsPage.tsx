@@ -14,6 +14,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader, Divider } from '@/components/ui/Card';
+import { BankCard } from '@/components/bank/BankCard';
 import { SyncCard } from '@/components/sync/SyncCard';
 import { AvatarPicker } from '@/components/forms/AvatarPicker';
 import { BirthYearField } from '@/components/forms/BirthYearField';
@@ -148,6 +149,9 @@ export function SettingsPage() {
 
           <Divider className="my-5" />
           <SyncCard onMessage={(tone, text) => setMessage({ tone, text })} />
+
+          <Divider className="my-5" />
+          <BankCard onMessage={(tone, text) => setMessage({ tone, text })} />
 
           <Divider className="my-5" />
           <CardHeader title={t.settings.data.title} subtitle={t.settings.data.subtitle} />

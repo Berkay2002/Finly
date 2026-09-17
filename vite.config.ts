@@ -38,6 +38,21 @@ function vercelApi(): Plugin {
           res.end(String(error));
         }
       });
+      // The one function that takes a method, headers and a body; Vite parses none of them.
+      server.middlewares.use('/api/bank', async (req, res) => {
+        try {
+          const mod = (await server.ssrLoadModule('/api/bank.ts')) as { handle: (request: Request) => Promise<Response> };
+          const chunks: Buffer[] = [];
+          for await (const chunk of req) chunks.push(chunk as Buffer);
+          const headers = new Headers();
+          for (const [key, value] of Object.entries(req.headers)) if (typeof value === 'string') headers.set(key, value);
+          const body = req.method === 'POST' && chunks.length ? Buffer.concat(chunks) : undefined;
+          send(res, await mod.handle(new Request(new URL(req.url ?? '/', 'http://localhost'), { method: req.method, headers, body })));
+        } catch (error) {
+          res.statusCode = 500;
+          res.end(String(error));
+        }
+      });
       server.middlewares.use('/api/logo-search', async (req, res) => {
         try {
           const mod = (await server.ssrLoadModule('/api/logo-search.ts')) as {

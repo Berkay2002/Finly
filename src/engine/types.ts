@@ -64,6 +64,22 @@ export interface IncomeSource {
   includeInBaseline: boolean;
   /** Present when the user entered a before-tax salary. */
   gross?: GrossIncome;
+  /** The account this is normally paid into. Only used to find it among bank transactions. */
+  destinationAccountId?: string;
+  /** How the payment shows up at the bank, learnt when the user points one out. */
+  bankMatch?: IncomeBankMatch;
+  /**
+   * What actually arrived, keyed by the month it counts for (YYYY-MM). `amount` stays what is normally
+   * expected: one bigger or smaller payment never rewrites the plan.
+   */
+  actuals?: Record<string, number>;
+}
+
+export interface IncomeBankMatch {
+  /** The sender as the bank writes it, e.g. 'ERICSSON AB'. */
+  counterparty?: string;
+  /** Usual day of the month it arrives. */
+  day?: number;
 }
 
 export type ExpenseCategory = 'home' | 'living' | 'transport' | 'finance' | 'leisure' | 'planned';
@@ -283,6 +299,35 @@ export type AccountKind =
   | 'investment'
   | 'other';
 
+/** A link to a real bank account. Present only while connected; the account's `kind` is unaffected. */
+export interface AccountBankLink {
+  /** Who reads the bank, e.g. 'enable-banking'. Metadata: nothing in the engine branches on it. */
+  provider: string;
+  /** The provider's stable id for the bank account, the same across sessions and devices. */
+  externalId: string;
+  /** Lets a transfer that names this account be told from income or spending. */
+  iban?: string;
+}
+
+/** An authorised reading session at a bank. Useless without the private key, which stays on the device. */
+export interface BankSession {
+  id: string;
+  /** The bank's name as the provider lists it. */
+  aspsp: string;
+  country: string;
+  /** ISO timestamp the consent runs out; after it the bank asks for a new login. */
+  validUntil: string;
+  /** `AccountBankLink.externalId` → the id the session reads that account under. */
+  accounts: Record<string, string>;
+}
+
+export interface BankSetup {
+  provider: string;
+  /** The user's own application id at the provider. */
+  appId: string;
+  sessions: BankSession[];
+}
+
 export interface Account {
   id: string;
   name: string;
@@ -310,6 +355,8 @@ export interface Account {
   holdings?: Holding[];
   /** Uninvested money on an account with holdings. */
   cash?: number;
+  /** Set while the balance is read from a bank; without it the balance is typed in by hand. */
+  bank?: AccountBankLink;
 }
 
 export type HoldingType = 'stock' | 'etf' | 'fund' | 'certificate';
@@ -503,6 +550,8 @@ export interface FinancialPlan {
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];
+  /** Optional bank connectivity. Absent for a plan kept by hand; no calculation reads it. */
+  bank?: BankSetup;
   /** Missing on plans saved before loans had their own model; see `migrateLegacyDebts`. */
   debts?: Debt[];
   goals: SavingsGoal[];

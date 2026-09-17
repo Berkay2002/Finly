@@ -1,4 +1,5 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { Pencil, Plus, Trash2, Unplug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatMoney, formatNumber } from '@/engine/format';
@@ -7,7 +8,8 @@ import { goalForAccount, isSavingsAccount } from '@/engine/savings';
 import { capitalTaxSummary, SUGGESTED_RETURN, wrapperOf } from '@/engine/tax/capital';
 import { ACCOUNT_KINDS, accountKindMeta } from '@/engine/taxonomy';
 import type { Account, AccountKind } from '@/engine/types';
-import { useT } from '@/i18n';
+import { useBankStore } from '@/bank/bankStore';
+import { dateLocale, useT } from '@/i18n';
 import { bankDomain } from '@/lib/brandLogo';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, useGovBondRate, usePlan, useViewDate } from '@/store/selectors';
@@ -88,10 +90,11 @@ export function AccountEditor({
                   <RateMeta account={a} />
                 )}
                 {previous && <Delta before={previous[a.id]} after={a.balance} className="ml-1" />}
+                {a.bank && <BankMeta account={a} />}
               </>
             }
             fields={
-              a.holdings?.length ? (
+              a.holdings?.length || a.bank ? (
                 <span className="tabular min-w-0 flex-1 text-right text-[13.5px] font-medium text-ink sm:w-40 sm:flex-none">
                   {formatMoney(a.balance, currency)}
                 </span>
@@ -136,6 +139,11 @@ export function AccountSheet({ draft, onChange }: { draft: Draft | null; onChang
     if (!draft) return;
     if (draft.id) {
       const { id, ...patch } = draft;
+      // The sheet may have been open while the bank was read: its balance is the older one.
+      if (patch.bank) {
+        delete (patch as Partial<Account>).balance;
+        delete patch.balances;
+      }
       updateAccount(id, patch);
     } else addAccount(draft);
     onChange(null);
@@ -174,12 +182,65 @@ function HoldingsMeta({ account: a }: { account: Account }) {
   );
 }
 
+/** Where a connected account's balance comes from, and how fresh it is. Quiet unless something needs doing. */
+function BankMeta({ account: a, plain = false }: { account: Account; plain?: boolean }) {
+  const state = useBankStore((s) => (a.bank ? s.accounts[a.bank.externalId] : undefined));
+  const t = useT().bank.account;
+  const when = state?.lastSyncedAt && formatDistanceToNow(new Date(state.lastSyncedAt), { addSuffix: true, locale: dateLocale() });
+  const text =
+    state?.status === 'reauth' ? t.reauth : state?.status === 'error' ? t.unavailable : when ? t.synced(a.institution?.trim() || 'bank', when) : t.syncedElsewhere;
+  return (
+    <span className={state && state.status !== 'ok' ? 'text-warning' : undefined}>
+      {plain ? '' : '· '}
+      {text}
+      {state?.status !== 'ok' && when ? ` (${when})` : ''}
+    </span>
+  );
+}
+
 function RateMeta({ account: a }: { account: Account }) {
   const wrapper = wrapperOf(a.kind);
   const rate = wrapper === 'cash' ? a.interestRate : a.expectedReturn;
   const t = useT().accounts.editor;
   if (!rate) return null;
   return <span>· {wrapper === 'cash' ? t.interest(percent(rate)) : t.expected(percent(rate))}</span>;
+}
+
+/** A connected account in the sheet: the bank's figure, read-only, and the way back to keeping it by hand. */
+function BankBalance({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+  const currency = useCurrency();
+  const live = usePlan().accounts.find((a) => a.id === draft.id);
+  const state = useBankStore((s) => (draft.bank ? s.accounts[draft.bank.externalId] : undefined));
+  const t = useT();
+  const money = (n: number) => formatMoney(n, currency);
+  const both = state?.available !== undefined && state.booked !== undefined && state.available !== state.booked;
+  return (
+    <div>
+      <MoneyField
+        label={t.accounts.editor.currentBalance}
+        hint={t.bank.account.balanceHint}
+        currency={currency}
+        value={live?.balance ?? draft.balance}
+        onValueChange={() => {}}
+        disabled
+      />
+      <p className="mt-1 text-[12px] text-muted">
+        <BankMeta account={{ ...draft, id: draft.id ?? '' }} plain />
+        {both && ` · ${t.bank.account.available(money(state.available!))} · ${t.bank.account.booked(money(state.booked!))}`}
+      </p>
+      <div className="mt-2 flex items-center gap-3">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={Unplug}
+          onClick={() => onChange({ ...draft, bank: undefined, balance: live?.balance ?? draft.balance, balances: live?.balances ?? draft.balances })}
+        >
+          {t.bank.account.disconnect}
+        </Button>
+        <span className="text-[12px] text-muted">{t.bank.account.disconnectHint}</span>
+      </div>
+    </div>
+  );
 }
 
 function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
@@ -239,7 +300,9 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
           onPick={(institutionDomain) => onChange({ ...draft, institutionDomain })}
         />
       )}
-      {holdings.length > 0 ? (
+      {draft.bank ? (
+        <BankBalance draft={draft} onChange={onChange} />
+      ) : holdings.length > 0 ? (
         <MoneyField label={t.totalValue} hint={t.totalValueHint} currency={currency} value={draftAccount.balance} onValueChange={() => {}} disabled />
       ) : (
         <MoneyField

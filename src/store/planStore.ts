@@ -14,6 +14,7 @@ import { monthKeyOf } from '@/engine/metrics';
 import { accountPot, ensureLandingAccount, migrateLinkedGoals, type SavingsPot } from '@/engine/savings';
 import type {
   Account,
+  BankSetup,
   Commute,
   CommutePrice,
   Debt,
@@ -68,6 +69,8 @@ interface PlanState {
   addIncome: (draft: Draft<IncomeSource>) => string;
   updateIncome: (id: string, patch: Partial<IncomeSource>) => void;
   removeIncome: (id: string) => void;
+  /** Record (or clear, with null) what an income actually paid for a month (YYYY-MM). The expected amount is untouched. */
+  setIncomeActual: (id: string, month: string, amount: number | null) => void;
 
   addExpense: (draft: Draft<ExpenseItem>) => string;
   updateExpense: (id: string, patch: Partial<ExpenseItem>) => void;
@@ -109,6 +112,14 @@ interface PlanState {
   refreshHoldings: (result: QuoteResult, today?: Date) => void;
   /** Lays fetched exchange rates over the plan's; no change, no write. */
   refreshFx: (fx: FxRates) => void;
+  /**
+   * Balances read from the bank, by `Account.bank.externalId`. The bank's figure is the balance; nothing
+   * is worked out from transactions. Not an edit: `updatedAt` stays, so a device that only fetched does
+   * not outrank one where something was changed by hand. A no-op when nothing moved.
+   */
+  refreshBankBalances: (balances: Record<string, number>, today?: Date) => void;
+  /** Connect, reconnect or forget the bank; undefined removes the setup and every account's link with it. */
+  setBankSetup: (bank: BankSetup | undefined) => void;
 
   /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
   saveSnapshot: (month: string, today?: Date) => void;
@@ -175,8 +186,23 @@ export const usePlanStore = create<PlanState>()(
           return id;
         },
         updateIncome: (id, patch) =>
-          mutate((p) => ({ ...p, income: p.income.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
+          // `actuals` come from the bank (setIncomeActual); an edit made from an older copy must not put them back.
+          mutate((p) => ({ ...p, income: p.income.map((x) => (x.id === id ? { ...x, ...patch, actuals: x.actuals } : x)) })),
         removeIncome: (id) => mutate((p) => ({ ...p, income: p.income.filter((x) => x.id !== id) })),
+
+        setIncomeActual: (id, month, amount) =>
+          set((s) =>
+            withMonthApplied(s, month, (plan) => ({
+              ...plan,
+              income: plan.income.map((x) => {
+                if (x.id !== id) return x;
+                const actuals = { ...(x.actuals ?? {}) };
+                if (amount === null || !Number.isFinite(amount)) delete actuals[month];
+                else actuals[month] = Math.max(0, amount);
+                return { ...x, actuals: Object.keys(actuals).length > 0 ? actuals : undefined };
+              }),
+            })),
+          ),
 
         addExpense: (draft) => {
           const id = draft.id ?? newId('exp');
@@ -207,6 +233,26 @@ export const usePlanStore = create<PlanState>()(
             accounts: accounts.map((a, i) => (a === before[i] ? a : { ...a, balances: withMonthValue(a.balances, month, a.balance) })),
           }));
         },
+        refreshBankBalances: (balances, today = new Date()) => {
+          const month = monthKeyOf(today);
+          const before = get().plan.accounts;
+          const accounts = before.map((a) => {
+            const value = a.bank && !a.holdings?.length ? balances[a.bank.externalId] : undefined;
+            if (value === undefined || !Number.isFinite(value)) return a;
+            // The month's history too, also when the figure stands still into a new month.
+            if (a.balance === value && a.balances?.[month] === value) return a;
+            return { ...a, balance: value, balances: withMonthValue(a.balances, month, value) };
+          });
+          if (accounts.every((a, i) => a === before[i])) return;
+          set((s) => ({ plan: { ...s.plan, accounts } }));
+        },
+        setBankSetup: (bank) =>
+          mutate((p) => {
+            if (bank) return { ...p, bank };
+            const { bank: _b, ...rest } = p;
+            void _b;
+            return { ...rest, accounts: p.accounts.map(({ bank: _l, ...a }) => (void _l, a)) };
+          }),
         refreshFx: (fx) => {
           const merged = mergeFx(get().plan.fx, fx);
           if (merged) mutate((p) => ({ ...p, fx: merged }));
@@ -433,7 +479,8 @@ export function applyPotDraft(plan: FinancialPlan, draft: PotDraft, newGoalId: (
     if (a.id !== account.id) return a;
     const next: Account = { ...a, monthlyDeposit: deposit > 0 ? deposit : undefined };
     // An account with holdings has its balance worked out from them.
-    if (!a.holdings?.length && fields.currentAmount !== a.balance) {
+    // …and one read from a bank has the bank's figure.
+    if (!a.holdings?.length && !a.bank && fields.currentAmount !== a.balance) {
       next.balance = fields.currentAmount;
       next.balances = withMonthValue(a.balances, month, fields.currentAmount);
     }

@@ -108,6 +108,22 @@ describe('snapshots', () => {
     expect(after.savedAt).toBe(before.savedAt);
   });
 
+  it('writes what an income paid into both the live plan and the closed month, and never the expected amount', () => {
+    const plan = prdExamplePlan();
+    usePlanStore.setState({ plan });
+    usePlanStore.getState().saveSnapshot('2026-08', NOW);
+    const salary = plan.income[0];
+    usePlanStore.getState().setIncomeActual(salary.id, '2026-08', salary.amount + 1350);
+    const { plan: live, snapshots } = usePlanStore.getState();
+    expect(live.income[0]).toMatchObject({ amount: salary.amount, actuals: { '2026-08': salary.amount + 1350 } });
+    expect(snapshots['2026-08'].plan!.income[0].actuals).toEqual({ '2026-08': salary.amount + 1350 });
+    // An edit made from an older copy of the row does not wipe it.
+    usePlanStore.getState().updateIncome(salary.id, { ...salary, name: 'Pay' });
+    expect(usePlanStore.getState().plan.income[0]).toMatchObject({ name: 'Pay', actuals: { '2026-08': salary.amount + 1350 } });
+    usePlanStore.getState().setIncomeActual(salary.id, '2026-08', null);
+    expect(usePlanStore.getState().plan.income[0].actuals ?? {}).toEqual({});
+  });
+
   it('writes a food total into both the live plan and the closed month, and clears it', () => {
     const plan = prdExamplePlan();
     plan.expenses.push(expense({ name: 'Groceries', subcategory: 'groceries', amount: 1000, frequency: 'weekly', fixed: false }));
@@ -360,5 +376,88 @@ describe('saved scenarios', () => {
     ]);
     removeScenario(b);
     expect(usePlanStore.getState().plan.scenarios?.map((s) => s.id)).toEqual([a]);
+  });
+});
+
+describe('bank balances', () => {
+  const link = { provider: 'enable-banking', externalId: 'hash-everyday' };
+  const setUp = () => {
+    const store = usePlanStore.getState();
+    const connected = store.addAccount({ name: 'Everyday', institution: 'SEB', kind: 'everyday', balance: 24000, bank: link });
+    const manual = store.addAccount({ name: 'Cash', kind: 'cash', balance: 500 });
+    return { connected, manual };
+  };
+  const account = (id: string) => usePlanStore.getState().plan.accounts.find((a) => a.id === id)!;
+
+  it('moves only the connected account, and the manual one still takes a typed balance', () => {
+    const { connected, manual } = setUp();
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 26150, 'hash-unknown': 1 });
+    expect(account(connected)).toMatchObject({ kind: 'everyday', balance: 26150, balances: { [thisMonth]: 26150 } });
+    expect(account(manual).balance).toBe(500);
+    usePlanStore.getState().updateAccount(manual, { balance: 700 });
+    expect(account(manual).balance).toBe(700);
+  });
+
+  it('is not an edit: updatedAt stays, and an unchanged figure writes nothing', () => {
+    setUp();
+    const before = usePlanStore.getState().plan;
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 26150 });
+    const after = usePlanStore.getState().plan;
+    expect(after.updatedAt).toBe(before.updatedAt);
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 26150 });
+    expect(usePlanStore.getState().plan).toBe(after);
+  });
+
+  it('records the month when the same balance carries into a new one', () => {
+    const { connected } = setUp();
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 24000 }, new Date(2031, 0, 5));
+    expect(account(connected).balances).toMatchObject({ '2031-01': 24000 });
+  });
+
+  it('disconnecting leaves the account, its balance and history, and the bank no longer moves it', () => {
+    const { connected } = setUp();
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 24183 });
+    usePlanStore.getState().updateAccount(connected, { bank: undefined });
+    usePlanStore.getState().refreshBankBalances({ 'hash-everyday': 1 });
+    expect(account(connected)).toMatchObject({ name: 'Everyday', institution: 'SEB', balance: 24183, balances: { [thisMonth]: 24183 } });
+    expect(account(connected).bank).toBeUndefined();
+    usePlanStore.getState().updateAccount(connected, { balance: 24000 });
+    expect(account(connected).balance).toBe(24000);
+  });
+
+  it('forgetting the bank unlinks every account and keeps them', () => {
+    const { connected } = setUp();
+    usePlanStore.getState().setBankSetup({ provider: 'enable-banking', appId: 'app', sessions: [] });
+    usePlanStore.getState().setBankSetup(undefined);
+    const { plan } = usePlanStore.getState();
+    expect(plan.bank).toBeUndefined();
+    expect(account(connected)).toMatchObject({ balance: 24000 });
+    expect(account(connected).bank).toBeUndefined();
+  });
+
+  it('never lays a bank figure over a balance worked out from holdings', () => {
+    const id = usePlanStore.getState().addAccount({
+      name: 'ISK', kind: 'isk', balance: 0, cash: 100, bank: { provider: 'enable-banking', externalId: 'hash-isk' },
+      holdings: [{ id: 'h', orderbookId: '1', name: 'Fund', type: 'fund', currency: 'SEK', quantity: 2, avgPrice: 50, price: 50 }],
+    });
+    const before = account(id).balance;
+    usePlanStore.getState().refreshBankBalances({ 'hash-isk': 5 });
+    expect(account(id).balance).toBe(before);
+  });
+
+  it('the savings sheet cannot type over a balance the bank supplies', () => {
+    const id = usePlanStore.getState().addAccount({ name: 'Buffer', kind: 'savings', balance: 84100, bank: { provider: 'enable-banking', externalId: 'hash-savings' } });
+    const pot = savingsPots(usePlanStore.getState().plan).find((p) => p.accountId === id)!;
+    usePlanStore.getState().saveSavingsPot({ ...pot, currentAmount: 1, monthlyContribution: 2000 });
+    expect(account(id)).toMatchObject({ balance: 84100, monthlyDeposit: 2000 });
+  });
+
+  it('survives a plan file round trip', () => {
+    setUp();
+    usePlanStore.getState().setBankSetup({ provider: 'enable-banking', appId: 'app', sessions: [{ id: 's', aspsp: 'SEB', country: 'SE', validUntil: '2027-01-01T00:00:00Z', accounts: { 'hash-everyday': 'uid' } }] });
+    const { plan, snapshots } = usePlanStore.getState();
+    const back = parsePlanFile(serializePlanFile({ plan, snapshots })).plan;
+    expect(back.bank).toEqual(plan.bank);
+    expect(back.accounts[0].bank).toEqual(link);
   });
 });
