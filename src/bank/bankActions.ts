@@ -31,6 +31,54 @@ async function token(): Promise<string> {
   return signJwt(key, appId);
 }
 
+async function readKeyFile(file: File): Promise<{ pem: string; key: CryptoKey }> {
+  const t = messages().bank.setup;
+  try {
+    const pem = await file.text();
+    return { pem, key: await importPem(pem) };
+  } catch (e) {
+    throw new Error(e instanceof KeyFileError && e.problem === 'pkcs1' ? t.pkcs1 : t.unreadable);
+  }
+}
+
+/**
+ * Opt-in: the key file travels with the synced plan, so every device that joins with the sync phrase
+ * can read the bank by itself. The file is asked for again because the stored key cannot be read out.
+ */
+export async function shareKey(file: File): Promise<void> {
+  const appId = usePlanStore.getState().plan.bank?.appId;
+  if (!appId) throw new Error(messages().bank.callback.noKey);
+  const { pem, key } = await readKeyFile(file);
+  // A wrong file would lock every other device out: the provider has to accept it first.
+  await listBanks(await signJwt(key, appId), 'SE').catch(() => {
+    throw new Error(messages().bank.setup.wrongKeyForPlan);
+  });
+  await saveKey(key);
+  useBankStore.getState().setHasKey(true);
+  useBankStore.getState().setSharedPem(pem);
+}
+
+/** Other devices drop the key on their next sync; this one keeps it. */
+export const stopSharingKey = () => useBankStore.getState().setSharedPem(undefined);
+
+/** Called by sync after another device's copy was taken: `previous` is what this device shared before. */
+export async function installSharedKey(pem: string | undefined, previous: string | undefined): Promise<void> {
+  if (pem === previous) return;
+  try {
+    if (pem) {
+      await saveKey(await importPem(pem));
+      useBankStore.getState().setHasKey(true);
+      void syncBank({ force: true });
+    } else {
+      // Sharing was switched off elsewhere: a key that came through sync goes with it.
+      await clearKey();
+      useBankStore.getState().setHasKey(false);
+    }
+  } catch {
+    /* an unreadable key leaves this device as it was: balances still arrive through the plan */
+  }
+}
+
 /** Takes the downloaded key file onto this device. The first key also starts the plan's bank setup. */
 export async function addKeyFile(file: File, typedAppId?: string): Promise<void> {
   const t = messages().bank.setup;
@@ -38,12 +86,7 @@ export async function addKeyFile(file: File, typedAppId?: string): Promise<void>
   if (!appId) throw new Error(t.noAppId);
   const { plan, setBankSetup } = usePlanStore.getState();
   if (plan.bank && plan.bank.appId !== appId) throw new Error(t.wrongKeyForPlan);
-  let key: CryptoKey;
-  try {
-    key = await importPem(await file.text());
-  } catch (e) {
-    throw new Error(e instanceof KeyFileError && e.problem === 'pkcs1' ? t.pkcs1 : t.unreadable);
-  }
+  const { key } = await readKeyFile(file);
   await saveKey(key);
   useBankStore.getState().setHasKey(true);
   if (!plan.bank) setBankSetup({ provider: PROVIDER, appId, sessions: [] });

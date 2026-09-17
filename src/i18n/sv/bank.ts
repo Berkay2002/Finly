@@ -21,6 +21,13 @@ export default {
     somethingWentWrong: 'Något gick fel.',
     forgetExplainer:
       'Att glömma tar bort nyckeln från den här enheten och avslutar samtycket hos banken. Inget konto raderas: varje konto behåller sitt senaste saldo och uppdateras för hand igen.',
+    share: 'Använd på alla mina enheter',
+    shareHint:
+      'Skickar nyckeln tillsammans med din synkade plan, krypterad med din synkfras, så att dina andra enheter läser banken utan filen. Den som får tag i din synkfras kan då också läsa dina bankuppgifter, tills du tar bort nyckeln hos Enable Banking. Välj nyckelfilen en gång till för att slå på det.',
+    shared: 'Nyckeln följer med din synkade plan, så varje enhet med din synkfras läser banken själv.',
+    stopSharing: 'Sluta dela nyckeln',
+    sharingOn: 'Dina andra enheter hämtar nyckeln vid nästa synk.',
+    sharingOff: 'Nyckeln finns bara kvar på den här enheten. Dina andra enheter släpper den vid nästa synk.',
     installedAppHint: 'Kopplingen skickar dig till banken och tillbaka. I den installerade appen kan du hamna i webbläsaren i stället, så koppla från webbläsaren.',
   },
   status: {

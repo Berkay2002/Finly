@@ -4,19 +4,31 @@ import type { PlanData } from '@/store/planStore';
 /** What the encrypted blob holds. `payloadVersion` lets the shape change later. */
 export interface SyncPayload extends PlanData {
   payloadVersion: 1;
+  /**
+   * The bank key file, only when the person chose to use their bank connection on every device.
+   * Beside the plan and not in it: a plan is exported to files and copied into every closed month.
+   */
+  bankKey?: string;
 }
 
-export function toPayload(data: PlanData): SyncPayload {
-  return { payloadVersion: 1, plan: data.plan, snapshots: data.snapshots };
+/** What another device sent: its data, and the bank key if that device shares one. */
+export type RemoteData = PlanData & { bankKey?: string };
+
+export function toPayload(data: PlanData, bankKey?: string): SyncPayload {
+  return { payloadVersion: 1, plan: data.plan, snapshots: data.snapshots, ...(bankKey ? { bankKey } : {}) };
 }
 
 /** Accepts a decrypted blob; throws when it is not one of ours. */
-export function fromPayload(raw: unknown): PlanData {
+export function fromPayload(raw: unknown): RemoteData {
   const p = raw as Partial<SyncPayload> | null;
   if (!p || typeof p !== 'object' || p.payloadVersion !== 1 || !p.plan || typeof p.plan !== 'object') {
     throw new Error(messages().sync.errors.unrecognised);
   }
-  return { plan: p.plan, snapshots: p.snapshots && typeof p.snapshots === 'object' ? p.snapshots : {} };
+  return {
+    plan: p.plan,
+    snapshots: p.snapshots && typeof p.snapshots === 'object' ? p.snapshots : {},
+    ...(typeof p.bankKey === 'string' ? { bankKey: p.bankKey } : {}),
+  };
 }
 
 export type Winner = 'local' | 'remote';

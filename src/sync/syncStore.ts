@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { PlanData } from '@/store/planStore';
+import type { RemoteData } from './resolve';
 import { deriveSyncId, toHex } from './crypto';
 import type { Winner } from './resolve';
 
 export type SyncStatus = 'off' | 'idle' | 'syncing' | 'conflict' | 'error';
 
 export interface SyncConflict {
-  remote: PlanData;
+  remote: RemoteData;
   remoteVersion: number;
   remoteUpdatedAt: number;
   /** Which copy is newer by the plan's own `updatedAt`. */

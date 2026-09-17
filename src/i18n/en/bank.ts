@@ -19,6 +19,13 @@ export default {
     somethingWentWrong: 'Something went wrong.',
     forgetExplainer:
       'Forgetting removes the key from this device and ends the consent at the bank. No account is deleted: each keeps its last balance and goes back to being updated by hand.',
+    share: 'Use on all my devices',
+    shareHint:
+      'Sends the key along with your synced plan, encrypted with your sync phrase, so your other devices read the bank without the file. Anyone who gets your sync phrase could then read your bank data too, until you delete the key at Enable Banking. Pick the key file once more to switch it on.',
+    shared: 'The key travels with your synced plan, so every device with your sync phrase reads the bank by itself.',
+    stopSharing: 'Stop sharing the key',
+    sharingOn: 'Your other devices pick up the key on their next sync.',
+    sharingOff: 'The key stays on this device only. Your other devices drop it on their next sync.',
     installedAppHint: 'Connecting sends you to your bank and back. In the installed app that can land in the browser instead, so connect from the browser.',
   },
   status: {

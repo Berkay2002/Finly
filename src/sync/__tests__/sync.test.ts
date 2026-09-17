@@ -72,6 +72,16 @@ describe('crypto', () => {
     await expect(decryptJson(key, tampered)).rejects.toThrow();
     expect(() => fromPayload({ hello: 1 })).toThrow();
   });
+
+  it('carries the bank key only when it is shared, and never inside the plan', () => {
+    const data = { plan: prdExamplePlan(), snapshots: {} };
+    expect('bankKey' in toPayload(data)).toBe(false);
+    expect('bankKey' in fromPayload(toPayload(data))).toBe(false);
+    const shared = toPayload(data, '-----BEGIN PRIVATE KEY-----');
+    expect(fromPayload(shared).bankKey).toBe('-----BEGIN PRIVATE KEY-----');
+    expect(JSON.stringify(shared.plan)).not.toContain('PRIVATE KEY');
+    expect(fromPayload({ ...shared, bankKey: 42 }).bankKey).toBeUndefined();
+  });
 });
 
 describe('resolveConflict', () => {

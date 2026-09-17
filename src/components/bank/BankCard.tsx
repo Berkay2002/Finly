@@ -2,7 +2,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { Check, Copy, KeyRound, Landmark, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { addKeyFile, beginAuth, fetchBanks, forgetBank, redirectUrl, saveMapping, suggestedKind, type MappingChoice } from '@/bank/bankActions';
+import { addKeyFile, beginAuth, fetchBanks, forgetBank, redirectUrl, saveMapping, shareKey, stopSharingKey, suggestedKind, type MappingChoice } from '@/bank/bankActions';
 import { useBankStore } from '@/bank/bankStore';
 import { appIdFromFileName, type BankInstitution } from '@/bank/enableBanking';
 import { syncBank } from '@/bank/useBankSync';
@@ -10,6 +10,7 @@ import { ACCOUNT_KINDS } from '@/engine/taxonomy';
 import type { AccountKind } from '@/engine/types';
 import { dateLocale, useT } from '@/i18n';
 import { usePlan } from '@/store/selectors';
+import { useSyncStore } from '@/sync/syncStore';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { CardHeader } from '@/components/ui/Card';
@@ -30,6 +31,8 @@ export function BankCard({ onMessage }: { onMessage: OnMessage }) {
   const [mode, setMode] = useState<Mode>('closed');
   const [confirmForget, setConfirmForget] = useState(false);
   const [busy, setBusy] = useState(false);
+  const syncOn = useSyncStore((s) => Boolean(s.syncId));
+  const shareInput = useRef<HTMLInputElement>(null);
 
   const setup = plan.bank;
   const linked = plan.accounts.filter((a) => a.bank);
@@ -127,6 +130,41 @@ export function BankCard({ onMessage }: { onMessage: OnMessage }) {
             )}
           </div>
           <p className="text-[12px] text-muted">{standalone ? t.card.installedAppHint : t.card.forgetExplainer}</p>
+          {syncOn && bank.hasKey && (
+            <div className="space-y-2 border-t border-line pt-3">
+              <p className="text-[12px] text-muted">{bank.sharedPem ? t.card.shared : t.card.shareHint}</p>
+              <input
+                ref={shareInput}
+                type="file"
+                accept=".pem,application/x-pem-file,text/plain"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file)
+                    void run(async () => {
+                      await shareKey(file);
+                      onMessage('success', t.card.sharingOn);
+                    });
+                }}
+              />
+              {bank.sharedPem ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    stopSharingKey();
+                    onMessage('success', t.card.sharingOff);
+                  }}
+                >
+                  {t.card.stopSharing}
+                </Button>
+              ) : (
+                <Button variant="secondary" icon={KeyRound} disabled={busy} onClick={() => shareInput.current?.click()}>
+                  {t.card.share}
+                </Button>
+              )}
+            </div>
+          )}
         </div>
       )}
 

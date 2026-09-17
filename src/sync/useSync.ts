@@ -6,7 +6,9 @@ import { usePlanStore, type PlanData } from '@/store/planStore';
 import { convex } from './convexClient';
 import { decryptJson, deriveKey, encryptJson, fromHex, generateSecret, type Sealed } from './crypto';
 import { phraseToSecret, secretToPhrase } from './phrase';
-import { fromPayload, resolveConflict, toPayload, type Winner } from './resolve';
+import { installSharedKey } from '@/bank/bankActions';
+import { useBankStore } from '@/bank/bankStore';
+import { fromPayload, resolveConflict, toPayload, type RemoteData, type Winner } from './resolve';
 import { useSyncStore } from './syncStore';
 
 const PUSH_DELAY_MS = 2000;
@@ -40,21 +42,26 @@ function localData(): PlanData {
 }
 
 /** Apply another device's copy without the plan store treating it as an edit. */
-function applyRemote(data: PlanData) {
+function applyRemote({ bankKey, ...data }: RemoteData, takeBankKey = true) {
   applyingRemote = true;
   try {
     usePlanStore.getState().replaceAll(data);
+    if (takeBankKey) {
+      const previous = useBankStore.getState().sharedPem;
+      useBankStore.getState().setSharedPem(bankKey);
+      void installSharedKey(bankKey, previous);
+    }
     dirty = false;
   } finally {
     applyingRemote = false;
   }
 }
 
-async function decryptRemote(syncId: string, secretHex: string, sealed: Sealed): Promise<PlanData> {
+async function decryptRemote(syncId: string, secretHex: string, sealed: Sealed): Promise<RemoteData> {
   return fromPayload(await decryptJson(await keyFor(syncId, secretHex), sealed));
 }
 
-function raiseConflict(remote: PlanData, remoteVersion: number, remoteUpdatedAt: number) {
+function raiseConflict(remote: RemoteData, remoteVersion: number, remoteUpdatedAt: number) {
   const { winner } = resolveConflict(localData(), remote);
   useSyncStore.getState().setConflict({ remote, remoteVersion, remoteUpdatedAt, newer: winner });
 }
@@ -74,7 +81,7 @@ async function push(): Promise<void> {
     sync.setStatus('syncing');
     try {
       const key = await keyFor(sync.syncId, sync.secret);
-      const sealed = await encryptJson(key, toPayload(localData()));
+      const sealed = await encryptJson(key, toPayload(localData(), useBankStore.getState().sharedPem));
       dirty = false;
       const result = await client().mutation(api.blobs.put, { syncId: sync.syncId, ...sealed, version: sync.version });
       if (result.ok) {
@@ -133,8 +140,17 @@ export function SyncController() {
       dirty = true;
       schedulePush();
     });
+    // Sharing the bank key switched on or off here is an edit like any other.
+    const unsubscribeBank = useBankStore.subscribe((s, prev) => {
+      if (applyingRemote || s.sharedPem === prev.sharedPem || useSyncStore.getState().status === 'off') return;
+      dirty = true;
+      schedulePush();
+    });
     if (dirty) schedulePush();
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      unsubscribeBank();
+    };
   }, [syncId]);
 
   // Other devices' pushes → apply, or ask when this device has unsent edits.
@@ -217,7 +233,7 @@ export function useSyncActions() {
         return 'uploaded';
       }
       const secretHex = useSyncStore.getState().secret!;
-      let data: PlanData;
+      let data: RemoteData;
       try {
         data = await decryptRemote(syncId, secretHex, remote);
       } catch (e) {
@@ -239,11 +255,11 @@ export function useSyncActions() {
       const { conflict } = useSyncStore.getState();
       if (!conflict) return;
       const local = localData();
-      const merged: PlanData =
+      const merged: RemoteData =
         keep === 'local'
           ? { plan: local.plan, snapshots: { ...conflict.remote.snapshots, ...local.snapshots } }
-          : { plan: conflict.remote.plan, snapshots: { ...local.snapshots, ...conflict.remote.snapshots } };
-      applyRemote(merged);
+          : { plan: conflict.remote.plan, snapshots: { ...local.snapshots, ...conflict.remote.snapshots }, bankKey: conflict.remote.bankKey };
+      applyRemote(merged, keep === 'remote');
       useSyncStore.getState().setConflict(undefined);
       useSyncStore.getState().markSynced(conflict.remoteVersion);
       if (keep === 'local') {

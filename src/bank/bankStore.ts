@@ -29,6 +29,11 @@ export interface PendingAuth {
 interface BankState {
   /** Whether this device holds the signing key (the key itself is in IndexedDB, see keyStore). */
   hasKey: boolean;
+  /**
+   * The key file as text, only when the person chose to use the connection on all their devices. It
+   * rides along in the encrypted sync blob, which is why it has to be readable here.
+   */
+  sharedPem?: string;
   pendingAuth?: PendingAuth;
   /** A fresh session whose accounts still have to be tied to Finly accounts. */
   pendingMapping?: NewSession & { bank: BankInstitution };
@@ -45,6 +50,7 @@ interface BankState {
   syncing: boolean;
 
   setHasKey: (hasKey: boolean) => void;
+  setSharedPem: (pem: string | undefined) => void;
   setPendingAuth: (pending: PendingAuth | undefined) => void;
   setPendingMapping: (pending: BankState['pendingMapping']) => void;
   setAccounts: (accounts: Record<string, BankAccountState>, lastSyncedAt?: string) => void;
@@ -65,17 +71,18 @@ export const useBankStore = create<BankState>()(
       syncing: false,
 
       setHasKey: (hasKey) => set({ hasKey }),
+      setSharedPem: (sharedPem) => set({ sharedPem }),
       setPendingAuth: (pendingAuth) => set({ pendingAuth }),
       setPendingMapping: (pendingMapping) => set({ pendingMapping }),
       setAccounts: (accounts, lastSyncedAt) => set((s) => ({ accounts, lastSyncedAt: lastSyncedAt ?? s.lastSyncedAt })),
       setTxs: (txs) => set({ txs }),
       setSyncing: (syncing) => set({ syncing }),
-      forget: () => set({ hasKey: false, pendingAuth: undefined, pendingMapping: undefined, accounts: {}, txs: {}, lastSyncedAt: undefined }),
+      forget: () => set({ hasKey: false, sharedPem: undefined, pendingAuth: undefined, pendingMapping: undefined, accounts: {}, txs: {}, lastSyncedAt: undefined }),
     }),
     {
       // Not sessionStorage: the bank's app often hands the person back in a new tab.
       name: 'finly.bank.v1',
-      partialize: ({ hasKey, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }) => ({ hasKey, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }),
+      partialize: ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }) => ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }),
     },
   ),
 );
