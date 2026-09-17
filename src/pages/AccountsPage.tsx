@@ -8,7 +8,6 @@ import { SavingsTaxStrip } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { DeltaOr } from '@/components/ui/Delta';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { ACCOUNT_ACCENT } from '@/components/ui/icons';
 import { StatCard } from '@/components/ui/StatCard';
@@ -62,30 +61,27 @@ export function AccountsPage() {
           accent="blue"
           label={t.totalAssets}
           value={money(m.position.totalAssets)}
-          sub={<DeltaOr before={prev?.totalAssets} after={m.position.totalAssets} fallback={t.allAccountsCombined} />}
+          trend={{ before: prev?.totalAssets, after: m.position.totalAssets }}
+          sub={t.allAccountsCombined}
         />
         <StatCard
           icon="account-cash"
           accent="green"
           label={t.cashInBank}
           value={money(m.position.cashInBank)}
-          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback={t.everydayPlusSavings} />}
+          trend={{ before: prev?.cashInBank, after: m.position.cashInBank }}
+          sub={t.everydayPlusSavings}
         />
         <StatCard
           icon="account-emergency"
           accent="yellow"
           label={t.emergencySavings}
           value={money(m.position.emergency)}
+          trend={{ before: prev?.emergency, after: m.position.emergency }}
           sub={
-            <DeltaOr
-              before={prev?.emergency}
-              after={m.position.emergency}
-              fallback={
-                m.essentialCost > 0 && m.position.emergency > 0
-                  ? t.monthsOfEssentials(formatMonths(emergencyMonths))
-                  : t.reservedForUnexpected
-              }
-            />
+            m.essentialCost > 0 && m.position.emergency > 0
+              ? t.monthsOfEssentials(formatMonths(emergencyMonths))
+              : t.reservedForUnexpected
           }
         />
         <StatCard
@@ -93,7 +89,8 @@ export function AccountsPage() {
           accent="purple"
           label={t.investments}
           value={money(m.position.investments)}
-          sub={<DeltaOr before={prev?.investments} after={m.position.investments} fallback={t.ofAssets(formatPercent(investShare))} />}
+          trend={{ before: prev?.investments, after: m.position.investments }}
+          sub={t.ofAssets(formatPercent(investShare))}
         />
       </div>
 

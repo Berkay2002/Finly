@@ -9,7 +9,6 @@ import { GoalEditor } from '@/components/forms/GoalEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { DeltaOr } from '@/components/ui/Delta';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { Switch } from '@/components/ui/fields';
 import { StatCard } from '@/components/ui/StatCard';
@@ -51,14 +50,16 @@ export function SavingsPage() {
           accent="blue"
           label={t.monthlySavings}
           value={money(m.savings.total)}
-          sub={<DeltaOr before={prev?.savings} after={m.savings.total} fallback={t.perYear(money(m.savings.total * 12))} />}
+          trend={{ before: prev?.savings, after: m.savings.total }}
+          sub={t.perYear(money(m.savings.total * 12))}
         />
         <StatCard
           icon="card-savings-projection"
           accent="brand"
           label={t.savingsRate}
           value={formatPercent(m.savings.rate)}
-          sub={<DeltaOr before={prev?.savingsRate} after={m.savings.rate} fallback={t.ofReliableIncome(formatPercent(m.savings.rateOfReliable))} />}
+          trend={{ before: prev?.savingsRate, after: m.savings.rate }}
+          sub={t.ofReliableIncome(formatPercent(m.savings.rateOfReliable))}
         />
         <StatCard icon="card-per-day" accent="green" label={t.plannedFutureSpending} value={formatPercent(futureShare)} sub={t.perMonth(money(m.savings.futureSpending))} />
         <StatCard icon="account-investment" accent="purple" label={t.longTermWealth} value={formatPercent(longShare)} sub={t.perMonth(money(m.savings.longTerm))} />

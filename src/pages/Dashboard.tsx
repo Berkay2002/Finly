@@ -28,7 +28,6 @@ import { useSavingsTaxSheet } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { DeltaOr } from '@/components/ui/Delta';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { EditableRow, EditableTitle } from '@/components/ui/EditableRow';
 import { CATEGORY_ICON, goalAccent, goalIcon } from '@/components/ui/icons';
@@ -161,29 +160,27 @@ export function Dashboard() {
           accent="blue"
           label={d.stats.totalIncome}
           value={money(m.income.total)}
-          sub={<DeltaOr before={prev?.income} after={m.income.total} fallback={d.stats.averagePerMonth} />}
+          trend={{ before: prev?.income, after: m.income.total }}
+          sub={d.stats.averagePerMonth}
         />
         <StatCard
           icon="stat-cost"
           accent="red"
           label={d.stats.normalMonthlyCost}
           value={money(m.lifestyleCost)}
+          trend={{
+            before: prev?.lifestyleCostActual ?? prev?.lifestyleCost,
+            after: m.actuals.lifestyleCost,
+            invert: true,
+            suffix:
+              (prev?.billsConfirmed ?? 0) > 0 || m.actuals.confirmed.length > 0
+                ? d.stats.vsLastMonthRealBills
+                : undefined,
+          }}
           sub={
-            <DeltaOr
-              before={prev?.lifestyleCostActual ?? prev?.lifestyleCost}
-              after={m.actuals.lifestyleCost}
-              invert
-              suffix={
-                (prev?.billsConfirmed ?? 0) > 0 || m.actuals.confirmed.length > 0
-                  ? d.stats.vsLastMonthRealBills
-                  : undefined
-              }
-              fallback={
-                m.range.hasRanges
-                  ? d.stats.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
-                  : d.stats.essential(money(m.essentialCost))
-              }
-            />
+            m.range.hasRanges
+              ? d.stats.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
+              : d.stats.essential(money(m.essentialCost))
           }
         />
         <StatCard
@@ -191,14 +188,16 @@ export function Dashboard() {
           accent="green"
           label={d.stats.plannedSaving}
           value={money(m.savings.total)}
-          sub={<DeltaOr before={prev?.savings} after={m.savings.total} fallback={d.stats.ofIncome(formatPercent(m.savings.rate))} />}
+          trend={{ before: prev?.savings, after: m.savings.total }}
+          sub={d.stats.ofIncome(formatPercent(m.savings.rate))}
         />
         <StatCard
           icon="stat-bank"
           accent="indigo"
           label={d.stats.bankBalance}
           value={money(m.position.cashInBank)}
-          sub={<DeltaOr before={prev?.cashInBank} after={m.position.cashInBank} fallback={d.stats.allCashAccounts} />}
+          trend={{ before: prev?.cashInBank, after: m.position.cashInBank }}
+          sub={d.stats.allCashAccounts}
         />
       </div>
 

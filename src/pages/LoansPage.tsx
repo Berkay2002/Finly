@@ -33,7 +33,6 @@ import { DEBT_ACCENT, DEBT_ICON, LoanEditor, useLoanSheet } from '@/components/f
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
-import { DeltaOr } from '@/components/ui/Delta';
 import { EditableRow, EditableTitle } from '@/components/ui/EditableRow';
 import { IconTile } from '@/components/ui/IconTile';
 import { SplitBar } from '@/components/ui/ProgressBar';
@@ -103,7 +102,8 @@ export function LoansPage() {
           accent="red"
           label={t.page.totalOwed}
           value={money(m.debt.balance)}
-          sub={<DeltaOr before={prev?.totalDebt} after={m.debt.balance} invert fallback={t.common.loanCount(debts.length)} />}
+          trend={{ before: prev?.totalDebt, after: m.debt.balance, invert: true }}
+          sub={t.common.loanCount(debts.length)}
         />
         <StatCard
           icon="stat-cost"
