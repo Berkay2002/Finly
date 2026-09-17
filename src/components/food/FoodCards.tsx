@@ -33,15 +33,16 @@ export function FoodCard() {
   const groceries = plan.expenses.find((e) => e.subcategory === 'groceries' && !e.includedElsewhere);
   const hasLunches = plan.expenses.some((e) => e.subcategory === 'work_lunches');
 
-  // The estimate is at `priceMonth`'s prices, so the item follows the food index from there on.
+  // The estimate is one figure at `priceMonth`'s prices: it replaces any earlier range (a range from
+  // before the estimate says nothing about it) and the item follows the food index from there on.
   const applyEstimate = (monthly: number, adultsLunchingOut: number, priceMonth: string) => {
     if (groceries) {
       const amount = amountForMonthly(groceries, monthly);
-      updateExpense(groceries.id, { amount, priceLink: foodPriceLink({ amount, range: groceries.range }, priceMonth) });
+      updateExpense(groceries.id, { amount, range: undefined, priceLink: foodPriceLink({ amount }, priceMonth) });
     } else {
       const draft = fromSuggestion(suggestionBySlug('groceries')!);
       const amount = amountForMonthly(draft, monthly);
-      addExpense({ ...draft, amount, priceLink: foodPriceLink({ amount, range: draft.range }, priceMonth) });
+      addExpense({ ...draft, amount, range: undefined, priceLink: foodPriceLink({ amount }, priceMonth) });
     }
     if (adultsLunchingOut > 0 && !hasLunches) {
       const lunches = fromSuggestion(suggestionBySlug('work_lunches')!);
