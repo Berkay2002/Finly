@@ -89,9 +89,11 @@ and the **subject** text to append to the master paragraph.
 
 ### 3.1 Brand
 
-**`logo-mark.png`** · accent brand `#158F6B`
-> Subject: a single fresh sprout with two rounded leaves growing out of the top of a small
-> round coin, the coin plain with no markings. The sprout is the hero, the coin is the base.
+**`logo-mark.png`** · brand `#099373` on transparent
+> The Finly "F": two stacked leaf-shaped strokes and a dot, taken from the supplied app icon.
+> Not generated with the master prompt. `logo-mark-white.png` is the same shape in white for
+> green surfaces; `app-icon.png`, `pwa-*.png` and `apple-touch-icon.png` are the white F on
+> the green rounded square.
 
 ### 3.2 Welcome page
 

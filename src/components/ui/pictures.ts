@@ -4,6 +4,8 @@
  */
 export const PICTURES = [
   'logo-mark',
+  'logo-mark-white',
+  'app-icon',
   'welcome-plan',
   'welcome-explore',
   'nav-home',
