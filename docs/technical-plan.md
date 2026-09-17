@@ -198,6 +198,12 @@ The app is static apart from two Vercel Functions (Node runtime; Edge Functions 
   to split groceries by food group (`src/engine/foodPrices.ts`). SCB allows 30 calls per 10 s per IP and
   changes the data monthly, so the same day-long CDN cache applies; the client stores it as
   `finly:food-prices:v1` and falls back to `src/engine/foodPricesSnapshot.ts` (`npm run food:prices` regenerates it).
+- **Price-linked costs** (`src/engine/priceLinks.ts`, `src/store/usePriceRefresh.ts`). Some costs follow a price
+  series instead of sitting still. A groceries item applied from the estimate carries a `priceLink`: the base
+  amount at the month it was priced, moved to the newest month of the food index whenever one arrives
+  (recomputed from the base, never compounded; a hand-typed amount becomes the new base). A supply tariff with
+  `followSpot` picks up last month's average spot price for its area from elprisetjustnu.se when the app opens.
+  Both run once per new month; closed months are frozen (`freezePlan`), so only the live plan moves.
 - **Caching keeps it inside the Hobby plan.** Success: `s-maxage=86400, stale-while-revalidate=604800`, so
   the CDN runs it about once a day per region whatever the traffic. Failure: 502 with `s-maxage=900`. The
   client stores the answer in `localStorage` (`finly:rates:v1`) for 24 h and never waits on it: until it

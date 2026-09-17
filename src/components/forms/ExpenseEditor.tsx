@@ -24,6 +24,8 @@ import {
   monthlyToWeekly,
 } from '@/engine/frequency';
 import { amountForMonthly } from '@/engine/everyday';
+import { latestMonth } from '@/engine/foodPrices';
+import { foodPriceLink } from '@/engine/priceLinks';
 import { formatAmount, formatDate, formatMoney, formatMoneyRange, formatMonthKey, formatNumber } from '@/engine/format';
 import {
   CATEGORY_META,
@@ -45,6 +47,7 @@ import {
   type Occurrences,
 } from '@/engine/types';
 import { messages, useT } from '@/i18n';
+import { useFoodPrices } from '@/lib/foodPrices';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
 import { HomeFields } from './HomeFields';
 import { HouseholdFoodEstimator } from './HouseholdFood';
@@ -708,6 +711,8 @@ function ExpenseDetailForm({
         <p className="mt-1 text-[12px] text-muted">{tf.tagsHelp}</p>
       </div>
 
+      {draft.subcategory === 'groceries' && !draft.tariff && <FoodPriceLinkSwitch draft={draft} onChange={set} />}
+
       <Switch
         checked={!!draft.includedElsewhere}
         onChange={(includedElsewhere) => set({ includedElsewhere })}
@@ -961,7 +966,41 @@ function SpotPriceFetch({ tariff, onChange }: { tariff: ElectricityTariff; onCha
       )}
       {state.error && <span className="text-red-500">{state.error}</span>}
       <span className="w-full text-faint">{ts.source}</span>
+      <div className="w-full">
+        <Switch
+          checked={!!tariff.followSpot}
+          onChange={(followSpot) => onChange({ ...tariff, priceArea: tariff.priceArea ?? area, followSpot })}
+          label={ts.follow}
+          description={ts.followHelp}
+        />
+      </div>
     </div>
+  );
+}
+
+/**
+ * Lets groceries follow SCB's food price index. Turning it on takes the current amount as the base at
+ * the newest month of prices; the store rebases when the amount is edited by hand.
+ */
+function FoodPriceLinkSwitch({ draft, onChange }: { draft: Draft; onChange: (patch: Partial<Draft>) => void }) {
+  const tp = useT().expenses.priceLink;
+  const currency = useCurrency();
+  const prices = useFoodPrices();
+  const link = draft.priceLink;
+  const month = link?.month ?? link?.baseMonth;
+  return (
+    <Switch
+      checked={!!link}
+      onChange={(on) => onChange({ priceLink: on ? foodPriceLink(draft, latestMonth(prices)) : undefined })}
+      label={tp.follow}
+      description={
+        link && month
+          ? month !== link.baseMonth
+            ? tp.status(formatMoney(link.base.amount, currency), formatMonthKey(link.baseMonth), formatMonthKey(month))
+            : tp.current(formatMonthKey(month))
+          : tp.followHelp
+      }
+    />
   );
 }
 

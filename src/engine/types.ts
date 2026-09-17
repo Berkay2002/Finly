@@ -107,6 +107,26 @@ export interface ElectricityTariff {
   /** Supply only: price area and month (YYYY-MM) of the spot price, when it came from the price feed. */
   priceArea?: PriceArea;
   priceMonth?: string;
+  /**
+   * Supply only: keep `energyPrice` at the newest complete month's average for `priceArea`, fetched
+   * when the app opens (store/usePriceRefresh.ts), so the bill follows the market on its own.
+   */
+  followSpot?: boolean;
+}
+
+/**
+ * A cost that moves with a public price series instead of sitting still: groceries follow SCB's food
+ * price index. `base` is the figure at `baseMonth`; the live `amount` is that times the index move
+ * since, recomputed from the base whenever a newer month arrives (engine/priceLinks.ts), never
+ * compounded. Editing the amount by hand makes the new figure the base.
+ */
+export interface PriceLink {
+  index: 'food';
+  base: { amount: number; range?: AmountRange };
+  /** YYYY-MM the base figure was priced at. */
+  baseMonth: string;
+  /** YYYY-MM whose prices the current amount reflects; unset until the first refresh. */
+  month?: string;
 }
 
 /**
@@ -161,6 +181,8 @@ export interface ExpenseItem {
    * amount and range and the item is treated as a monthly variable cost.
    */
   tariff?: ElectricityTariff;
+  /** Follow a price index (see `PriceLink`). Not combined with `tariff`. */
+  priceLink?: PriceLink;
   /** Required to maintain basic obligations vs optional. */
   essential: boolean;
   /** Hard to change in the short term vs realistically adjustable. */

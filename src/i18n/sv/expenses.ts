@@ -145,6 +145,12 @@ export default {
     includedElsewhere: 'Ingår redan i en annan betalning',
     includedElsewhereHelp: 't.ex. vatten som ingår i hyran. Visas fortfarande men räknas inte med i summorna.',
   },
+  priceLink: {
+    follow: 'Följ matpriserna',
+    followHelp: 'Rör sig med SCB:s prisindex för livsmedel varje månad, så budgeten hänger med i butiken.',
+    status: (base, baseMonth, month) => `Utgår från ${base} i ${baseMonth} års priser; nu i ${month} års priser.`,
+    current: (month) => `I ${month} års priser. Skriver du ett nytt belopp blir det den nya utgångspunkten.`,
+  },
   bills: {
     recorded: 'Registrerade räkningar',
     average: (average, range) => `snitt ${average} · ${range}`,
@@ -193,6 +199,8 @@ export default {
     useAverage: (month) => `Använd snittpriset för ${month}`,
     nowUsing: (month, area) => `Använder nu snittpriset för ${month} i ${area}.`,
     source: 'Spotpriser från elprisetjustnu.se. Lägg till din elhandlares påslag ovanpå.',
+    follow: 'Följ spotpriset',
+    followHelp: 'Varje månads snittpris för ditt elområde hämtas när appen öppnas, så räkningen följer marknaden.',
   },
   add: {
     title: (shortLabel) => `Lägg till utgift under ${shortLabel}`,

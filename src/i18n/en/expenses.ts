@@ -127,6 +127,13 @@ export default {
     includedElsewhere: 'Already included in another payment',
     includedElsewhereHelp: 'e.g. water included in rent. Kept visible, excluded from totals.',
   },
+  priceLink: {
+    follow: 'Follow food prices',
+    followHelp: "Moves with Statistics Sweden's food price index each month, so the budget keeps up with the shops.",
+    /** Shown while linked: the base figure and month, and the month the amount now reflects. */
+    status: (base: string, baseMonth: string, month: string) => `Based on ${base} at ${baseMonth} prices; now at ${month} prices.`,
+    current: (month: string) => `At ${month} prices. Typing a new amount makes it the new base.`,
+  },
   bills: {
     recorded: 'Recorded bills',
     average: (average: string, range: string) => `avg ${average} · ${range}`,
@@ -178,6 +185,8 @@ export default {
     useAverage: (month: string) => `Use ${month} average`,
     nowUsing: (month: string, area: string) => `Now using the ${month} average for ${area}.`,
     source: "Spot prices from elprisetjustnu.se. Add your supplier's surcharge (påslag) on top.",
+    follow: 'Follow the spot price',
+    followHelp: "Each month's average for your price area is fetched when the app opens, so the bill moves with the market.",
   },
   add: {
     title: (shortLabel: string) => `Add ${shortLabel.toLowerCase()} expense`,

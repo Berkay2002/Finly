@@ -33,7 +33,7 @@ export function HouseholdFoodEstimator({
 }: {
   currency: string;
   applyLabel: (monthly: number) => string;
-  onApply: (monthly: number, adultsLunchingOut: number) => void;
+  onApply: (monthly: number, adultsLunchingOut: number, priceMonth: string) => void;
   onCancel?: () => void;
 }) {
   const t = useT();
@@ -206,7 +206,7 @@ export function HouseholdFoodEstimator({
           size="sm"
           onClick={() => {
             if (members.length === 0) save(shown);
-            onApply(cost.monthly, cost.adultsLunchingOut);
+            onApply(cost.monthly, cost.adultsLunchingOut, cost.priceMonth);
           }}
           disabled={cost.monthly <= 0}
         >

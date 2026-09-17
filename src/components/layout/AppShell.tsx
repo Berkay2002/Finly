@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
 import { useMonthClose } from '@/store/useMonthClose';
+import { usePriceRefresh } from '@/store/usePriceRefresh';
 import { convex } from '@/sync/convexClient';
 import { SyncController } from '@/sync/useSync';
 import { SyncBanner } from '@/components/sync/SyncBanner';
@@ -13,6 +14,7 @@ import { Sidebar } from './Sidebar';
 
 export function AppShell() {
   useMonthClose();
+  usePriceRefresh();
   return (
     <div className="min-h-screen lg:flex">
       {convex && <SyncController />}

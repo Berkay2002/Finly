@@ -5,6 +5,7 @@ import { newId } from '@/lib/id';
 import { applyCommute } from '@/engine/commute';
 import { migrateLegacyDebts } from '@/engine/debts';
 import { shareUsage, withTariffAmounts } from '@/engine/electricity';
+import { reconcilePriceLink, refreshPriceLinks, type PriceInputs } from '@/engine/priceLinks';
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
@@ -95,6 +96,9 @@ interface PlanState {
   reopenOnboarding: () => void;
   startOnboarding: () => void;
 
+  /** Bring price-linked costs (food index, spot price) to the newest month. No-op when nothing is newer. */
+  refreshPriceLinks: (inputs: PriceInputs) => void;
+
   /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
   saveSnapshot: (month: string, today?: Date) => void;
   /** Close every month that is due (see `monthsToClose`). Returns the keys closed; idempotent. */
@@ -172,10 +176,16 @@ export const usePlanStore = create<PlanState>()(
           mutate((p) => ({
             ...p,
             expenses: withElectricity(
-              p.expenses.map((x) => (x.id === id ? { ...x, ...patch } : x)),
+              p.expenses.map((x) => (x.id === id ? reconcilePriceLink(x, { ...x, ...patch }) : x)),
               id,
             ),
           })),
+        refreshPriceLinks: (inputs) => {
+          const { expenses, changed } = refreshPriceLinks(get().plan.expenses, inputs);
+          if (changed.length === 0) return;
+          const electricity = changed.filter((id) => expenses.find((e) => e.id === id)?.tariff);
+          mutate((p) => ({ ...p, expenses: electricity.reduce(shareUsage, expenses) }));
+        },
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
           set((s) =>

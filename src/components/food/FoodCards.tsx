@@ -2,6 +2,7 @@ import { useState } from 'react';
 import clsx from 'clsx';
 import { amountForMonthly } from '@/engine/everyday';
 import { formatMoney, formatPercent } from '@/engine/format';
+import { foodPriceLink } from '@/engine/priceLinks';
 import { suggestionBySlug } from '@/engine/taxonomy';
 import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
@@ -32,12 +33,15 @@ export function FoodCard() {
   const groceries = plan.expenses.find((e) => e.subcategory === 'groceries' && !e.includedElsewhere);
   const hasLunches = plan.expenses.some((e) => e.subcategory === 'work_lunches');
 
-  const applyEstimate = (monthly: number, adultsLunchingOut: number) => {
+  // The estimate is at `priceMonth`'s prices, so the item follows the food index from there on.
+  const applyEstimate = (monthly: number, adultsLunchingOut: number, priceMonth: string) => {
     if (groceries) {
-      updateExpense(groceries.id, { amount: amountForMonthly(groceries, monthly) });
+      const amount = amountForMonthly(groceries, monthly);
+      updateExpense(groceries.id, { amount, priceLink: foodPriceLink({ amount, range: groceries.range }, priceMonth) });
     } else {
       const draft = fromSuggestion(suggestionBySlug('groceries')!);
-      addExpense({ ...draft, amount: amountForMonthly(draft, monthly) });
+      const amount = amountForMonthly(draft, monthly);
+      addExpense({ ...draft, amount, priceLink: foodPriceLink({ amount, range: draft.range }, priceMonth) });
     }
     if (adultsLunchingOut > 0 && !hasLunches) {
       const lunches = fromSuggestion(suggestionBySlug('work_lunches')!);
