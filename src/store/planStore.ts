@@ -22,6 +22,7 @@ import type {
   HomeLocation,
   Household,
   IncomeSource,
+  SavedScenario,
   OnboardingStep,
   SavingsGoal,
   SpendEntry,
@@ -92,6 +93,10 @@ interface PlanState {
    * one, the rest to its goal. A savings account with no goal gets one only when something goal-like was set.
    */
   saveSavingsPot: (draft: PotDraft) => void;
+
+  /** Add a scenario, or replace the one with the same id. */
+  saveScenario: (draft: Draft<SavedScenario>) => string;
+  removeScenario: (id: string) => void;
 
   completeStep: (step: OnboardingStep) => void;
   finishOnboarding: () => void;
@@ -299,6 +304,17 @@ export const usePlanStore = create<PlanState>()(
           })),
         removeGoal: (id) => mutate((p) => ({ ...p, goals: p.goals.filter((x) => x.id !== id) })),
         saveSavingsPot: (draft) => mutate((p) => applyPotDraft(p, draft, () => newId('goal'), monthKeyOf(new Date()))),
+
+        saveScenario: (draft) => {
+          const id = draft.id ?? newId('scenario');
+          mutate((p) => {
+            const list = p.scenarios ?? [];
+            const next = { ...draft, id };
+            return { ...p, scenarios: list.some((x) => x.id === id) ? list.map((x) => (x.id === id ? next : x)) : [next, ...list] };
+          });
+          return id;
+        },
+        removeScenario: (id) => mutate((p) => ({ ...p, scenarios: (p.scenarios ?? []).filter((x) => x.id !== id) })),
 
         completeStep: (step) =>
           mutate((p) =>

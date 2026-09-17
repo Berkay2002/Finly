@@ -5,8 +5,10 @@ import { toMonthly } from './frequency';
 import { computeMetrics, monthKeyOf, type PlanMetrics } from './metrics';
 import { allGoalProgress, monthsAhead, projectPlan, type GoalProgress } from './projections';
 import type { GovBondRate } from './rates';
-import { landingAccount } from './savings';
-import type { AmountRange, ExpenseCategory, FinancialPlan, Frequency } from './types';
+import { isSavingsAccount, landingAccount } from './savings';
+import { accountRole, type AccountRole } from './taxonomy';
+import { capitalTaxSummary } from './tax/capital';
+import type { AccountKind, AmountRange, ExpenseCategory, FinancialPlan, Frequency } from './types';
 
 /* ------------------------------------------------------------------ */
 /* Scenario definitions                                                */
@@ -196,6 +198,8 @@ export interface PurchaseResult {
   account: string;
   /** Month of the purchase (1st). */
   month: Date;
+  /** Landing account today. */
+  landingNow: number;
   /** Landing account at the end of the purchase month, without and with the purchase. */
   landingBefore: number;
   landingAfter: number;
@@ -244,6 +248,7 @@ export function purchaseImpact(plan: FinancialPlan, purchase: { amount: number; 
   return {
     account: landing.name,
     month: at(p),
+    landingNow: b(0),
     landingBefore: b(p),
     landingAfter: b(p) - purchase.amount,
     lowest,
@@ -254,6 +259,44 @@ export function purchaseImpact(plan: FinancialPlan, purchase: { amount: number; 
     savings: avail,
     earliest,
   };
+}
+
+export interface FundingSource {
+  accountId: string;
+  name: string;
+  kind: AccountKind;
+  /** What the account gives in the purchase month: its balance by then with the deposits, less tax on the gain when an AF is sold. */
+  available: number;
+  /** AF: the tax on the gain taken off `available`. */
+  tax: number;
+}
+
+/**
+ * Savings accounts that could add to a down payment, as they should stand in the purchase month: spare cash
+ * first, investments next, the emergency buffer last, the order they are drawn from.
+ */
+export function fundingSources(plan: FinancialPlan, date: Date, now: Date = new Date(), gov?: GovBondRate): FundingSource[] {
+  const projected = projectPlan(plan, now, date, gov);
+  const taxes = new Map(capitalTaxSummary(plan, now, gov).accounts.map((t) => [t.accountId, t.taxIfSold]));
+  const order: AccountRole[] = ['cash_savings', 'investment', 'emergency'];
+  return projected.accounts
+    .filter((a) => isSavingsAccount(a) && a.balance > 0)
+    .sort((a, b) => order.indexOf(accountRole(a.kind)) - order.indexOf(accountRole(b.kind)))
+    .map((a) => {
+      // Deposits raise the balance and the cost basis alike, so the gain, and its tax, stay as they are today.
+      const tax = Math.min(a.balance, taxes.get(a.id) ?? 0);
+      return { accountId: a.id, name: a.name, kind: a.kind, available: a.balance - tax, tax };
+    });
+}
+
+/** What each chosen source puts in when `amount` is drawn from them in order. */
+export function drawFrom<T extends { available: number }>(sources: T[], amount: number): { source: T; amount: number }[] {
+  let left = Math.max(0, amount);
+  return sources.flatMap((source) => {
+    const take = Math.min(left, Math.max(0, source.available));
+    left -= take;
+    return take > 0 ? [{ source, amount: take }] : [];
+  });
 }
 
 /** Paying `amount` back in `months` equal payments (annuity) at a yearly nominal rate, with any fees. */

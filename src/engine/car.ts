@@ -9,8 +9,9 @@ import type { FinancialPlan } from './types';
  * car's figures come from the ad or the registration certificate; the vehicle tax is then exact.
  */
 
-export type CarFuel = 'petrol' | 'diesel' | 'hybrid' | 'electric' | 'ethanol';
-export const CAR_FUELS: CarFuel[] = ['petrol', 'diesel', 'hybrid', 'electric', 'ethanol'];
+/** `hybrid` is a plug-in hybrid; `petrol_hybrid` is a self-charging one (elhybrid), taxed and fuelled like petrol. */
+export type CarFuel = 'petrol' | 'petrol_hybrid' | 'hybrid' | 'diesel' | 'electric' | 'ethanol';
+export const CAR_FUELS: CarFuel[] = ['petrol', 'petrol_hybrid', 'hybrid', 'diesel', 'electric', 'ethanol'];
 
 export interface CarDetails {
   fuel: CarFuel;
@@ -120,12 +121,74 @@ export interface ChargingPrice {
   source: 'tariff' | 'spot';
 }
 
-/** Home charging price: the plan's own supply and grid tariffs when both are entered, else the spot average (öre incl. moms) plus energy tax. */
-export function homeChargingPrice(plan: FinancialPlan, spotOreInclVat?: number): ChargingPrice | null {
+/** Electricity at home (charging a car, running a house): the plan's own supply and grid tariffs when both are entered, else the spot average (öre incl. moms) plus energy tax. */
+export function homeElectricityPrice(plan: FinancialPlan, spotOreInclVat?: number): ChargingPrice | null {
   const tariffs = plan.expenses.map((e) => e.tariff).filter((t) => t !== undefined);
   const supply = tariffs.find((t) => t.part === 'supply');
   const grid = tariffs.find((t) => t.part === 'grid');
   if (supply && grid && perKwh(supply) > 0) return { krPerKwh: perKwh(supply) + perKwh(grid), source: 'tariff' };
   if (spotOreInclVat === undefined) return null;
   return { krPerKwh: (spotOreInclVat + energyTaxFor(homeKommunCode(plan))) / 100, source: 'spot' };
+}
+
+/* ------------------------------------------------------------------ */
+/* Estimates for what the ad does not say                              */
+/* ------------------------------------------------------------------ */
+
+/**
+ * car.info shows a car's CO2, fuel use, first registration and vehicle tax by plate, free. Transportstyrelsen's
+ * own lookup sits behind a captcha and leaves out CO2.
+ */
+export function carInfoUrl(plate: string): string {
+  const reg = plate.replace(/\s+/g, '').toUpperCase();
+  return reg ? `https://www.car.info/sv-se/license-plate/S/${encodeURIComponent(reg)}` : 'https://www.car.info/sv-se/';
+}
+
+/** Typical mixed driving per 100 km: litres, or kWh for an electric car. A plug-in hybrid charged most days burns little petrol. */
+export const TYPICAL_CONSUMPTION: Record<CarFuel, number> = {
+  petrol: 6.5,
+  petrol_hybrid: 4.8,
+  hybrid: 2.5,
+  diesel: 5.5,
+  electric: 17,
+  ethanol: 9,
+};
+
+/** The month `AVERAGE_FUEL_PRICE` was read. */
+export const FUEL_PRICES_MONTH = '2026-09';
+/**
+ * Average pump price across Sweden, kr per litre. Chains no longer publish list prices, and a krona either way
+ * moves the monthly cost little, so an average stands in until the user types their own.
+ */
+// ponytail: static snapshot; fetch it when an open fuel-price source turns up.
+export const AVERAGE_FUEL_PRICE: Record<Exclude<CarFuel, 'electric'>, number> = {
+  petrol: 17.6,
+  petrol_hybrid: 17.6,
+  hybrid: 17.6,
+  diesel: 21.26,
+  ethanol: 14.92,
+};
+
+export interface Maintenance {
+  service: number;
+  tyres: number;
+  repairs: number;
+  yearly: number;
+}
+
+const hundreds = (n: number) => Math.round(n / 100) * 100;
+
+/**
+ * A yearly amount to set aside for service, tyres and repairs, since nobody knows it ahead: one service a year
+ * (3,000–6,000 kr, less for an electric car), a tyre change twice a year plus new tyres spread over their life
+ * (a set lasts about 45,000 km), and repairs once the warranty years are over, more for an older car. An unknown
+ * registration counts as a car past its warranty. A buffer, not a quote.
+ */
+export function maintenanceEstimate({ fuel, firstRegistered, kmPerYear }: { fuel: CarFuel; firstRegistered?: string; kmPerYear: number }, at: Date): Maintenance {
+  const [y, m] = (firstRegistered ?? '').split('-').map(Number);
+  const age = y && m ? (at.getFullYear() - y) + (at.getMonth() + 1 - m) / 12 : 5;
+  const service = fuel === 'electric' ? 2500 : 4500;
+  const tyres = hundreds(1200 + (9000 * pos(kmPerYear)) / 45000);
+  const repairs = age < 3 ? 0 : age < 8 ? 3000 : 7000;
+  return { service, tyres, repairs, yearly: service + tyres + repairs };
 }

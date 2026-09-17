@@ -347,3 +347,18 @@ describe('electricity tariffs', () => {
     expect(byId[net]).toMatchObject({ amount: 930, range: { low: 930, high: 1455 } });
   });
 });
+
+describe('saved scenarios', () => {
+  it('adds, updates in place and removes', () => {
+    const { saveScenario, removeScenario } = usePlanStore.getState();
+    const a = saveScenario({ tool: 'car', name: 'Volvo', values: { priceFrom: 250000 }, savedAt: 'x' });
+    const b = saveScenario({ tool: 'car', name: 'Tesla', values: { priceFrom: 400000 }, savedAt: 'x' });
+    saveScenario({ id: a, tool: 'car', name: 'Volvo', values: { priceFrom: 260000 }, savedAt: 'y' });
+    expect(usePlanStore.getState().plan.scenarios?.map((s) => [s.id, s.values.priceFrom])).toEqual([
+      [b, 400000],
+      [a, 260000],
+    ]);
+    removeScenario(b);
+    expect(usePlanStore.getState().plan.scenarios?.map((s) => s.id)).toEqual([a]);
+  });
+});

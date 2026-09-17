@@ -1,27 +1,56 @@
-import { Check, ExternalLink, Plus } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { format, isValid, parseISO, setDate as setDayOfMonth } from 'date-fns';
-import { CAR_FUELS, homeChargingPrice, runningCosts, vehicleTax, type CarFuel } from '@/engine/car';
+import { Check, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import {
+  AVERAGE_FUEL_PRICE,
+  CAR_FUELS,
+  FUEL_PRICES_MONTH,
+  TYPICAL_CONSUMPTION,
+  carInfoUrl,
+  maintenanceEstimate,
+  runningCosts,
+  vehicleTax,
+  type CarFuel,
+} from '@/engine/car';
 import { typicalRate } from '@/engine/debts';
 import { formatMoney, formatMonthKey, formatPercent } from '@/engine/format';
-import { homePriceArea } from '@/engine/home';
 import { computeMetrics, monthKeyOf } from '@/engine/metrics';
-import { monthsAhead } from '@/engine/projections';
-import { CAR_MIN_DOWN_SHARE, installment, maxAffordablePrice, purchaseImpact, runScenario, suggestedDownPayment } from '@/engine/scenarios';
-import { suggestionBySlug } from '@/engine/taxonomy';
+import {
+  CAR_MIN_DOWN_SHARE,
+  drawFrom,
+  fundingSources,
+  installment,
+  maxAffordablePrice,
+  purchaseImpact,
+  runScenario,
+  suggestedDownPayment,
+} from '@/engine/scenarios';
+import { accountRole, suggestionBySlug } from '@/engine/taxonomy';
 import { useT } from '@/i18n';
-import { fetchSpotAverage, previousMonthKey, type SpotAverage } from '@/lib/spotPrice';
+import { useDraft } from '@/store/draftStore';
 import { usePlanStore } from '@/store/planStore';
-import { useCurrency, useGovBondRate, usePlan, useViewDate } from '@/store/selectors';
+import { useCurrency, useGovBondRate, usePlan } from '@/store/selectors';
 import { fromSuggestion } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
 import { useLoanSheet } from '@/components/forms/LoanEditor';
 import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { DateField, MoneyField, SelectField, TextField } from '@/components/ui/fields';
-import { DeltaTile, NumberField, ScenarioResults } from './results';
-
-const isoDay = (d: Date) => format(d, 'yyyy-MM-dd');
+import {
+  AnswerPanel,
+  CostList,
+  Field,
+  FieldGrid,
+  NumberField,
+  ScenarioResults,
+  SourceLinks,
+  ToolGrid,
+  ToolSection,
+  VerdictHeadline,
+  isoDay,
+  roundDown,
+  useElectricityPrice,
+  usePurchaseDate,
+} from './results';
 
 const QUOTE_LINKS = [
   { name: 'Folksam', url: 'https://www.folksam.se/forsakringar/bilforsakring' },
@@ -29,107 +58,103 @@ const QUOTE_LINKS = [
   { name: 'Trygg-Hansa', url: 'https://www.trygghansa.se/forsakringar/bilforsakring' },
   { name: 'Länsförsäkringar', url: 'https://www.lansforsakringar.se/privat/forsakring/bilforsakring/' },
 ];
-const PLATE_LOOKUP = 'https://fordon-fu-regnr.transportstyrelsen.se/';
-const FUEL_PRICES = 'https://bensinpriser.se/';
 
 /**
- * Can I afford this car? Answers first with the most car the plan carries, from what the landing account can
- * spare as down payment and what the breathing room pays a month; then judges a price (or range) with the
- * car's own running costs and a car loan.
+ * Can I afford this car? Answers first with the most car the plan carries, from the money that can go down by
+ * the purchase month (the landing account's balance and leftovers until then, plus any savings the user
+ * includes) and what the breathing room pays a month; then judges a price (or range) with the car's own running
+ * costs and a car loan. What people rarely know (fuel use and price, upkeep) starts from an estimate.
  */
 export function CarTool() {
   const plan = usePlan();
-  const viewDate = useViewDate();
   const gov = useGovBondRate();
   const currency = useCurrency();
   const addExpense = usePlanStore((s) => s.addExpense);
   const loans = useLoanSheet();
   const goalSheet = useGoalSheet();
   const t = useT();
+  const a = t.planning.afford;
   const c = t.planning.car;
   const money = (n: number) => formatMoney(n, currency);
-  const today = useMemo(() => new Date(), []);
+  const share = (n: number, of: number) => formatPercent(of > 0 ? n / of : 0, 0);
+  const field = useDraft('car');
+  const { today, date, setDate, when } = usePurchaseDate(field);
 
-  const [priceFrom, setPriceFrom] = useState(0);
-  const [priceTo, setPriceTo] = useState(0);
-  const [date, setDate] = useState(() => isoDay(monthsAhead(today, viewDate) > 0 ? setDayOfMonth(viewDate, 15) : today));
-  const [plate, setPlate] = useState('');
-  const [fuel, setFuel] = useState<CarFuel>('petrol');
-  const [co2, setCo2] = useState<number | null>(null);
-  const [firstRegistered, setFirstRegistered] = useState(() => monthKeyOf(today));
-  const [km, setKm] = useState<number | null>(12000);
-  const [consumption, setConsumption] = useState<number | null>(null);
-  const [unitPrice, setUnitPrice] = useState<number | null>(null);
-  const [insurance, setInsurance] = useState<number | null>(null);
-  const [service, setService] = useState<number | null>(null);
-  const [parking, setParking] = useState<number | null>(null);
-  const [down, setDown] = useState<number | null>(null);
-  const [apr, setApr] = useState<number | null>(null);
-  const [years, setYears] = useState(5);
-  const [setupFee, setSetupFee] = useState(0);
-  const [monthlyFee, setMonthlyFee] = useState(0);
-  const [spot, setSpot] = useState<SpotAverage | null>(null);
+  const [priceFrom, setPriceFrom] = field('priceFrom', 0);
+  const [priceTo, setPriceTo] = field('priceTo', 0);
+  const [plate, setPlate] = field('plate', '');
+  const [fuel, setFuel] = field<CarFuel>('fuel', 'petrol');
+  const [co2, setCo2] = field<number | null>('co2', null);
+  const [firstRegistered, setFirstRegistered] = field('firstRegistered', '');
+  const [km, setKm] = field<number | null>('km', 12000);
+  const [consumption, setConsumption] = field<number | null>('consumption', null);
+  const [unitPrice, setUnitPrice] = field<number | null>('unitPrice', null);
+  const [insurance, setInsurance] = field<number | null>('insurance', null);
+  const [service, setService] = field<number | null>('service', null);
+  const [parking, setParking] = field<number | null>('parking', null);
+  const [sources, setSources] = field<string[]>('sources', []);
+  const [down, setDown] = field<number | null>('down', null);
+  const [apr, setApr] = field<number | null>('apr', null);
+  const [years, setYears] = field('years', 5);
+  const [setupFee, setSetupFee] = field('setupFee', 0);
+  const [monthlyFee, setMonthlyFee] = field('monthlyFee', 0);
   const [added, setAdded] = useState(false);
 
-  const when = useMemo(() => {
-    const d = parseISO(date);
-    return isValid(d) && d > today ? d : today;
-  }, [date, today]);
-
   // Charging at home is priced from the household's own electricity bills, else last month's spot price.
-  const charging = fuel === 'electric' ? homeChargingPrice(plan, spot?.oreInclVat) : null;
-  useEffect(() => {
-    if (fuel !== 'electric' || spot || homeChargingPrice(plan)) return;
-    fetchSpotAverage(homePriceArea(plan).area, previousMonthKey())
-      .then(setSpot)
-      .catch(() => undefined);
-  }, [fuel, spot, plan]);
+  const electric = fuel === 'electric';
+  const { price: charging, spot } = useElectricityPrice(plan, electric);
 
-  const tax = vehicleTax({ fuel, co2: co2 ?? 0, firstRegistered }, when);
-  const needsCo2 = fuel !== 'electric';
+  // The tax needs CO2 and the registration month (malus runs three years from it); an electric car pays the base.
+  const taxKnown = electric || (co2 !== null && firstRegistered !== '');
+  const tax = vehicleTax({ fuel, co2: co2 ?? 0, firstRegistered: firstRegistered || monthKeyOf(today) }, when);
+  const use = consumption ?? TYPICAL_CONSUMPTION[fuel];
+  const energyPrice = unitPrice ?? (electric ? charging?.krPerKwh : AVERAGE_FUEL_PRICE[fuel as Exclude<CarFuel, 'electric'>]);
+  const upkeep = maintenanceEstimate({ fuel, firstRegistered, kmPerYear: km ?? 0 }, when);
   const run = runningCosts({
-    taxYearly: needsCo2 && co2 === null ? 0 : tax.yearly,
+    taxYearly: taxKnown ? tax.yearly : 0,
     kmPerYear: km ?? 0,
-    consumption: consumption ?? 0,
-    unitPrice: unitPrice ?? charging?.krPerKwh ?? 0,
+    consumption: use,
+    unitPrice: energyPrice ?? 0,
     insuranceMonthly: insurance ?? 0,
-    serviceYearly: service ?? 0,
+    serviceYearly: service ?? upkeep.yearly,
     parkingMonthly: parking ?? 0,
   });
   const missing = [
-    needsCo2 && co2 === null && c.costs.tax,
-    (consumption === null || (unitPrice ?? charging?.krPerKwh) === undefined) && (fuel === 'electric' ? c.costs.charging : c.costs.fuel),
+    !taxKnown && c.costs.tax,
+    energyPrice === undefined && c.costs.charging,
     insurance === null && c.costs.insurance,
-    service === null && c.costs.service,
   ].filter((x): x is string => !!x);
 
-  const { room } = useMemo(() => purchaseImpact(plan, { amount: 0, date: when }, today, gov), [plan, when, today, gov]);
+  const base = useMemo(() => purchaseImpact(plan, { amount: 0, date: when }, today, gov), [plan, when, today, gov]);
+  const savings = useMemo(() => fundingSources(plan, when, today, gov), [plan, when, today, gov]);
   const breathingRoom = useMemo(() => computeMetrics(plan, when, gov).breathingRoom, [plan, when, gov]);
+  const chosen = savings.filter((s) => sources.includes(s.accountId));
+  const cash = base.room + chosen.reduce((sum, s) => sum + s.available, 0);
+
   const rate = apr ?? typicalRate('car', true);
   const months = Math.max(1, Math.round(years * 12));
-  const loanMonthly = (loan: number) => (loan > 0 ? installment(loan, months, rate, setupFee, monthlyFee).monthly : 0);
-  // Whole thousands: the answer is a guide, not a quote.
-  const maxFor = (budget: number) =>
-    Math.floor(maxAffordablePrice({ cash: room, budget, minShare: CAR_MIN_DOWN_SHARE, loanMonthly }) / 1000) * 1000;
+  const loanFor = (loan: number) => installment(Math.max(0, loan), months, rate, setupFee, monthlyFee);
+  const loanMonthly = (loan: number) => (loan > 0 ? loanFor(loan).monthly : 0);
+  const maxFor = (budget: number) => roundDown(maxAffordablePrice({ cash, budget, minShare: CAR_MIN_DOWN_SHARE, loanMonthly }), 1000);
   const max = maxFor(breathingRoom - run.total);
   const comfortable = maxFor(breathingRoom / 2 - run.total);
 
   const judge = (price: number) => {
-    const d = Math.min(price, down ?? suggestedDownPayment(room, price, CAR_MIN_DOWN_SHARE));
-    const loan = installment(price - d, months, rate, setupFee, monthlyFee);
-    const monthly = loan.monthly + run.total;
-    return { price, down: d, loan, monthly, verdict: price <= comfortable ? 'comfortable' : price <= max ? 'tight' : 'no' } as const;
+    // The suggestion is what the everyday account can spare; savings only go in when the user asks for more.
+    const d = Math.min(price, down ?? suggestedDownPayment(base.room, price, CAR_MIN_DOWN_SHARE));
+    const loan = loanFor(price - d);
+    const fromSavings = drawFrom(chosen, d - base.room);
+    const short = Math.max(0, d - base.room - fromSavings.reduce((sum, s) => sum + s.amount, 0));
+    const monthly = (price > d ? loan.monthly : 0) + run.total;
+    return { price, down: d, loan, monthly, fromSavings, short, verdict: price <= comfortable ? 'comfortable' : price <= max ? 'tight' : 'no' } as const;
   };
   const top = Math.max(priceFrom, priceTo);
   const main = top > 0 ? judge(top) : null;
   const low = priceTo > priceFrom && priceFrom > 0 ? judge(priceFrom) : null;
+  const minDown = Math.ceil(top * CAR_MIN_DOWN_SHARE);
+  const maxDown = Math.max(minDown, Math.min(top, roundDown(cash, 100)));
 
-  const mainDown = main?.down;
   const mainMonthly = main?.monthly;
-  const impact = useMemo(
-    () => (mainDown === undefined ? null : purchaseImpact(plan, { amount: mainDown, date: when }, today, gov)),
-    [plan, mainDown, when, today, gov],
-  );
   const scenario = useMemo(
     () =>
       mainMonthly === undefined
@@ -141,7 +166,7 @@ export function CarTool() {
   const addRunningCosts = () => {
     const lines: [string, number, 'monthly' | 'yearly'][] = [
       ['vehicle_tax', run.tax * 12, 'yearly'],
-      [fuel === 'electric' ? 'ev_charging' : 'fuel', run.energy, 'monthly'],
+      [electric ? 'ev_charging' : 'fuel', run.energy, 'monthly'],
       ['car_insurance', run.insurance, 'monthly'],
       ['car_service', run.service * 12, 'yearly'],
       ['car_parking', run.parking, 'monthly'],
@@ -153,198 +178,309 @@ export function CarTool() {
     setAdded(true);
   };
 
-  return (
-    <div className="grid gap-4 lg:grid-cols-2 lg:grid-rows-[auto_1fr] lg:items-start">
-      <div className="lg:col-start-2 lg:row-start-1">
-        {/* The answer, before anything is typed */}
-        <div className="rounded-xl border border-line bg-page/60 p-4">
-          <div className="text-[12px] font-medium text-muted">{c.answerTitle}</div>
-          {max > 0 ? (
-            <>
-              <div className="mt-1 grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[12px] text-ink-soft">{c.upTo}</div>
-                  <div className="tabular text-[22px] font-bold text-ink">{money(max)}</div>
+  const month = formatMonthKey(monthKeyOf(when));
+  const answer = (
+    <AnswerPanel
+      figures={
+        max > 0
+          ? [
+              { label: c.upTo, value: money(max) },
+              { label: c.comfortablyUpTo, value: comfortable > 0 ? money(comfortable) : '–', positive: true },
+            ]
+          : []
+      }
+      note={
+        <>
+          {c.basis(money(cash), month, formatPercent(rate / 100, 1), years)}{' '}
+          {missing.length === 0 || run.total > 0 ? c.runningIncluded(money(run.total)) : c.runningMissing}
+        </>
+      }
+      empty={c.none(money(breathingRoom))}
+    />
+  );
+
+  const perKrona = ((km ?? 0) * use) / 100 / 12;
+  const inputs = (
+    <>
+      <FieldGrid cols={3}>
+        <Field>
+          <MoneyField label={c.price} currency={currency} value={priceFrom} onValueChange={setPriceFrom} />
+        </Field>
+        <Field>
+          <MoneyField label={c.priceTo} hint={t.planning.allowance.optional} currency={currency} value={priceTo} onValueChange={setPriceTo} />
+        </Field>
+        <Field>
+          <DateField label={a.when} value={date} min={isoDay(today)} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+      </FieldGrid>
+
+      <ToolSection title={c.carTitle}>
+        <FieldGrid className="mt-2">
+          <Field help={<SourceLinks links={[{ name: c.lookUp, url: carInfoUrl(plate) }]} />}>
+            <TextField label={c.plate} placeholder="ABC 123" value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} />
+          </Field>
+          <Field>
+            <SelectField label={c.fuel} value={fuel} onValueChange={setFuel} options={CAR_FUELS.map((f) => ({ value: f, label: c.fuels[f] }))} />
+          </Field>
+          {!electric && (
+            <Field help={c.co2Hint}>
+              <NumberField label={c.co2} value={co2} onChange={setCo2} />
+            </Field>
+          )}
+          <Field>
+            <TextField label={c.firstRegistered} type="month" value={firstRegistered} onChange={(e) => setFirstRegistered(e.target.value)} />
+          </Field>
+          <Field>
+            <NumberField label={c.km} value={km} onChange={setKm} />
+          </Field>
+          <Field help={consumption === null ? c.typical(String(TYPICAL_CONSUMPTION[fuel])) : undefined}>
+            <NumberField
+              label={electric ? c.kwhPer100 : c.litresPer100}
+              value={consumption}
+              onChange={setConsumption}
+              step="0.1"
+              placeholder={String(TYPICAL_CONSUMPTION[fuel])}
+            />
+          </Field>
+          <Field
+            wide
+            help={
+              !electric
+                ? c.fuelPriceHint(formatMonthKey(FUEL_PRICES_MONTH), money(perKrona))
+                : charging?.source === 'tariff'
+                  ? c.chargingFromBills
+                  : charging && spot
+                    ? c.chargingFromSpot(formatMonthKey(spot.month), spot.area)
+                    : c.chargingUnknown
+            }
+          >
+            <NumberField
+              label={electric ? c.pricePerKwh : c.pricePerLitre}
+              value={unitPrice}
+              onChange={setUnitPrice}
+              step="0.01"
+              placeholder={energyPrice !== undefined && unitPrice === null ? energyPrice.toFixed(2) : undefined}
+            />
+          </Field>
+          <Field help={<SourceLinks label={c.getQuote} links={QUOTE_LINKS} />}>
+            <MoneyField label={c.insurance} currency={currency} value={insurance ?? 0} onValueChange={setInsurance} />
+          </Field>
+          <Field>
+            <MoneyField label={c.parking} hint={t.planning.allowance.optional} currency={currency} value={parking ?? 0} onValueChange={setParking} />
+          </Field>
+          <Field wide help={service === null ? c.serviceHint(money(upkeep.service), money(upkeep.tyres), money(upkeep.repairs)) : undefined}>
+            <MoneyField
+              label={c.service}
+              currency={currency}
+              value={service ?? 0}
+              placeholder={String(upkeep.yearly)}
+              // Clearing the field goes back to the estimate.
+              onValueChange={(v) => setService(v > 0 ? v : null)}
+            />
+          </Field>
+        </FieldGrid>
+
+        <CostList
+          className="mt-3"
+          currency={currency}
+          rows={[
+            {
+              label: c.costs.tax,
+              value: taxKnown ? run.tax : null,
+              note: tax.malusUntil ? c.malus(formatMonthKey(tax.malusUntil), money(tax.afterMalus ?? 0)) : c.perYear(money(tax.yearly)),
+            },
+            {
+              label: electric ? c.costs.charging : c.costs.fuel,
+              value: energyPrice === undefined ? null : run.energy,
+              note: consumption === null || unitPrice === null ? c.estimate : undefined,
+            },
+            { label: c.costs.insurance, value: insurance === null ? null : run.insurance },
+            { label: c.costs.service, value: run.service, note: service === null ? c.estimate : undefined },
+            { label: c.costs.parking, value: run.parking },
+          ]}
+          total={{ label: c.costs.total, value: run.total }}
+        />
+      </ToolSection>
+
+      <ToolSection title={c.payTitle}>
+        <p className="mt-0.5 text-[12.5px] text-muted">{c.moneyBy(month)}</p>
+        <ul className="mt-2 divide-y divide-line rounded-lg bg-page/60 px-3 text-[12.5px]">
+          <li className="flex items-baseline justify-between gap-3 py-2">
+            <span className="min-w-0">
+              <span className="block text-ink">{base.account}</span>
+              <span className="block text-muted">
+                {c.everydayNote(money(base.landingNow), money(base.landingBefore - base.landingNow))}
+                {base.room < base.landingBefore - 0.5 && c.keptBack(money(base.landingBefore - base.room))}
+              </span>
+            </span>
+            <span className="tabular shrink-0 text-ink">{money(base.room)}</span>
+          </li>
+          {savings.map((s) => (
+            <li key={s.accountId}>
+              <label className="flex cursor-pointer items-baseline justify-between gap-3 py-2">
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <input
+                    type="checkbox"
+                    className="translate-y-0.5 accent-brand-solid"
+                    checked={sources.includes(s.accountId)}
+                    onChange={(e) => setSources(e.target.checked ? [...sources, s.accountId] : sources.filter((id) => id !== s.accountId))}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-ink">{s.name}</span>
+                    {(s.tax > 0 || accountRole(s.kind) === 'emergency') && (
+                      <span className="block text-muted">{s.tax > 0 ? c.afterTax(money(s.tax)) : c.bufferNote}</span>
+                    )}
+                  </span>
+                </span>
+                <span className={sources.includes(s.accountId) ? 'tabular shrink-0 text-ink' : 'tabular shrink-0 text-faint'}>{money(s.available)}</span>
+              </label>
+            </li>
+          ))}
+          {savings.length > 0 && (
+            <li className="flex items-baseline justify-between gap-3 py-2 font-semibold text-ink">
+              <span>{c.available}</span>
+              <span className="tabular">{money(cash)}</span>
+            </li>
+          )}
+        </ul>
+
+        {main && (
+          <div className="mt-3">
+            <MoneyField label={a.downPayment} currency={currency} value={main.down} onValueChange={(v) => setDown(Math.max(0, v))} />
+            {maxDown > minDown && (
+              <>
+                <input
+                  type="range"
+                  aria-label={a.downPayment}
+                  className="mt-3 w-full accent-brand-solid"
+                  min={minDown}
+                  max={maxDown}
+                  step={100}
+                  value={Math.min(maxDown, Math.max(minDown, main.down))}
+                  onChange={(e) => setDown(Number(e.target.value))}
+                />
+                <div className="tabular flex justify-between gap-3 text-[12px] text-muted">
+                  <span>{c.downMin(share(minDown, top), money(minDown))}</span>
+                  <span className="text-right">{c.downMax(share(maxDown, top), money(maxDown))}</span>
                 </div>
-                <div>
-                  <div className="text-[12px] text-ink-soft">{c.comfortablyUpTo}</div>
-                  <div className="tabular text-[22px] font-bold text-positive">{comfortable > 0 ? money(comfortable) : '–'}</div>
-                </div>
-              </div>
-              <p className="mt-2 text-[12.5px] text-muted">
-                {c.basis(money(room), formatPercent(rate / 100, 1), years)}{' '}
-                {missing.length === 0 || run.total > 0 ? c.runningIncluded(money(run.total)) : c.runningMissing}
-              </p>
-            </>
-          ) : (
-            <p className="mt-1 text-[13px] text-ink-soft">{c.none(money(breathingRoom))}</p>
+                {maxDown < top && (
+                  <p className="mt-2 text-[12.5px] text-ink-soft">
+                    {c.downCompare(
+                      share(minDown, top),
+                      money(loanFor(top - minDown).monthly),
+                      share(maxDown, top),
+                      money(loanFor(top - maxDown).monthly),
+                      money(loanFor(top - minDown).extra - loanFor(top - maxDown).extra),
+                    )}
+                  </p>
+                )}
+              </>
+            )}
+            {down !== null && (
+              <Button className="mt-2" size="sm" variant="secondary" onClick={() => setDown(null)}>
+                {a.useSuggested}
+              </Button>
+            )}
+          </div>
+        )}
+
+        <details className="mt-3 border-t border-line pt-3">
+          <summary className="cursor-pointer text-[13px] font-medium text-ink">
+            {c.loanTitle} <span className="font-normal text-muted">{c.loanSummary(formatPercent(rate / 100, 1), years)}</span>
+          </summary>
+          <FieldGrid className="mt-3">
+            <Field help={apr === null ? a.rateHint(formatPercent(rate / 100, 1)) : undefined}>
+              <NumberField label={a.interest} value={apr} onChange={setApr} placeholder={String(rate)} step="0.01" />
+            </Field>
+            <Field>
+              <NumberField label={c.years} value={years} onChange={(v) => setYears(Math.max(1, v ?? 1))} />
+            </Field>
+            <Field>
+              <MoneyField label={a.setupFee} currency={currency} value={setupFee} onValueChange={setSetupFee} />
+            </Field>
+            <Field>
+              <MoneyField label={a.monthlyFee} currency={currency} value={monthlyFee} onValueChange={setMonthlyFee} />
+            </Field>
+          </FieldGrid>
+        </details>
+      </ToolSection>
+    </>
+  );
+
+  const paidFrom = main
+    ? [
+        ...(Math.min(main.down, base.room) > 0 ? [`${base.account} ${money(Math.min(main.down, base.room))}`] : []),
+        ...main.fromSavings.map((s) => `${s.source.name} ${money(s.amount)}`),
+      ].join(' + ')
+    : '';
+
+  const verdict =
+    main && scenario ? (
+      <div className="space-y-3">
+        <VerdictHeadline
+          verdict={main.verdict}
+          title={c.headline[main.verdict]}
+          amount={c.perMonth(money(main.monthly))}
+          detail={main.price > main.down ? c.breakdown(money(main.loan.monthly), years, money(run.total)) : c.paidInFull(money(run.total))}
+        >
+          {paidFrom && <p>{c.downFrom(money(main.down), paidFrom)}</p>}
+          {low && <p>{c.lowEnd(money(low.price), c.verdictShort[low.verdict], money(low.monthly))}</p>}
+          {missing.length > 0 && <p className="text-muted">{c.notIncluded(missing.join(', ').toLowerCase()).trim()}</p>}
+        </VerdictHeadline>
+        {main.short > 0 && (
+          <Callout
+            tone="warning"
+            action={
+              cash >= minDown && (
+                <Button size="sm" variant="secondary" onClick={() => setDown(maxDown)}>
+                  {c.useAvailable(money(maxDown))}
+                </Button>
+              )
+            }
+          >
+            {c.downShort(money(main.short))}
+          </Callout>
+        )}
+        <ScenarioResults
+          result={scenario}
+          currency={currency}
+          onEditGoal={goalSheet.openEdit}
+          label={c.carName}
+          details={main.price > main.down ? [{ label: c.interestOver(years), value: money(main.loan.extra) }] : []}
+        />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Button size="sm" variant="secondary" icon={added ? Check : Plus} disabled={added || run.total <= 0} onClick={addRunningCosts}>
+            {added ? c.addedRunning : c.addRunning}
+          </Button>
+          {main.price > main.down && (
+            <Button
+              size="sm"
+              variant="soft"
+              icon={Plus}
+              onClick={() =>
+                loans.openNew('car', {
+                  name: plate ? `${c.carName} ${plate}` : c.carName,
+                  balance: main.price - main.down,
+                  rate,
+                  payment: main.loan.monthly,
+                  frequency: 'monthly',
+                  assetValue: main.price,
+                })
+              }
+            >
+              {a.addLoan}
+            </Button>
           )}
         </div>
       </div>
+    ) : (
+      <Callout tone="neutral">{c.enterPrice}</Callout>
+    );
 
-      <div className="space-y-4 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-        {/* Price */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <MoneyField label={c.price} currency={currency} value={priceFrom} onValueChange={setPriceFrom} />
-          <MoneyField label={c.priceTo} hint={t.planning.allowance.optional} currency={currency} value={priceTo} onValueChange={setPriceTo} />
-          <DateField label={t.planning.afford.when} value={date} min={isoDay(today)} onChange={(e) => setDate(e.target.value)} />
-        </div>
-
-        {/* The car */}
-        <section className="rounded-xl border border-line p-3">
-          <div className="text-[13px] font-medium text-ink">{c.carTitle}</div>
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <div>
-              <TextField label={c.plate} placeholder="ABC 123" value={plate} onChange={(e) => setPlate(e.target.value.toUpperCase())} />
-              <a href={PLATE_LOOKUP} target="_blank" rel="noreferrer" className="mt-1 inline-flex items-center gap-1 text-[12px] text-brand-600 hover:underline">
-                {c.lookUp} <ExternalLink size={11} />
-              </a>
-            </div>
-            <SelectField label={c.fuel} value={fuel} onValueChange={setFuel} options={CAR_FUELS.map((f) => ({ value: f, label: c.fuels[f] }))} />
-            {needsCo2 && <NumberField label={c.co2} hint={c.co2Hint} value={co2} onChange={setCo2} />}
-            <TextField label={c.firstRegistered} type="month" value={firstRegistered} onChange={(e) => e.target.value && setFirstRegistered(e.target.value)} />
-            <NumberField label={c.km} value={km} onChange={setKm} />
-            <NumberField label={fuel === 'electric' ? c.kwhPer100 : c.litresPer100} value={consumption} onChange={setConsumption} step="0.1" />
-            <div className="sm:col-span-2">
-              <NumberField
-                label={fuel === 'electric' ? c.pricePerKwh : c.pricePerLitre}
-                value={unitPrice}
-                onChange={setUnitPrice}
-                step="0.01"
-                placeholder={charging ? charging.krPerKwh.toFixed(2) : undefined}
-              />
-              <p className="mt-1 text-[12px] text-muted">
-                {fuel !== 'electric' ? (
-                  <a href={FUEL_PRICES} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-brand-600 hover:underline">
-                    {c.fuelPriceLink} <ExternalLink size={11} />
-                  </a>
-                ) : charging?.source === 'tariff' ? (
-                  c.chargingFromBills
-                ) : charging && spot ? (
-                  c.chargingFromSpot(formatMonthKey(spot.month), spot.area)
-                ) : (
-                  c.chargingUnknown
-                )}
-              </p>
-            </div>
-            <div>
-              <MoneyField label={c.insurance} currency={currency} value={insurance ?? 0} onValueChange={setInsurance} />
-              <p className="mt-1 flex flex-wrap gap-x-2 text-[12px] text-muted">
-                {c.getQuote}
-                {QUOTE_LINKS.map((q) => (
-                  <a key={q.name} href={q.url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline">
-                    {q.name}
-                  </a>
-                ))}
-              </p>
-            </div>
-            <MoneyField label={c.service} hint={c.serviceHint} currency={currency} value={service ?? 0} onValueChange={setService} />
-            <MoneyField label={c.parking} hint={t.planning.allowance.optional} currency={currency} value={parking ?? 0} onValueChange={setParking} />
-          </div>
-
-          <dl className="mt-3 divide-y divide-line rounded-lg bg-page/60 px-3 text-[12.5px]">
-            {[
-              { label: c.costs.tax, value: needsCo2 && co2 === null ? null : run.tax, note: tax.malusUntil ? c.malus(formatMonthKey(tax.malusUntil), money(tax.afterMalus ?? 0)) : c.perYear(money(tax.yearly)) },
-              { label: fuel === 'electric' ? c.costs.charging : c.costs.fuel, value: run.energy > 0 ? run.energy : null },
-              { label: c.costs.insurance, value: insurance === null ? null : run.insurance },
-              { label: c.costs.service, value: service === null ? null : run.service },
-              { label: c.costs.parking, value: run.parking },
-            ].map((row) => (
-              <div key={row.label} className="flex items-baseline justify-between gap-3 py-1.5">
-                <dt className="text-ink-soft">
-                  {row.label}
-                  {row.value !== null && row.note && <span className="ml-1 text-muted">· {row.note}</span>}
-                </dt>
-                <dd className="tabular text-ink">{row.value === null ? <span className="text-muted">{c.notEntered}</span> : money(row.value)}</dd>
-              </div>
-            ))}
-            <div className="flex justify-between gap-3 py-1.5 font-semibold">
-              <dt className="text-ink">{c.costs.total}</dt>
-              <dd className="tabular text-ink">{money(run.total)}</dd>
-            </div>
-          </dl>
-        </section>
-
-        {/* The loan */}
-        <details className="rounded-xl border border-line p-3">
-          <summary className="cursor-pointer text-[13px] font-medium text-ink">
-            {c.loanTitle} <span className="font-normal text-muted">· {c.loanSummary(down === null ? c.suggestedDown : money(down), formatPercent(rate / 100, 1), years)}</span>
-          </summary>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <MoneyField
-              label={t.planning.afford.downPayment}
-              hint={down === null ? c.downHint : undefined}
-              currency={currency}
-              value={main?.down ?? down ?? 0}
-              onValueChange={(v) => setDown(Math.max(0, v))}
-            />
-            <NumberField label={t.planning.afford.interest} hint={apr === null ? t.planning.afford.rateHint(formatPercent(rate / 100, 1)) : undefined} value={apr} onChange={setApr} placeholder={String(rate)} step="0.01" />
-            <NumberField label={c.years} value={years} onChange={(v) => setYears(Math.max(1, v ?? 1))} />
-            <MoneyField label={t.planning.afford.setupFee} currency={currency} value={setupFee} onValueChange={setSetupFee} />
-            <MoneyField label={t.planning.afford.monthlyFee} currency={currency} value={monthlyFee} onValueChange={setMonthlyFee} />
-            {down !== null && (
-              <div className="flex items-end">
-                <Button size="sm" variant="secondary" onClick={() => setDown(null)}>
-                  {t.planning.afford.useSuggested}
-                </Button>
-              </div>
-            )}
-          </div>
-        </details>
-      </div>
-
-      <div className="lg:col-start-2 lg:row-start-2">
-        {/* The verdict */}
-        {main && impact && scenario ? (
-          <div className="space-y-3">
-            <Callout tone={main.verdict === 'comfortable' ? 'success' : main.verdict === 'tight' ? 'info' : 'warning'}>
-              <strong>{c.verdict[main.verdict](money(main.price))}</strong>{' '}
-              {c.split(money(main.down), money(main.price - main.down), money(main.loan.monthly), years)}{' '}
-              {c.monthlyTotal(money(run.total), money(main.monthly))}
-              {main.monthly > breathingRoom && c.overBy(money(main.monthly - breathingRoom))}
-              {impact.shortBy > 0 && c.downFromSavings(money(impact.shortBy))}
-              {missing.length > 0 && c.notIncluded(missing.join(', ').toLowerCase())}
-            </Callout>
-            {low && (
-              <p className="text-[12.5px] text-ink-soft">
-                {c.lowEnd(money(low.price), c.verdictShort[low.verdict], money(low.monthly))}
-              </p>
-            )}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <DeltaTile label={t.planning.afford.landing(impact.account)} before={money(impact.landingBefore)} after={money(impact.landingAfter)} change={-main.down} />
-              <DeltaTile label={c.loanExtra} before={money(0)} after={money(main.loan.extra)} change={-main.loan.extra} />
-              <DeltaTile label={c.monthlyCost} before={money(0)} after={money(main.monthly)} change={-main.monthly} />
-            </div>
-            <ScenarioResults result={scenario} currency={currency} onEditGoal={goalSheet.openEdit} />
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button size="sm" variant="secondary" icon={added ? Check : Plus} disabled={added || run.total <= 0} onClick={addRunningCosts}>
-                {added ? c.addedRunning : c.addRunning}
-              </Button>
-              <Button
-                size="sm"
-                variant="soft"
-                icon={Plus}
-                onClick={() =>
-                  loans.openNew('car', {
-                    name: plate ? `${c.carName} ${plate}` : c.carName,
-                    balance: main.price - main.down,
-                    rate,
-                    payment: main.loan.monthly,
-                    frequency: 'monthly',
-                    assetValue: main.price,
-                  })
-                }
-              >
-                {t.planning.afford.addLoan}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <Callout tone="neutral">{c.enterPrice}</Callout>
-        )}
-      </div>
+  return (
+    <ToolGrid answer={answer} inputs={inputs} verdict={verdict}>
       {loans.sheet}
       {goalSheet.sheet}
-    </div>
+    </ToolGrid>
   );
 }

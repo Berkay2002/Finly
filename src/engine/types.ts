@@ -477,6 +477,16 @@ export interface Commute {
 
 export type CommutePrice = 'lunch' | 'ticket' | 'card' | 'parking' | 'passage';
 
+/** A "Can I afford this?" question kept for later: which tool, and what was typed into it. */
+export interface SavedScenario {
+  id: string;
+  /** An `AffordTab`: a purchase kind or 'monthly'. */
+  tool: string;
+  name: string;
+  values: Record<string, unknown>;
+  savedAt: string;
+}
+
 export interface FinancialPlan {
   version: 1;
   currency: string;
@@ -496,6 +506,8 @@ export interface FinancialPlan {
   /** Missing on plans saved before loans had their own model; see `migrateLegacyDebts`. */
   debts?: Debt[];
   goals: SavingsGoal[];
+  /** "Can I afford this?" scenarios saved to come back to. */
+  scenarios?: SavedScenario[];
   /** Exchange rates by month for expenses in other currencies; see engine/fx.ts. Refreshed by `usePriceRefresh`. */
   fx?: Record<string, Record<string, number>>;
   onboarding: {

@@ -368,7 +368,7 @@ export function useGoalSheet() {
     const g = savingsPots(plan).find((x) => x.id === id);
     if (g) setDraft({ ...g });
   };
-  const openNew = (kind?: GoalKind) => setDraft(blankGoal(kind));
+  const openNew = (kind?: GoalKind, patch?: Partial<Draft>) => setDraft({ ...blankGoal(kind), ...patch });
   const close = () => setDraft(null);
   const save = () => {
     if (!draft) return;

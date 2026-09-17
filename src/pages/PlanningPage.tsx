@@ -2,18 +2,16 @@ import { Plus, TrendingDown, TrendingUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import clsx from 'clsx';
-import { addMonths, format, isValid, parseISO, setDate as setDayOfMonth } from 'date-fns';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { FREQUENCIES, FREQUENCY_LABELS } from '@/engine/frequency';
-import { formatCompact, formatMoney, formatMoneyRange, formatMonths, formatPercent, formatShortMonth, formatShortMonthYear } from '@/engine/format';
-import { monthsAhead } from '@/engine/projections';
-import { installment, purchaseImpact, runScenario, suggestedDownPayment, type IncomeChangeScenario, type RecurringExpenseScenario } from '@/engine/scenarios';
-import { typicalRate } from '@/engine/debts';
-import { CATEGORY_META, debtKindMeta, suggestionBySlug } from '@/engine/taxonomy';
+import { formatCompact, formatMoney, formatMoneyRange, formatShortMonth, formatShortMonthYear } from '@/engine/format';
+import { runScenario, type IncomeChangeScenario, type RecurringExpenseScenario } from '@/engine/scenarios';
+import { CATEGORY_META } from '@/engine/taxonomy';
 import { EXPENSE_CATEGORIES, type ExpenseCategory, type Frequency } from '@/engine/types';
 import { useT } from '@/i18n';
-import { useCurrency, useEffectivePlan, useGovBondRate, useMetrics, useMonthOutlook, usePlan, useViewDate } from '@/store/selectors';
-import { customDraft, fromSuggestion, useExpenseSheet } from '@/components/forms/ExpenseEditor';
+import { useDraft, useDraftStore, type PurchaseKind } from '@/store/draftStore';
+import { useCurrency, useEffectivePlan, useMetrics, useMonthOutlook, usePlan, useViewDate } from '@/store/selectors';
+import { customDraft, useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
 import { useLoanSheet } from '@/components/forms/LoanEditor';
 import { useSavingsTaxSheet } from '@/components/forms/SavingsTax';
@@ -22,12 +20,14 @@ import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Icon } from '@/components/ui/Icon';
 import { IconTile } from '@/components/ui/IconTile';
-import type { PictureName } from '@/components/ui/pictures';
-import { DateField, MoneyField, SegmentedControl, SelectField, TextField, TogglePill } from '@/components/ui/fields';
+import { MoneyField, SegmentedControl, SelectField, TextField, TogglePill } from '@/components/ui/fields';
 import { Button } from '@/components/ui/Button';
 import { CarTool } from './planning/CarTool';
 import { HomeTool } from './planning/HomeTool';
-import { DeltaTile, ScenarioResults } from './planning/results';
+import { ItemTool } from './planning/ItemTool';
+import { TripTool } from './planning/TripTool';
+import { ScenarioResults } from './planning/results';
+import { SaveBar, SavedList, TOOL_ICONS } from './planning/SavedScenarios';
 
 const freqOptions = () => FREQUENCIES.filter((f) => f !== 'once').map((f) => ({ value: f, label: FREQUENCY_LABELS[f] }));
 
@@ -53,11 +53,14 @@ export function PlanningPage() {
 /* ------------------------------------------------------------------ */
 
 function AffordTool() {
-  const [mode, setMode] = useState<'purchase' | 'monthly'>('purchase');
+  const mode = useDraftStore((s) => s.mode);
+  const kind = useDraftStore((s) => s.kind);
+  const { setMode, setKind } = useDraftStore.getState();
   const a = useT().planning.afford;
   return (
     <Card>
       <CardHeader icon={<IconTile icon="card-afford" accent="orange" size="sm" />} title={a.title} subtitle={a.subtitle} />
+      <SavedList />
       <SegmentedControl
         className="mb-3"
         value={mode}
@@ -67,72 +70,57 @@ function AffordTool() {
           { value: 'monthly', label: a.modeMonthly },
         ]}
       />
-      {mode === 'purchase' ? <BigPurchase /> : <MonthlyCost />}
+      {mode === 'purchase' && (
+        <div className="mb-3">
+          <div className="mb-2 text-[12.5px] font-medium text-ink-soft">{a.whatBuying}</div>
+          <div className="flex flex-wrap gap-2">
+            {PURCHASE_KINDS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => setKind(k)}
+                className={clsx(
+                  'inline-flex items-center gap-1.5 rounded-full border py-1 pl-1.5 pr-3 text-[12.5px] font-medium transition',
+                  kind === k ? 'border-brand-200 bg-brand-50 text-ink' : 'border-line text-muted hover:text-ink',
+                )}
+              >
+                <Icon icon={TOOL_ICONS[k]} size={22} />
+                {a.kinds[k]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <SaveBar />
+      {mode === 'monthly' ? (
+        <MonthlyCost />
+      ) : kind === 'car' ? (
+        <CarTool />
+      ) : kind === 'home' ? (
+        <HomeTool />
+      ) : kind === 'trip' ? (
+        <TripTool />
+      ) : (
+        <ItemTool key={kind} kind={kind} />
+      )}
     </Card>
   );
 }
 
-type PurchaseKind = 'car' | 'home' | 'computer' | 'phone' | 'trip' | 'other';
-type OneOffKind = Exclude<PurchaseKind, 'car' | 'home'>;
-
-// ponytail: phone borrows the laptop picture until goal-phone.png exists (docs/icon-prompts.md).
-const PURCHASE_KINDS: { kind: PurchaseKind; icon: PictureName }[] = [
-  { kind: 'car', icon: 'goal-car' },
-  { kind: 'home', icon: 'goal-home' },
-  { kind: 'computer', icon: 'goal-laptop' },
-  { kind: 'phone', icon: 'goal-laptop' },
-  { kind: 'trip', icon: 'goal-plane' },
-  { kind: 'other', icon: 'goal-gift' },
-];
-
-/** Car and home get their own tools; the rest is a plain one-off, filed and paid by default like this. */
-const ONE_OFF_PRESETS: Record<OneOffKind, { slug: string; pay: 'now' | 'split' | 'save'; months: number }> = {
-  computer: { slug: 'electronics', pay: 'now', months: 12 },
-  phone: { slug: 'electronics', pay: 'now', months: 24 },
-  trip: { slug: 'holidays', pay: 'save', months: 12 },
-  other: { slug: 'large_one_off', pay: 'now', months: 12 },
-};
-
-function BigPurchase() {
-  const [kind, setKind] = useState<PurchaseKind>('car');
-  const a = useT().planning.afford;
-  return (
-    <>
-      <div className="mb-4">
-        <div className="mb-2 text-[12.5px] font-medium text-ink-soft">{a.whatBuying}</div>
-        <div className="flex flex-wrap gap-2">
-          {PURCHASE_KINDS.map((k) => (
-            <button
-              key={k.kind}
-              type="button"
-              aria-pressed={kind === k.kind}
-              onClick={() => setKind(k.kind)}
-              className={clsx(
-                'inline-flex items-center gap-1.5 rounded-full border py-1 pl-1.5 pr-3 text-[12.5px] font-medium transition',
-                kind === k.kind ? 'border-brand-200 bg-brand-50 text-ink' : 'border-line text-muted hover:text-ink',
-              )}
-            >
-              <Icon icon={k.icon} size={22} />
-              {a.kinds[k.kind]}
-            </button>
-          ))}
-        </div>
-      </div>
-      {kind === 'car' ? <CarTool /> : kind === 'home' ? <HomeTool /> : <OneOffPurchase key={kind} kind={kind} />}
-    </>
-  );
-}
+const PURCHASE_KINDS: PurchaseKind[] = ['car', 'home', 'computer', 'phone', 'trip', 'other'];
 
 function MonthlyCost() {
   const plan = useEffectivePlan();
   const now = useViewDate();
   const currency = useCurrency();
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState(0);
-  const [frequency, setFrequency] = useState<Frequency>('monthly');
-  const [category, setCategory] = useState<ExpenseCategory>('transport');
-  const [essential, setEssential] = useState<'essential' | 'optional'>('optional');
-  const [committed, setCommitted] = useState<'committed' | 'flexible'>('committed');
+  const field = useDraft('monthly');
+  const [name, setName] = field('name', '');
+  const [amount, setAmount] = field('amount', 0);
+  const [frequency, setFrequency] = field<Frequency>('frequency', 'monthly');
+  const [category, setCategory] = field<ExpenseCategory>('category', 'transport');
+  const [essential, setEssential] = field<'essential' | 'optional'>('essential', 'optional');
+  const [committed, setCommitted] = field<'committed' | 'flexible'>('committed', 'committed');
   const expenses = useExpenseSheet();
   const goalSheet = useGoalSheet();
   const t = useT();
@@ -210,251 +198,6 @@ function CategorySelect({ value, onValueChange }: { value: ExpenseCategory; onVa
       onValueChange={onValueChange}
       options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_META[c].label }))}
     />
-  );
-}
-
-const isoDay = (d: Date) => format(d, 'yyyy-MM-dd');
-
-type PurchaseLoan = 'personal' | 'other';
-const PURCHASE_LOANS: PurchaseLoan[] = ['personal', 'other'];
-
-/** Judged from today against the plan rolled forward, so it uses the live plan; the date starts in the viewed month. */
-function OneOffPurchase({ kind }: { kind: OneOffKind }) {
-  const plan = usePlan();
-  const viewDate = useViewDate();
-  const gov = useGovBondRate();
-  const currency = useCurrency();
-  const today = useMemo(() => new Date(), []);
-  const preset = ONE_OFF_PRESETS[kind];
-  const suggestion = suggestionBySlug(preset.slug)!;
-  const category = suggestion.category;
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState(0);
-  const [upTo, setUpTo] = useState(0);
-  const [running, setRunning] = useState(0);
-  const [date, setDate] = useState(() => isoDay(monthsAhead(today, viewDate) > 0 ? setDayOfMonth(viewDate, 15) : today));
-  const [pay, setPay] = useState(preset.pay);
-  const [loanKind, setLoanKind] = useState<PurchaseLoan>('personal');
-  /** Null follows the suggestion. */
-  const [down, setDown] = useState<number | null>(null);
-  const [months, setMonths] = useState(preset.months);
-  /** Null uses the typical rate for the loan type. */
-  const [apr, setApr] = useState<number | null>(null);
-  const [setupFee, setSetupFee] = useState(0);
-  const [monthlyFee, setMonthlyFee] = useState(0);
-  const expenses = useExpenseSheet();
-  const loans = useLoanSheet();
-  const goalSheet = useGoalSheet();
-  const t = useT();
-  const a = t.planning.afford;
-  const money = (n: number) => formatMoney(n, currency);
-  const label = name || (kind === 'other' ? t.planning.newExpense : a.kinds[kind]);
-
-  const when = useMemo(() => {
-    const d = parseISO(date);
-    return isValid(d) && d > today ? d : today;
-  }, [date, today]);
-  // A range is judged at its top; the low end gets its own line under the loan.
-  const price = Math.max(amount, upTo);
-  const isRange = upTo > amount && amount > 0;
-  const room = useMemo(() => purchaseImpact(plan, { amount: 0, date: when }, today, gov).room, [plan, when, today, gov]);
-  const rate = apr ?? typicalRate(loanKind, false);
-  const downAt = (p: number) => Math.min(p, down ?? suggestedDownPayment(room, p));
-  const loanAt = (p: number) => installment(p - downAt(p), months, rate, setupFee, monthlyFee);
-  const loan = loanAt(price);
-  const upfront = pay === 'split' ? downAt(price) : price;
-  const result = useMemo(() => (price > 0 ? purchaseImpact(plan, { amount: upfront, date: when }, today, gov) : null), [plan, price, upfront, when, today, gov]);
-
-  // Saving up needs at least a month; a purchase this month saves over a year instead.
-  const ahead = monthsAhead(today, when);
-  const saveMonths = ahead >= 1 ? ahead : 12;
-  const monthly = (pay === 'split' ? loan.monthly : pay === 'save' ? price / saveMonths : 0) + running;
-  const scenario = useMemo(
-    () =>
-      price > 0 && monthly > 0
-        ? runScenario(plan, { type: 'add_expense', name: label, amount: monthly, frequency: 'monthly', category, essential: false, committed: true }, today)
-        : null,
-    [plan, price, label, monthly, category, today],
-  );
-
-  const options = [
-    { id: 'now' as const, label: a.payNow, detail: money(price), extra: '' },
-    {
-      id: 'split' as const,
-      label: a.split,
-      detail: `${a.splitDetail(money(downAt(price)), money(loan.monthly))} · ${a.total(money(downAt(price) + loan.total))}`,
-      extra: loan.extra > 0.5 ? a.extraCost(money(loan.extra)) : '',
-    },
-    {
-      id: 'save' as const,
-      label: a.saveUp,
-      detail: `${a.perMonth(money(price / saveMonths))} ${a.saveBy(formatShortMonthYear(addMonths(today, saveMonths)))}`,
-      extra: '',
-    },
-  ];
-
-  return (
-    <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TextField label={a.whatIsIt} placeholder={a.kindPlaceholders[kind]} value={name} onChange={(e) => setName(e.target.value)} className="sm:col-span-2" />
-        <MoneyField label={a.amount} currency={currency} value={amount} onValueChange={setAmount} />
-        <MoneyField label={a.priceUpTo} hint={t.planning.allowance.optional} currency={currency} value={upTo} onValueChange={setUpTo} />
-        <DateField label={a.when} value={date} min={isoDay(today)} onChange={(e) => setDate(e.target.value)} />
-        <MoneyField label={a.running} hint={a.runningHint} currency={currency} value={running} onValueChange={setRunning} />
-      </div>
-      <div className="mt-4">
-        {result ? (
-          <div className="space-y-3">
-            <Callout tone={result.shortBy > 0 ? 'warning' : 'success'}>
-              {a.paidFrom(result.account, money(result.landingBefore), money(result.landingAfter))}
-              {result.shortBy > 0 && a.shortBy(result.account, money(result.shortBy), formatShortMonthYear(result.lowest.month))}
-              {isRange && a.rangeNote(money(price))}
-            </Callout>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              <DeltaTile label={a.landing(result.account)} before={money(result.landingBefore)} after={money(result.landingAfter)} change={-upfront} />
-              <DeltaTile
-                label={a.lowest(formatShortMonthYear(result.lowest.month))}
-                before={money(result.lowest.balance + upfront)}
-                after={money(result.lowest.balance)}
-                change={-upfront}
-              />
-              <DeltaTile
-                label={t.planning.deltas.essentialRunway}
-                before={formatMonths(result.runwayBefore)}
-                after={formatMonths(result.runwayAfter)}
-                change={result.runwayAfter - result.runwayBefore}
-              />
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-soft">
-              <span>
-                {!result.earliest ? a.notWithin : monthsAhead(today, result.earliest) <= 0 ? a.fitsNow : a.earliest(formatShortMonthYear(result.earliest))}
-              </span>
-              {result.earliest && monthsAhead(result.earliest, when) !== 0 && (
-                <Button size="sm" variant="secondary" onClick={() => setDate(isoDay(result.earliest! > today ? result.earliest! : today))}>
-                  {a.useDate}
-                </Button>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-line p-3">
-              <div className="text-[13px] font-medium text-ink">{a.waysToPay}</div>
-              <div className="mt-2 space-y-1">
-                {options.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    aria-pressed={pay === o.id}
-                    onClick={() => setPay(o.id)}
-                    className={clsx(
-                      'flex w-full items-baseline justify-between gap-3 rounded-lg border px-3 py-2 text-left text-[12.5px] transition',
-                      pay === o.id ? 'border-brand-200 bg-brand-50' : 'border-transparent hover:bg-page',
-                    )}
-                  >
-                    <span className="font-medium text-ink">{o.label}</span>
-                    <span className="tabular text-right text-ink-soft">
-                      {o.detail}
-                      {o.extra && <span className="block text-warning">{o.extra}</span>}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {pay === 'split' && (
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  <SelectField
-                    label={a.loanType}
-                    value={loanKind}
-                    onValueChange={setLoanKind}
-                    options={PURCHASE_LOANS.map((k) => ({ value: k, label: debtKindMeta(k).name }))}
-                  />
-                  <MoneyField
-                    label={a.downPayment}
-                    hint={down === null ? a.downSuggested(money(downAt(price))) : undefined}
-                    currency={currency}
-                    value={downAt(price)}
-                    onValueChange={(v) => setDown(Math.max(0, v))}
-                  />
-                  <TextField
-                    label={a.months}
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={months}
-                    onChange={(e) => setMonths(Math.max(1, Math.round(Number(e.target.value)) || 1))}
-                  />
-                  <TextField
-                    label={a.interest}
-                    hint={apr === null ? a.rateHint(formatPercent(rate / 100, 1)) : undefined}
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    placeholder={String(rate)}
-                    value={apr ?? ''}
-                    onChange={(e) => setApr(e.target.value === '' ? null : Math.max(0, Number(e.target.value) || 0))}
-                  />
-                  <MoneyField label={a.setupFee} currency={currency} value={setupFee} onValueChange={setSetupFee} />
-                  <MoneyField label={a.monthlyFee} currency={currency} value={monthlyFee} onValueChange={setMonthlyFee} />
-                  <div className="col-span-2 space-y-1 text-[12.5px] text-muted">
-                    {down !== null && (
-                      <Button size="sm" variant="secondary" onClick={() => setDown(null)}>
-                        {a.useSuggested}
-                      </Button>
-                    )}
-                    {isRange && <p>{a.lowEnd(money(amount), money(downAt(amount)), money(loanAt(amount).monthly))}</p>}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {scenario && (
-              <>
-                <p className="text-[12.5px] text-muted">
-                  {pay !== 'now' && a.forMonths(pay === 'split' ? months : saveMonths)} {running > 0 && a.runningNote(money(running))}
-                </p>
-                <ScenarioResults result={scenario} currency={currency} onEditGoal={goalSheet.openEdit} />
-              </>
-            )}
-
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[12.5px] text-muted">{a.goAhead}</p>
-              {pay === 'split' ? (
-                <Button
-                  size="sm"
-                  variant="soft"
-                  icon={Plus}
-                  onClick={() =>
-                    loans.openNew(loanKind, {
-                      name: label,
-                      balance: price - downAt(price),
-                      rate,
-                      payment: loan.monthly,
-                      frequency: 'monthly',
-                    })
-                  }
-                >
-                  {a.addLoan}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  variant="soft"
-                  icon={Plus}
-                  onClick={() =>
-                    expenses.openNew({ ...fromSuggestion(suggestion), occurrences: undefined, name: label, amount: price, frequency: 'once', nextDate: isoDay(when), essential: false, committed: true })
-                  }
-                >
-                  {a.addOneOff}
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <Callout tone="neutral">{a.enterAmount}</Callout>
-        )}
-      </div>
-      {expenses.sheet}
-      {loans.sheet}
-      {goalSheet.sheet}
-    </>
   );
 }
 

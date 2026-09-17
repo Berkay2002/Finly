@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyScenario, homeBuyingCosts, installment, maxAffordablePrice, mortgageMonthly, propertyFee, purchaseImpact, runScenario, suggestedDownPayment } from '../scenarios';
+import { applyScenario, drawFrom, fundingSources, homeBuyingCosts, installment, maxAffordablePrice, mortgageMonthly, propertyFee, purchaseImpact, runScenario, suggestedDownPayment } from '../scenarios';
 import { NOW, prdExamplePlan } from './fixtures';
 
 describe('add recurring expense (§18.19, §23)', () => {
@@ -206,5 +206,28 @@ describe('home purchase', () => {
   it('charges a house 0.75 % of three quarters of the price, up to the cap', () => {
     expect(propertyFee(1_000_000)).toBe(5625);
     expect(propertyFee(5_000_000)).toBe(10_425);
+  });
+});
+
+describe('fundingSources', () => {
+  it('lists savings by the purchase month with deposits, spare cash first and the buffer last', () => {
+    const plan = prdExamplePlan();
+    const sources = fundingSources(plan, new Date(NOW.getFullYear(), NOW.getMonth() + 3, 1), NOW);
+    expect(sources.map((s) => s.accountId)).toEqual(['a2', 'a4', 'a3']);
+    expect(sources.find((s) => s.accountId === 'a3')!.available).toBe(40000 + 3 * 2000);
+  });
+
+  it('takes the tax on the gain off an AF account', () => {
+    const plan = prdExamplePlan();
+    plan.accounts = [...plan.accounts, { id: 'af', name: 'AF', kind: 'af', balance: 50000, costBasis: 30000 }];
+    const af = fundingSources(plan, NOW, NOW).find((s) => s.accountId === 'af')!;
+    expect(af.tax).toBeCloseTo(6000);
+    expect(af.available).toBeCloseTo(44000);
+  });
+
+  it('draws in order until the amount is covered', () => {
+    const drawn = drawFrom([{ available: 100 }, { available: 50 }, { available: 80 }], 130);
+    expect(drawn.map((d) => d.amount)).toEqual([100, 30]);
+    expect(drawFrom([{ available: 100 }], -5)).toEqual([]);
   });
 });

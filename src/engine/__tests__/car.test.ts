@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { homeChargingPrice, runningCosts, vehicleTax } from '../car';
+import { carInfoUrl, homeElectricityPrice, maintenanceEstimate, runningCosts, vehicleTax } from '../car';
 import { NOW, prdExamplePlan } from './fixtures';
 
 describe('vehicleTax', () => {
@@ -10,6 +10,11 @@ describe('vehicleTax', () => {
 
   it('charges 11 kr per gram for an ethanol car', () => {
     expect(vehicleTax({ fuel: 'ethanol', co2: 131, firstRegistered: '2015-05' }, NOW).yearly).toBe(360 + 11 * 20);
+  });
+
+  it('taxes a self-charging petrol hybrid like petrol', () => {
+    const car = { co2: 110, firstRegistered: '2025-01' };
+    expect(vehicleTax({ ...car, fuel: 'petrol_hybrid' }, NOW)).toEqual(vehicleTax({ ...car, fuel: 'petrol' }, NOW));
   });
 
   it('adds malus for the first three years, then drops to the normal tax', () => {
@@ -45,9 +50,26 @@ describe('runningCosts', () => {
   });
 });
 
-describe('homeChargingPrice', () => {
+describe('homeElectricityPrice', () => {
   it('falls back to spot price plus energy tax without tariffs', () => {
-    expect(homeChargingPrice(prdExamplePlan(), 80)).toEqual({ krPerKwh: 1.25, source: 'spot' });
-    expect(homeChargingPrice(prdExamplePlan())).toBeNull();
+    expect(homeElectricityPrice(prdExamplePlan(), 80)).toEqual({ krPerKwh: 1.25, source: 'spot' });
+    expect(homeElectricityPrice(prdExamplePlan())).toBeNull();
+  });
+});
+
+describe('car estimates', () => {
+  it('links to car.info by plate', () => {
+    expect(carInfoUrl('abc 123')).toBe('https://www.car.info/sv-se/license-plate/S/ABC123');
+    expect(carInfoUrl('')).toBe('https://www.car.info/sv-se/');
+  });
+
+  it('sets aside more for an older car and more tyres for more driving', () => {
+    const at = new Date(2026, 8, 1);
+    const fresh = maintenanceEstimate({ fuel: 'petrol', firstRegistered: '2025-06', kmPerYear: 15000 }, at);
+    const old = maintenanceEstimate({ fuel: 'petrol', firstRegistered: '2015-06', kmPerYear: 15000 }, at);
+    expect(fresh).toEqual({ service: 4500, tyres: 4200, repairs: 0, yearly: 8700 });
+    expect(old.repairs).toBeGreaterThan(fresh.repairs);
+    expect(maintenanceEstimate({ fuel: 'electric', kmPerYear: 7500 }, at).service).toBeLessThan(fresh.service);
+    expect(maintenanceEstimate({ fuel: 'petrol', kmPerYear: 30000 }, at).tyres).toBeGreaterThan(fresh.tyres);
   });
 });

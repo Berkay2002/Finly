@@ -85,6 +85,7 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
   const copy = structuredClone(plan);
   copy.isSample = undefined;
   delete copy.avatar; // every closed month would otherwise carry its own copy of the picture
+  delete copy.scenarios; // what-ifs, not the month's figures
   copy.expenses = copy.expenses.map((e) => {
     const bill = e.actuals?.[month];
     const { actuals: _drop, ...rest } = e;
