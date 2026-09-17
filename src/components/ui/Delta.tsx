@@ -7,7 +7,8 @@ import { useT } from '@/i18n';
 function change(before: number | undefined, after: number): number | null {
   if (before === undefined || !Number.isFinite(before) || before === 0) return null;
   const c = (after - before) / Math.abs(before);
-  return Number.isFinite(c) ? c : null;
+  // Unchanged is not worth a "+0 %": the caller's fallback text says more.
+  return Number.isFinite(c) && Math.abs(c) >= 0.0005 ? c : null;
 }
 
 /**

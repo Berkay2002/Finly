@@ -1,10 +1,11 @@
 import { addMonths, differenceInCalendarMonths, startOfMonth } from 'date-fns';
 import { messages } from '@/i18n';
 import { amountSpread } from './amounts';
-import { debtFlow } from './debts';
+import { debtFlow, debtSchedule } from './debts';
 import { isIrregular, monthsPerPeriod } from './frequency';
+import { withMonthValue } from './history';
 import type { PlanMetrics } from './metrics';
-import { activeExpenses } from './metrics';
+import { activeExpenses, monthKeyOf } from './metrics';
 import type { GovBondRate } from './rates';
 import { savingsPots } from './savings';
 import { capitalTaxSummary, monthlyRate } from './tax/capital';
@@ -327,4 +328,79 @@ export function savingsProjection(
     });
   }
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Forward view: the plan as it should stand in a later month          */
+/* ------------------------------------------------------------------ */
+
+/** Whole months from the month of `from` to the month of `to`; 0 or less when `to` is not in a later month. */
+export function monthsAhead(from: Date, to: Date): number {
+  return differenceInCalendarMonths(startOfMonth(to), startOfMonth(from));
+}
+
+/**
+ * The plan as it should stand in the month of `to`, seen from `from` (today). Each month in between an
+ * account takes its monthly deposit, a goal saved outside any account takes its contribution, and a loan
+ * follows its repayment schedule (interest, then the payment). The return on savings is expected, not
+ * promised, so it is left out unless `withReturns` is set: then each account also grows by its return
+ * after tax. The months passed are written into the balance history so the tax on savings and the payoff
+ * sums see them. Unchanged when `to` is not in a later month than `from`.
+ */
+export function projectPlan(
+  plan: FinancialPlan,
+  from: Date,
+  to: Date,
+  gov?: GovBondRate,
+  { withReturns = false }: { withReturns?: boolean } = {},
+): FinancialPlan {
+  const n = monthsAhead(from, to);
+  if (n <= 0) return plan;
+  const keyAt = (i: number) => monthKeyOf(addMonths(startOfMonth(from), i));
+  const returns = withReturns ? accountReturns(plan, from, gov) : new Map<string, number>();
+
+  /** Runs `step` `n` times from `start`, recording each month's value and the starting value under today's month. */
+  const roll = (history: Record<string, number> | undefined, start: number, step: (v: number, i: number) => number) => {
+    let balances = history?.[keyAt(0)] === undefined ? withMonthValue(history, keyAt(0), start) : { ...history };
+    let value = start;
+    for (let i = 1; i <= n; i += 1) {
+      value = step(value, i);
+      balances = withMonthValue(balances, keyAt(i), value);
+    }
+    return { value, balances };
+  };
+
+  const accounts = plan.accounts.map((a) => {
+    const r = monthlyRate(returns.get(a.id) ?? 0);
+    const deposit = Math.max(0, a.monthlyDeposit ?? 0);
+    const { value, balances } = roll(a.balances, a.balance, (v) => v * (1 + r) + deposit);
+    return { ...a, balance: value, balances };
+  });
+
+  const goals = plan.goals.map((g) => {
+    if (g.linkedAccountId) return g;
+    const contribution = Math.max(0, g.monthlyContribution);
+    const { value, balances } = roll(g.balances, g.currentAmount, (v) => v + contribution);
+    return { ...g, currentAmount: value, balances };
+  });
+
+  const debts = plan.debts?.map((d) => {
+    const rows = debtSchedule(d, from, n);
+    const { value, balances } = roll(d.balances, d.balance, (_, i) => rows[i - 1]?.balance ?? d.balance);
+    return { ...d, balance: value, balances };
+  });
+
+  return { ...plan, accounts, goals, ...(debts ? { debts } : {}) };
+}
+
+/**
+ * The forecast (prognos) part of a later month: the return after tax the accounts are expected to have
+ * earned by the month of `to`, on top of what is put in. An expectation, not a promise, so it is shown
+ * beside net worth rather than counted in it. 0 when `to` is not in a later month.
+ */
+export function expectedReturnsBy(plan: FinancialPlan, from: Date, to: Date, gov?: GovBondRate): number {
+  if (monthsAhead(from, to) <= 0) return 0;
+  const grown = projectPlan(plan, from, to, gov, { withReturns: true }).accounts;
+  const saved = projectPlan(plan, from, to, gov).accounts;
+  return grown.reduce((sum, a, i) => sum + a.balance - saved[i].balance, 0);
 }

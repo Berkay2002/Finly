@@ -53,6 +53,7 @@ export default {
     loans: 'Loans',
     netWorth: 'Net worth',
     excludingCsn: (amount: string) => `${amount} excluding CSN`,
+    forecast: (amount: string) => `${amount} if savings grow as expected (forecast, not promised)`,
     totalAssets: 'Total assets',
   },
   goals: {

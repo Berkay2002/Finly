@@ -28,7 +28,7 @@ import type { Debt } from '@/engine/types';
 import { messages, useT } from '@/i18n';
 import { useRateOutlook } from '@/lib/rateOutlook';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot, useViewDate } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics, usePreviousMonth, usePreviousSnapshot, useViewDate } from '@/store/selectors';
 import { DEBT_ACCENT, DEBT_ICON, LoanEditor, useLoanSheet } from '@/components/forms/LoanEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -74,7 +74,8 @@ export function LoansPage() {
   const plan = useEffectivePlan();
   const m = useMetrics();
   const currency = useCurrency();
-  const prev = usePreviousSnapshot();
+  const prev = usePreviousMonth();
+  const closed = usePreviousSnapshot();
   const autoAdd = useAutoAdd();
   const loans = useLoanSheet();
   const now = useViewDate();
@@ -143,7 +144,7 @@ export function LoansPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title={t.page.yourLoans} subtitle={t.page.yourLoansSubtitle} />
-            <LoanEditor autoOpenAdd={autoAdd} previous={prev?.byDebt} />
+            <LoanEditor autoOpenAdd={autoAdd} previous={closed?.byDebt} />
           </Card>
 
           {m.debt.monthly > 0 && (

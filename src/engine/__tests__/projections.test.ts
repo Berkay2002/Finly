@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeMetrics } from '../metrics';
-import { allGoalProgress, goalProgress, monthOutlook, savingsProjection, upcomingExpenses } from '../projections';
-import type { SavingsGoal } from '../types';
+import { allGoalProgress, expectedReturnsBy, goalProgress, monthOutlook, monthsAhead, projectPlan, savingsProjection, upcomingExpenses } from '../projections';
+import type { Debt, SavingsGoal } from '../types';
 import { NOW, prdExamplePlan } from './fixtures';
 
 describe('upcomingExpenses (§18.10)', () => {
@@ -182,5 +182,90 @@ describe('ranges in the outlook', () => {
     // Regular spend is lifestyle minus the provision for irregular items; high adds 800 of spread.
     const sep = out[0];
     expect(sep.expectedHigh - sep.expected).toBe(800);
+  });
+});
+
+describe('projectPlan (a later month)', () => {
+  const csn: Debt = {
+    id: 'csn',
+    name: 'CSN',
+    kind: 'csn',
+    csnType: 'annuity',
+    balance: 440_000,
+    rate: 2.135,
+    payment: 4500,
+    frequency: 'quarterly',
+    nextDate: '2027-02-28',
+  };
+
+  it('is the plan itself for this month or an earlier one', () => {
+    const plan = prdExamplePlan();
+    expect(monthsAhead(NOW, NOW)).toBe(0);
+    expect(projectPlan(plan, NOW, NOW)).toBe(plan);
+    expect(projectPlan(plan, NOW, new Date(2026, 5, 1))).toBe(plan);
+  });
+
+  it('adds the deposit and return of each month to the accounts', () => {
+    const plan = prdExamplePlan();
+    const nov = projectPlan(plan, NOW, new Date(2026, 10, 1));
+    const by = Object.fromEntries(nov.accounts.map((a) => [a.id, a]));
+    expect(by.a1.balance).toBe(18500); // no deposit, no return
+    expect(by.a3.balance).toBe(40000 + 2 * 2000);
+    expect(by.a4.balance).toBe(110000 + 2 * 3000); // no expected return set
+    expect(by.a3.balances).toEqual({ '2026-09': 40000, '2026-10': 42000, '2026-11': 44000 });
+    expect(plan.accounts[2].balance).toBe(40000); // the live plan is untouched
+  });
+
+  it('leaves the expected return out of the balances: it is a forecast, not money in the bank', () => {
+    const plan = prdExamplePlan();
+    plan.accounts.push({ id: 'isk', name: 'ISK', kind: 'isk', balance: 50000, monthlyDeposit: 5500, expectedReturn: 6 });
+    const oct = projectPlan(plan, NOW, new Date(2026, 9, 1)).accounts.find((a) => a.id === 'isk')!;
+    expect(oct.balance).toBe(55500);
+    expect(expectedReturnsBy(plan, NOW, NOW)).toBe(0);
+  });
+
+  it('compounds the return after tax on an ISK when asked to', () => {
+    const plan = prdExamplePlan();
+    plan.accounts.push({ id: 'isk', name: 'ISK', kind: 'isk', balance: 50000, monthlyDeposit: 5500, expectedReturn: 6 });
+    const at = (to: Date) => projectPlan(plan, NOW, to, undefined, { withReturns: true }).accounts.find((a) => a.id === 'isk')!;
+    // The ISK's yearly tax is a small drag on 6 %; one month of it on 50 000 is under 250 kr.
+    const oct = at(new Date(2026, 9, 1));
+    expect(oct.balance).toBeGreaterThan(55500);
+    expect(oct.balance).toBeLessThan(55500 + 250);
+    expect(at(new Date(2027, 8, 1)).balance).toBeGreaterThan(50000 * 1.05 + 12 * 5500);
+    expect(expectedReturnsBy(plan, NOW, new Date(2026, 9, 1))).toBeCloseTo(oct.balance - 55500, 6);
+  });
+
+  it('adds the contribution to a goal saved outside any account', () => {
+    const plan = prdExamplePlan();
+    const jan = projectPlan(plan, NOW, new Date(2027, 0, 1));
+    expect(jan.goals.find((g) => g.id === 'g3')!.currentAmount).toBe(64000 + 4 * 1000);
+    expect(jan.goals.find((g) => g.id === 'g1')!.currentAmount).toBe(0); // linked: the account holds it
+  });
+
+  it('takes the payments off a loan as the months pass', () => {
+    const plan = prdExamplePlan();
+    plan.debts = [csn];
+    const balanceIn = (y: number, m0: number) => projectPlan(plan, NOW, new Date(y, m0, 1)).debts![0].balance;
+    const dec = balanceIn(2026, 11);
+    const mar = balanceIn(2027, 2);
+    // Repayment starts with the quarter ending in February 2027: until then only interest builds up.
+    expect(dec).toBeGreaterThan(440_000);
+    expect(mar).toBeLessThan(dec);
+    expect(dec - mar).toBeGreaterThan(4500 - 3 * ((dec * 0.02135) / 12)); // the quarter's payment less its interest
+    expect(plan.debts[0].balance).toBe(440_000);
+  });
+
+  it('keeps a loan with no rate at its balance', () => {
+    const plan = prdExamplePlan();
+    plan.debts = [{ ...csn, rate: undefined }];
+    expect(projectPlan(plan, NOW, new Date(2027, 5, 1)).debts![0].balance).toBe(440_000);
+  });
+
+  it('net worth in a later month counts the months in between', () => {
+    const plan = prdExamplePlan();
+    const today = computeMetrics(plan, NOW).position.netWorth;
+    const later = computeMetrics(projectPlan(plan, NOW, new Date(2026, 11, 1)), new Date(2026, 11, 1)).position.netWorth;
+    expect(later).toBe(today + 3 * (2000 + 3000));
   });
 });

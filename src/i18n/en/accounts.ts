@@ -41,6 +41,8 @@ export default {
     excludingCsnHint: 'Can be lowered if income drops, written off at death',
     ifSoldAfterTax: 'If sold today, after tax',
     ifSoldAfterTaxHint: 'Minus tax on AF gains and this year’s savings tax',
+    forecast: 'Forecast with expected returns',
+    forecastHint: 'If ISK, KF and cash grow as expected. An expectation, not a promise',
     allocation: 'Account allocation',
     addAccountsToSee: 'Add accounts to see how your money is spread.',
     currencyTotal: (currency: string) => `${currency} total`,

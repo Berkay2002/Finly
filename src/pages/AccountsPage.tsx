@@ -2,7 +2,7 @@ import { IconTile } from '@/components/ui/IconTile';
 import { formatMoney, formatMonths, formatPercent } from '@/engine/format';
 import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useEffectivePlan, useMetrics, usePreviousSnapshot } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useExpectedReturns, useMetrics, usePreviousMonth, usePreviousSnapshot } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
 import { SavingsTaxStrip } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -17,7 +17,9 @@ export function AccountsPage() {
   const plan = useEffectivePlan();
   const m = useMetrics();
   const currency = useCurrency();
-  const prev = usePreviousSnapshot();
+  const prev = usePreviousMonth();
+  const closed = usePreviousSnapshot();
+  const expectedReturns = useExpectedReturns();
   const autoAdd = useAutoAdd();
   const t = useT().accounts.page;
   const money = (n: number) => formatMoney(n, currency);
@@ -47,6 +49,7 @@ export function AccountsPage() {
     ...(hasNetWorth ? [{ label: t.netWorth, value: p.netWorth, hint: t.netWorthHint, strong: true }] : []),
     ...(p.csnDebt > 0 ? [{ label: t.excludingCsn, value: p.netWorthExcludingCsn, hint: t.excludingCsnHint }] : []),
     ...(p.netWorth - p.netWorthAfterTax >= 1 ? [{ label: t.ifSoldAfterTax, value: p.netWorthAfterTax, hint: t.ifSoldAfterTaxHint }] : []),
+    ...(expectedReturns >= 1 ? [{ label: t.forecast, value: (hasNetWorth ? p.netWorth : p.totalAssets) + expectedReturns, hint: t.forecastHint }] : []),
   ];
 
   return (
@@ -98,7 +101,7 @@ export function AccountsPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title={t.yourAccounts} subtitle={t.yourAccountsSubtitle} />
-            <AccountEditor autoOpenAdd={autoAdd} previous={prev?.byAccount} />
+            <AccountEditor autoOpenAdd={autoAdd} previous={closed?.byAccount} />
           </Card>
 
           <SavingsTaxStrip />

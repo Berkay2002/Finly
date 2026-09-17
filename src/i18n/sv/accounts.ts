@@ -42,6 +42,8 @@ export default {
     excludingCsnHint: 'Kan sättas ned om inkomsten sjunker, skrivs av vid dödsfall',
     ifSoldAfterTax: 'Om allt såldes i dag, efter skatt',
     ifSoldAfterTaxHint: 'Minus skatt på vinster i AF och årets skatt på sparande',
+    forecast: 'Prognos med förväntad avkastning',
+    forecastHint: 'Om ISK, KF och kontanter växer som väntat. En förväntan, inget löfte',
     allocation: 'Fördelning mellan konton',
     addAccountsToSee: 'Lägg till konton för att se hur dina pengar är fördelade.',
     currencyTotal: (currency) => `${currency} totalt`,

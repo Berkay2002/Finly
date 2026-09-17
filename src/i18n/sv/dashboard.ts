@@ -55,6 +55,7 @@ export default {
     loans: 'Lån',
     netWorth: 'Nettoförmögenhet',
     excludingCsn: (amount) => `${amount} utan CSN`,
+    forecast: (amount) => `${amount} om sparandet växer som väntat (prognos, inte garanterat)`,
     totalAssets: 'Totala tillgångar',
   },
   goals: {

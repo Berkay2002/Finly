@@ -14,7 +14,8 @@ import {
   useEffectivePlan,
   useMetrics,
   usePlan,
-  usePreviousSnapshot,
+  useExpectedReturns,
+  usePreviousMonth,
   useUpcoming,
   useViewDate,
 } from '@/store/selectors';
@@ -52,7 +53,8 @@ export function Dashboard() {
   const shown = useEffectivePlan();
   const m = useMetrics();
   const currency = useCurrency();
-  const prev = usePreviousSnapshot();
+  const prev = usePreviousMonth();
+  const expectedReturns = useExpectedReturns();
   const upcoming = useUpcoming(12).slice(0, 4);
   const now = useViewDate();
   const viewMonth = useUiStore((s) => s.viewMonth);
@@ -249,6 +251,11 @@ export function Dashboard() {
               <div className="text-[14px] font-semibold text-ink">{hasNetWorth ? d.position.netWorth : d.position.totalAssets}</div>
               {m.position.csnDebt > 0 && (
                 <div className="text-[11.5px] text-muted">{d.position.excludingCsn(money(m.position.netWorthExcludingCsn))}</div>
+              )}
+              {expectedReturns >= 1 && (
+                <div className="text-[11.5px] text-muted">
+                  {d.position.forecast(money((hasNetWorth ? m.position.netWorth : m.position.totalAssets) + expectedReturns))}
+                </div>
               )}
             </div>
             <span className="tabular shrink-0 text-[16px] font-bold text-ink">
