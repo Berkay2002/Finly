@@ -2,6 +2,7 @@ import { Pencil } from 'lucide-react';
 import type { ReactNode } from 'react';
 import clsx from 'clsx';
 import type { Accent } from '@/components/ui/accent';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { IconTile } from '@/components/ui/IconTile';
 import type { IconSource } from '@/components/ui/Icon';
 import { KebabMenu, type MenuItem } from '@/components/ui/Menu';
@@ -20,6 +21,8 @@ export function ItemRow({
   menu,
   className,
   onClick,
+  brand,
+  brandDomain,
 }: {
   icon: IconSource;
   accent: Accent;
@@ -29,6 +32,10 @@ export function ItemRow({
   menu?: MenuItem[];
   className?: string;
   onClick?: () => void;
+  /** A brand name; when set, the company logo takes the icon tile's place. */
+  brand?: string | null;
+  /** A picked brand domain; wins over `brand` since it pins the exact company. */
+  brandDomain?: string;
 }) {
   const t = useT();
   return (
@@ -52,7 +59,11 @@ export function ItemRow({
           onClick ? 'cursor-pointer' : 'cursor-default',
         )}
       >
-        <IconTile icon={icon} accent={accent} size="sm" />
+        {brand || brandDomain ? (
+          <BrandLogo name={brand ?? undefined} domain={brandDomain} size="sm" />
+        ) : (
+          <IconTile icon={icon} accent={accent} size="sm" />
+        )}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             <span className="truncate text-[13.5px] font-medium text-ink transition-colors group-hover/edit:text-brand-700">

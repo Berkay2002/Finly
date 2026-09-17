@@ -9,6 +9,7 @@ export default {
     `Importerade ${file}${closedMonths > 0 ? ` med ${closedMonths} ${plural(closedMonths, 'stängd månad', 'stängda månader')}` : ''}.`,
   importFailed: 'Filen kunde inte läsas.',
   notPlanFile: 'Det här är inte en planfil från Finly',
+  logosCredit: 'Logotyper från Logo.dev',
   profile: {
     title: 'Profil',
     name: 'Ditt namn',

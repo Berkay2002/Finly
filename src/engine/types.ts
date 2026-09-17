@@ -190,6 +190,8 @@ export interface ExpenseItem {
   tags: ExpenseTag[];
   /** e.g. a utility bundled into rent: kept visible but excluded from totals. */
   includedElsewhere?: boolean;
+  /** Company logo for subscriptions: the brand domain picked from search, rendered by Logo.dev. */
+  brandDomain?: string;
 }
 
 /**
@@ -296,6 +298,34 @@ export interface Account {
   fundShare?: number;
   /** AF: yearly dividend yield on the shares part, percent. Default 0. */
   dividendYield?: number;
+  /** ISK, KF, AF: what the account holds. When set, `balance` is derived: `cash` + the holdings at their last price. */
+  holdings?: Holding[];
+  /** Uninvested money on an account with holdings. */
+  cash?: number;
+}
+
+export type HoldingType = 'stock' | 'etf' | 'fund' | 'certificate';
+
+/** A position on an investment account, priced from Avanza or Nordnet (Yahoo as backup) by `usePriceRefresh`. */
+export interface Holding {
+  id: string;
+  /** Avanza's orderbook id, or `nn` + Nordnet's instrument id for funds only Nordnet lists. */
+  orderbookId: string;
+  /** For the Yahoo backup; filled in on the first price refresh. */
+  isin?: string;
+  name: string;
+  type: HoldingType;
+  /** The instrument's own currency; `avgPrice` and `price` are in it. */
+  currency: string;
+  quantity: number;
+  /** Average purchase price (GAV). */
+  avgPrice: number;
+  /** Last known price. */
+  price?: number;
+  /** One unit of `currency` in the plan currency at the last refresh. */
+  fx?: number;
+  /** ISO date the price last moved. */
+  priceAt?: string;
 }
 
 export type GoalKind = 'emergency' | 'general' | 'investment' | 'purchase' | 'pension' | 'custom';

@@ -46,6 +46,15 @@ describe('balance history', () => {
     expect(usePlanStore.getState().plan.accounts[0].balances).toEqual({ [thisMonth]: 100 });
   });
 
+  it('derives an account balance from its holdings and records it', () => {
+    const id = usePlanStore.getState().addAccount({ name: 'ISK', kind: 'isk', balance: 100 });
+    const holding = { id: 'h', orderbookId: '5247', name: 'Investor B', type: 'stock' as const, currency: 'SEK', quantity: 10, avgPrice: 350, price: 400, fx: 1 };
+    usePlanStore.getState().updateAccount(id, { holdings: [holding], cash: 50 });
+    expect(usePlanStore.getState().plan.accounts[0]).toMatchObject({ balance: 4050, balances: { [thisMonth]: 4050 } });
+    usePlanStore.getState().refreshHoldings({ quotes: { 5247: { price: 410 } }, fx: {} });
+    expect(usePlanStore.getState().plan.accounts[0]).toMatchObject({ balance: 4150, balances: { [thisMonth]: 4150 } });
+  });
+
   it('records goal progress under the current month', () => {
     const id = usePlanStore.getState().addGoal({
       name: 'Buffer',

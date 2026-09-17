@@ -8,6 +8,7 @@ export default {
     `Imported ${file}${closedMonths > 0 ? ` with ${closedMonths} closed ${plural(closedMonths, 'month', 'months')}` : ''}.`,
   importFailed: 'Could not read that file.',
   notPlanFile: 'Not a Finly plan file',
+  logosCredit: 'Logos provided by Logo.dev',
   profile: {
     title: 'Profile',
     name: 'Your name',

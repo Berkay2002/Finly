@@ -47,13 +47,16 @@ import {
   type Occurrences,
 } from '@/engine/types';
 import { messages, useT } from '@/i18n';
+import { brandedExpenseName } from '@/lib/brandLogo';
 import { useFoodPrices } from '@/lib/foodPrices';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
 import { HomeFields } from './HomeFields';
 import { HouseholdFoodEstimator } from './HouseholdFood';
+import { BrandPicker } from './BrandPicker';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { Button } from '@/components/ui/Button';
+import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Chip } from '@/components/ui/Chip';
 import { CATEGORY_ICON } from '@/components/ui/icons';
 import { CountField, DateField, MoneyField, SelectField, Switch, TextField, TogglePill } from '@/components/ui/fields';
@@ -234,11 +237,16 @@ export function ExpenseEditor({
     const ranged = varies(e);
     const notMonthly = !!e.occurrences || e.frequency !== 'monthly';
     const suggestion = suggestFromActuals(e);
+    const subscription = e.tags.includes('subscription');
+    const brandDomain = subscription ? e.brandDomain : undefined;
+    const brand = !brandDomain && subscription ? brandedExpenseName(e) : null;
     return (
       <ItemRow
         key={e.id}
         icon={Icon}
         accent={accent}
+        brand={brand}
+        brandDomain={brandDomain}
         title={expenseName(e)}
         onClick={() => setEditing({ ...e })}
         className={clsx(e.includedElsewhere && 'opacity-60')}
@@ -481,6 +489,9 @@ function ExpenseDetailForm({
         />
       )}
       <TextField label={tf.name} value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!draft.id} />
+      {draft.tags.includes('subscription') && (
+        <BrandPicker name={draft.name} domain={draft.brandDomain} onPick={(brandDomain) => set({ brandDomain })} />
+      )}
       <TextField
         label={tf.note}
         hint={tf.optionalHint}
@@ -1061,9 +1072,18 @@ function AddExpenseSheet({
 }) {
   const ta = useT().expenses.add;
   const [query, setQuery] = useState('');
+  const [preview, setPreview] = useState('');
   useEffect(() => {
-    if (open) setQuery('');
+    if (open) {
+      setQuery('');
+      setPreview('');
+    }
   }, [open]);
+  // The logo follows the typing at a delay, so each keystroke does not fetch an image.
+  useEffect(() => {
+    const timer = setTimeout(() => setPreview(query), 350);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const used = new Set(existing.map((e) => e.subcategory));
   const all = suggestionsFor(category);
@@ -1097,7 +1117,7 @@ function AddExpenseSheet({
         onClick={() => onCustom(query.trim())}
         className="mb-3 flex w-full items-center gap-2 rounded-xl border border-dashed border-brand-200 bg-brand-50/60 px-3 py-2.5 text-[13px] font-medium text-brand-700 hover:bg-brand-50"
       >
-        <Plus size={14} />
+        {preview.trim() ? <BrandLogo name={preview.trim()} size="xs" /> : <Plus size={14} />}
         {q ? ta.create(query.trim()) : ta.createCustom}
       </button>
 

@@ -6,6 +6,7 @@ import { applyCommute } from '@/engine/commute';
 import { migrateLegacyDebts } from '@/engine/debts';
 import { shareUsage, withTariffAmounts } from '@/engine/electricity';
 import { reconcilePriceLink, refreshPriceLinks, type PriceInputs } from '@/engine/priceLinks';
+import { applyQuotes, holdingsPatch, type QuoteResult } from '@/engine/holdings';
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
@@ -98,6 +99,8 @@ interface PlanState {
 
   /** Bring price-linked costs (food index, spot price) to the newest month. No-op when nothing is newer. */
   refreshPriceLinks: (inputs: PriceInputs) => void;
+  /** Move holdings to fresh prices; a no-op when nothing changed. */
+  refreshHoldings: (result: QuoteResult, today?: Date) => void;
 
   /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
   saveSnapshot: (month: string, today?: Date) => void;
@@ -186,6 +189,16 @@ export const usePlanStore = create<PlanState>()(
           const electricity = changed.filter((id) => expenses.find((e) => e.id === id)?.tariff);
           mutate((p) => ({ ...p, expenses: electricity.reduce(shareUsage, expenses) }));
         },
+        refreshHoldings: (result, today = new Date()) => {
+          const before = get().plan.accounts;
+          const accounts = applyQuotes(before, result, today.toISOString().slice(0, 10));
+          if (!accounts) return;
+          const month = monthKeyOf(today);
+          mutate((p) => ({
+            ...p,
+            accounts: accounts.map((a, i) => (a === before[i] ? a : { ...a, balances: withMonthValue(a.balances, month, a.balance) })),
+          }));
+        },
         removeExpense: (id) => mutate((p) => ({ ...p, expenses: p.expenses.filter((x) => x.id !== id) })),
         setExpenseActual: (id, month, amount) =>
           set((s) =>
@@ -215,8 +228,9 @@ export const usePlanStore = create<PlanState>()(
 
         addAccount: (draft) => {
           const id = draft.id ?? newId('acc');
-          const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), draft.balance);
-          mutate((p) => ({ ...p, accounts: [...p.accounts, { ...draft, id, balances }] }));
+          const account = { ...draft, ...holdingsPatch({ ...draft, id }) };
+          const balances = withMonthValue(draft.balances, monthKeyOf(new Date()), account.balance);
+          mutate((p) => ({ ...p, accounts: [...p.accounts, { ...account, id, balances }] }));
           return id;
         },
         updateAccount: (id, patch) =>
@@ -224,8 +238,9 @@ export const usePlanStore = create<PlanState>()(
             ...p,
             accounts: p.accounts.map((x) => {
               if (x.id !== id) return x;
-              const next = { ...x, ...patch };
-              if (typeof patch.balance === 'number') next.balances = withMonthValue(x.balances, monthKeyOf(new Date()), patch.balance);
+              const merged = { ...x, ...patch };
+              const next = 'holdings' in patch || 'cash' in patch ? { ...merged, ...holdingsPatch(merged) } : merged;
+              if (typeof patch.balance === 'number' || next.balance !== x.balance) next.balances = withMonthValue(x.balances, monthKeyOf(new Date()), next.balance);
               return next;
             }),
           })),

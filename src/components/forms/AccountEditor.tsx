@@ -1,6 +1,7 @@
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { formatMoney, formatNumber } from '@/engine/format';
+import { holdingsPatch } from '@/engine/holdings';
 import { goalForAccount, isSavingsAccount } from '@/engine/savings';
 import { capitalTaxSummary, SUGGESTED_RETURN, wrapperOf } from '@/engine/tax/capital';
 import { ACCOUNT_KINDS, accountKindMeta } from '@/engine/taxonomy';
@@ -13,6 +14,7 @@ import { Delta } from '@/components/ui/Delta';
 import { ACCOUNT_ACCENT, ACCOUNT_ICON } from '@/components/ui/icons';
 import { MoneyField, SelectField, TextField } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
+import { HoldingsEditor } from './HoldingsEditor';
 import { ItemRow } from './ItemRow';
 
 type Draft = Omit<Account, 'id'> & { id?: string };
@@ -75,6 +77,7 @@ export function AccountEditor({
               <>
                 {a.institution && <span>{a.institution}</span>}
                 <span>· {accountKindMeta(a.kind).label}</span>
+                {!!a.holdings?.length && <span>· {t.holdingCount(a.holdings.length)}</span>}
                 {wrapperOf(a.kind) === 'unknown' ? (
                   <span className="text-warning">{t.pickWrapper}</span>
                 ) : (
@@ -84,13 +87,19 @@ export function AccountEditor({
               </>
             }
             fields={
-              <MoneyField
-                size="sm"
-                currency={currency}
-                value={a.balance}
-                onValueChange={(balance) => updateAccount(a.id, { balance })}
-                className="min-w-0 flex-1 sm:w-40 sm:flex-none"
-              />
+              a.holdings?.length ? (
+                <span className="tabular min-w-0 flex-1 text-right text-[13.5px] font-medium text-ink sm:w-40 sm:flex-none">
+                  {formatMoney(a.balance, currency)}
+                </span>
+              ) : (
+                <MoneyField
+                  size="sm"
+                  currency={currency}
+                  value={a.balance}
+                  onValueChange={(balance) => updateAccount(a.id, { balance })}
+                  className="min-w-0 flex-1 sm:w-40 sm:flex-none"
+                />
+              )
             }
             menu={[
               { label: t.editDetails, icon: Pencil, onSelect: () => setEditing({ ...a }) },
@@ -151,8 +160,10 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
   const saves = isSavingsAccount(draft);
   const kinds = ACCOUNT_KINDS.filter((k) => !k.legacy || k.id === draft.kind);
 
+  const holdings = draft.holdings ?? [];
+  const derived = holdingsPatch({ ...draft, id: '' });
   // The draft in place of the saved account, so the tax preview shares the tax-free level with the other accounts.
-  const draftAccount: Account = { ...draft, id: draft.id ?? '__draft__' };
+  const draftAccount: Account = { ...draft, ...derived, id: draft.id ?? '__draft__' };
   const summary = capitalTaxSummary(
     { accounts: [...plan.accounts.filter((a) => a.id !== draft.id), draftAccount] },
     now,
@@ -186,12 +197,24 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
         value={draft.institution ?? ''}
         onChange={(e) => onChange({ ...draft, institution: e.target.value })}
       />
-      <MoneyField
-        label={t.currentBalance}
-        currency={currency}
-        value={draft.balance}
-        onValueChange={(balance) => onChange({ ...draft, balance })}
-      />
+      {holdings.length > 0 ? (
+        <MoneyField label={t.totalValue} hint={t.totalValueHint} currency={currency} value={draftAccount.balance} onValueChange={() => {}} disabled />
+      ) : (
+        <MoneyField
+          label={t.currentBalance}
+          currency={currency}
+          value={draft.balance}
+          onValueChange={(balance) => onChange({ ...draft, balance })}
+        />
+      )}
+      {invests && (
+        <HoldingsEditor
+          holdings={holdings}
+          cash={draft.cash ?? 0}
+          currency={currency}
+          onChange={(patch) => onChange({ ...draft, ...patch, ...(patch.holdings?.length === 0 ? { holdings: undefined, cash: undefined } : {}) })}
+        />
+      )}
 
       {(invests || saves || INTEREST_KINDS.includes(draft.kind)) && (
         <div className="grid grid-cols-2 gap-3">
@@ -225,7 +248,20 @@ function AccountFields({ draft, onChange }: { draft: Draft; onChange: (d: Draft)
         <p className="-mt-2 text-[12px] text-muted">{goal ? t.goalOnSavings(goal.name) : t.onSavings}</p>
       )}
 
-      {wrapper === 'af' && (
+      {wrapper === 'af' && holdings.length > 0 && (
+        <>
+          <p className="-mt-2 text-[12px] text-muted">{t.derivedFromHoldings}</p>
+          <MoneyField
+            label={t.dividendYield}
+            hint={t.shares}
+            currency="%"
+            value={draft.dividendYield ?? 0}
+            disabled={(draftAccount.fundShare ?? 100) >= 100}
+            onValueChange={(v) => onChange({ ...draft, dividendYield: v > 0 ? v : undefined })}
+          />
+        </>
+      )}
+      {wrapper === 'af' && holdings.length === 0 && (
         <>
           <MoneyField
             label={t.costBasis}

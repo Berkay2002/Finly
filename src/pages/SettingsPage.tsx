@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatMoney, formatMonthKey, formatMonthYear } from '@/engine/format';
 import { isFrozen } from '@/engine/history';
+import { logoDevEnabled } from '@/lib/brandLogo';
 import { downloadText, readFileText } from '@/lib/download';
 import { usePlanStore } from '@/store/planStore';
 import { parsePlanFile, serializePlanFile } from '@/store/planFile';
@@ -216,6 +217,14 @@ export function SettingsPage() {
           <p className="mt-3 text-[12px] text-muted">{t.settings.demo.exportFirst}</p>
         </Card>
       </div>
+
+      {logoDevEnabled() && (
+        <p className="mt-6 text-[12px] text-muted">
+          <a href="https://logo.dev" target="_blank" className="hover:text-brand-700 hover:underline">
+            {t.settings.logosCredit}
+          </a>
+        </p>
+      )}
     </div>
   );
 }

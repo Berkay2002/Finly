@@ -42,6 +42,24 @@ Create the key with `npx convex deployment token create vercel --prod` and store
 A live check of the protocol against the deployment in `.env.local` (two devices, conflict, throttle,
 tamper, delete) runs with `FINLY_E2E=1 npx vitest run src/sync/__tests__/e2e.test.ts`.
 
+### Company logos (optional)
+
+Expenses tagged as subscriptions show the company's logo: a preview pops up while typing a custom
+name in the add-expense sheet, and saved rows carry the logo. Lookups go by brand name to
+[Logo.dev](https://www.logo.dev); unknown names get a monogram. The app runs without it and keeps
+the regular icons.
+
+Set `VITE_LOGO_DEV_PUBLISHABLE_KEY` in `.env.local` and in Vercel's project environment for
+production. The publishable key is safe in client code; it only unlocks logo images, which count
+against the free tier's monthly requests. The free tier asks for a visible link back, shown on
+the Settings page whenever logos are enabled.
+
+Picking the exact company (instead of the best name guess) needs Logo.dev's Search API: set
+`LOGO_DEV_SECRET_KEY` in Vercel's environment and the edit sheet lists matching companies to choose
+from, proxied through `/api/logo-search` so the secret key never reaches the browser. Without it the
+sheet quietly falls back to a name-only preview. Locally, serverless functions only run under
+`vercel dev`, not plain `npm run dev`.
+
 ## How it is put together
 
 - `src/engine/` is a pure TypeScript calculation engine with no React dependency. Every number on the dashboard is a function of the `FinancialPlan`. It is fully unit-tested.
