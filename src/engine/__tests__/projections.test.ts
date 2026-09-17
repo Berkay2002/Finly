@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeMetrics } from '../metrics';
 import { allGoalProgress, expectedReturnsBy, goalProgress, monthOutlook, monthsAhead, projectPlan, savingsProjection, upcomingExpenses } from '../projections';
 import type { Debt, SavingsGoal } from '../types';
-import { NOW, prdExamplePlan } from './fixtures';
+import { expense, NOW, prdExamplePlan } from './fixtures';
 
 describe('upcomingExpenses (§18.10)', () => {
   const plan = prdExamplePlan();
@@ -209,7 +209,7 @@ describe('projectPlan (a later month)', () => {
     const plan = prdExamplePlan();
     const nov = projectPlan(plan, NOW, new Date(2026, 10, 1));
     const by = Object.fromEntries(nov.accounts.map((a) => [a.id, a]));
-    expect(by.a1.balance).toBe(18500); // no deposit, no return
+    expect(by.a2.balance).toBe(72000); // no deposit, no return
     expect(by.a3.balance).toBe(40000 + 2 * 2000);
     expect(by.a4.balance).toBe(110000 + 2 * 3000); // no expected return set
     expect(by.a3.balances).toEqual({ '2026-09': 40000, '2026-10': 42000, '2026-11': 44000 });
@@ -234,6 +234,36 @@ describe('projectPlan (a later month)', () => {
     expect(oct.balance).toBeLessThan(55500 + 250);
     expect(at(new Date(2027, 8, 1)).balance).toBeGreaterThan(50000 * 1.05 + 12 * 5500);
     expect(expectedReturnsBy(plan, NOW, new Date(2026, 9, 1))).toBeCloseTo(oct.balance - 55500, 6);
+  });
+
+  it('keeps what each month leaves over on the salary account', () => {
+    const plan = prdExamplePlan();
+    const room = computeMetrics(plan, NOW).breathingRoom;
+    expect(room).toBeGreaterThan(0);
+    plan.expenses.push(expense({ id: 'sofa', name: 'Sofa', category: 'home', amount: 7000, frequency: 'once', nextDate: '2026-11-10' }));
+    const salary = (to: Date) => projectPlan(plan, NOW, to).accounts.find((a) => a.id === 'a1')!.balance;
+    expect(salary(new Date(2026, 9, 1))).toBeCloseTo(18500 + room, 6);
+    expect(salary(new Date(2026, 10, 1))).toBeCloseTo(18500 + 2 * room - 7000, 6);
+  });
+
+  it('lands the leftover on the first everyday account when there is no salary account', () => {
+    const plan = prdExamplePlan();
+    plan.accounts[0] = { ...plan.accounts[0], kind: 'everyday' };
+    plan.accounts.push({ id: 'a5', name: 'Joint', kind: 'joint', balance: 5000 });
+    const room = computeMetrics(plan, NOW).breathingRoom;
+    const oct = projectPlan(plan, NOW, new Date(2026, 9, 1));
+    expect(oct.accounts[0].balance).toBeCloseTo(18500 + room, 6);
+    expect(oct.accounts.find((a) => a.id === 'a5')!.balance).toBe(5000);
+  });
+
+  it('adds an everyday account to land on when the plan has none', () => {
+    const plan = prdExamplePlan();
+    plan.accounts = plan.accounts.filter((a) => a.id !== 'a1');
+    const room = computeMetrics(plan, NOW).breathingRoom;
+    const oct = projectPlan(plan, NOW, new Date(2026, 9, 1));
+    expect(oct.accounts).toHaveLength(plan.accounts.length + 1);
+    expect(oct.accounts.at(-1)).toMatchObject({ id: 'acc_everyday', kind: 'everyday', balance: room });
+    expect(plan.accounts.find((a) => a.kind === 'everyday')).toBeUndefined();
   });
 
   it('adds the contribution to a goal saved outside any account', () => {
@@ -264,8 +294,8 @@ describe('projectPlan (a later month)', () => {
 
   it('net worth in a later month counts the months in between', () => {
     const plan = prdExamplePlan();
-    const today = computeMetrics(plan, NOW).position.netWorth;
+    const { breathingRoom, position } = computeMetrics(plan, NOW);
     const later = computeMetrics(projectPlan(plan, NOW, new Date(2026, 11, 1)), new Date(2026, 11, 1)).position.netWorth;
-    expect(later).toBe(today + 3 * (2000 + 3000));
+    expect(later).toBeCloseTo(position.netWorth + 3 * (2000 + 3000 + breathingRoom), 6);
   });
 });

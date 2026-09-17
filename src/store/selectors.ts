@@ -39,8 +39,8 @@ export function useFrozenMonth(): { key: string; frozen: boolean; snapshot?: Met
 /**
  * The plan every number on screen is computed from: frozen for a closed month, live for the running
  * month, and for a later month the live plan rolled forward (see `projectPlan`): deposits added to each
- * account, contributions to each goal, and loan payments taken off each loan. Expected returns are not
- * in it; `useExpectedReturns` has those as a forecast.
+ * account, contributions to each goal, loan payments taken off each loan, and each month's leftover kept
+ * on the salary account. Expected returns are not in it; `useExpectedReturns` has those as a forecast.
  */
 export function useEffectivePlan(): FinancialPlan {
   const live = usePlan();

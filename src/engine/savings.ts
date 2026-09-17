@@ -1,4 +1,4 @@
-import { accountRole, goalKindMeta, type AccountRole } from './taxonomy';
+import { accountKindMeta, accountRole, goalKindMeta, type AccountRole } from './taxonomy';
 import type { Account, FinancialPlan, GoalKind, SavingsGoal } from './types';
 
 /**
@@ -18,6 +18,21 @@ export const SAVINGS_ROLES: readonly AccountRole[] = ['cash_savings', 'emergency
 
 export function isSavingsAccount(a: Pick<Account, 'kind'>): boolean {
   return SAVINGS_ROLES.includes(accountRole(a.kind));
+}
+
+/** Id of the everyday account added when a plan has none, the same on every device so syncing does not double it. */
+export const DEFAULT_EVERYDAY_ACCOUNT_ID = 'acc_everyday';
+
+/** The account the pay lands in and each month's leftover stays on: the salary account, else the first everyday one. */
+export function landingAccount(plan: Pick<FinancialPlan, 'accounts'>): Account | undefined {
+  return plan.accounts.find((a) => a.kind === 'salary') ?? plan.accounts.find((a) => accountRole(a.kind) === 'everyday');
+}
+
+/** The plan with an everyday account (balance 0) when it has none, so the money coming in has somewhere to land. */
+export function ensureLandingAccount(plan: FinancialPlan): FinancialPlan {
+  if (landingAccount(plan)) return plan;
+  const account: Account = { id: DEFAULT_EVERYDAY_ACCOUNT_ID, name: accountKindMeta('everyday').label, kind: 'everyday', balance: 0 };
+  return { ...plan, accounts: [...plan.accounts, account] };
 }
 
 const KIND_OF_ROLE: Partial<Record<AccountRole, GoalKind>> = { emergency: 'emergency', investment: 'investment' };

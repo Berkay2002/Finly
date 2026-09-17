@@ -9,7 +9,7 @@ import { reconcilePriceLink, refreshPriceLinks, type PriceInputs } from '@/engin
 import { applyHome } from '@/engine/home';
 import { buildSnapshot, monthsToClose, withMonthValue, type MetricsSnapshot, type SnapshotMap } from '@/engine/history';
 import { monthKeyOf } from '@/engine/metrics';
-import { accountPot, migrateLinkedGoals, type SavingsPot } from '@/engine/savings';
+import { accountPot, ensureLandingAccount, migrateLinkedGoals, type SavingsPot } from '@/engine/savings';
 import type {
   Account,
   Commute,
@@ -341,7 +341,7 @@ export const usePlanStore = create<PlanState>()(
 
 /** Brings a plan saved by an older version up to the current shape. Idempotent. */
 export function normalizePlan(plan: FinancialPlan): FinancialPlan {
-  return migrateLinkedGoals(migrateLegacyDebts({ ...plan, debts: Array.isArray(plan.debts) ? plan.debts : [] }));
+  return ensureLandingAccount(migrateLinkedGoals(migrateLegacyDebts({ ...plan, debts: Array.isArray(plan.debts) ? plan.debts : [] })));
 }
 
 /** Closed months' frozen plans get the linked-goal migration, so their savings read the same way. */

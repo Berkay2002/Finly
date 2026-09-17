@@ -5,9 +5,9 @@ import { debtFlow, debtSchedule } from './debts';
 import { isIrregular, monthsPerPeriod } from './frequency';
 import { withMonthValue } from './history';
 import type { PlanMetrics } from './metrics';
-import { activeExpenses, monthKeyOf } from './metrics';
+import { activeExpenses, computeMetrics, monthKeyOf, typicalAmount } from './metrics';
 import type { GovBondRate } from './rates';
-import { savingsPots } from './savings';
+import { ensureLandingAccount, landingAccount, savingsPots } from './savings';
 import { capitalTaxSummary, monthlyRate } from './tax/capital';
 import { debtName, expenseName } from './taxonomy';
 import type { ExpenseItem, FinancialPlan, SavingsGoal } from './types';
@@ -342,22 +342,36 @@ export function monthsAhead(from: Date, to: Date): number {
 /**
  * The plan as it should stand in the month of `to`, seen from `from` (today). Each month in between an
  * account takes its monthly deposit, a goal saved outside any account takes its contribution, and a loan
- * follows its repayment schedule (interest, then the payment). The return on savings is expected, not
- * promised, so it is left out unless `withReturns` is set: then each account also grows by its return
- * after tax. The months passed are written into the balance history so the tax on savings and the payoff
- * sums see them. Unchanged when `to` is not in a later month than `from`.
+ * follows its repayment schedule (interest, then the payment). What is left of the income after costs and
+ * savings (the breathing room) stays on the landing account, added if the plan has none; a shortfall
+ * draws it down. A dated one-off is taken off in its month instead of a twelfth every month. The return on savings is expected, not promised, so it is left out unless `withReturns`
+ * is set: then each account also grows by its return after tax. The months passed are written into the
+ * balance history so the tax on savings and the payoff sums see them. Unchanged when `to` is not in a
+ * later month than `from`.
  */
 export function projectPlan(
-  plan: FinancialPlan,
+  source: FinancialPlan,
   from: Date,
   to: Date,
   gov?: GovBondRate,
   { withReturns = false }: { withReturns?: boolean } = {},
 ): FinancialPlan {
   const n = monthsAhead(from, to);
-  if (n <= 0) return plan;
+  if (n <= 0) return source;
+  const plan = ensureLandingAccount(source);
   const keyAt = (i: number) => monthKeyOf(addMonths(startOfMonth(from), i));
   const returns = withReturns ? accountReturns(plan, from, gov) : new Map<string, number>();
+  const landing = landingAccount(plan)!;
+  const metrics = computeMetrics(plan, from, gov);
+  const oneOffs = activeExpenses(plan).filter((e) => e.frequency === 'once' && e.nextDate);
+  const oneOffIds = new Set(oneOffs.map((e) => e.id));
+  // The month's cost carries a twelfth of each dated one-off; here it is paid in full in its month instead.
+  const room = metrics.breathingRoom + metrics.expenses.lines.filter((l) => oneOffIds.has(l.id)).reduce((s, l) => s + l.monthly, 0);
+  /** What the month leaves on the landing account. */
+  const leftover = (i: number) => {
+    const key = keyAt(i);
+    return room - oneOffs.filter((e) => e.nextDate!.slice(0, 7) === key).reduce((s, e) => s + typicalAmount(e), 0);
+  };
 
   /** Runs `step` `n` times from `start`, recording each month's value and the starting value under today's month. */
   const roll = (history: Record<string, number> | undefined, start: number, step: (v: number, i: number) => number) => {
@@ -373,7 +387,8 @@ export function projectPlan(
   const accounts = plan.accounts.map((a) => {
     const r = monthlyRate(returns.get(a.id) ?? 0);
     const deposit = Math.max(0, a.monthlyDeposit ?? 0);
-    const { value, balances } = roll(a.balances, a.balance, (v) => v * (1 + r) + deposit);
+    const keeps = a.id === landing.id;
+    const { value, balances } = roll(a.balances, a.balance, (v, i) => v * (1 + r) + deposit + (keeps ? leftover(i) : 0));
     return { ...a, balance: value, balances };
   });
 
