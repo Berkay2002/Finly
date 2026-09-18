@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { monthlySpread } from '@/engine/amounts';
-import { amountForMonthly, gapTarget, SPEND_GROUP_META, spendEntryFor, spendHistory, type SpendNudge, type SpendSummary } from '@/engine/everyday';
+import { amountForMonthly, gapTarget, SPEND_GROUP_META, spendEntryFor, spendGroupOf, spendHistory, type SpendNudge, type SpendSummary } from '@/engine/everyday';
 import { formatDate, formatMoney, formatMonthKey, formatNumber } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { expenseName } from '@/engine/taxonomy';
@@ -145,6 +145,10 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
   const isoToday = `${todayKey}-${String(today.getDate()).padStart(2, '0')}`;
   const over = (sm.spent ?? 0) > sm.expectedByNow;
   const title = group === 'food' ? t.food : meta.label;
+  const fromBank = spendEntryFor(spend, key)?.source === 'bank';
+  // The group's total is its items (groceries, restaurants, ...) plus what the bank sorted straight into the group.
+  const items = fromBank ? plan.expenses.filter((e) => spendGroupOf(e) === group && (e.actuals?.[key] ?? 0) > 0).map((e) => ({ id: e.id, name: expenseName(e), amount: e.actuals![key] })) : [];
+  const rest = Math.round(((sm.spent ?? 0) - items.reduce((sum, i) => sum + i.amount, 0)) * 100) / 100;
 
   return (
     <Card>
@@ -173,7 +177,23 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
           setEverydaySpend(group, key, amount > 0 ? (running ? { amount, asOf: isoToday } : { amount }) : null)
         }
       />
-      {spendEntryFor(spend, key)?.source === 'bank' && (
+      {fromBank && items.length > 0 && (
+        <dl className="tabular mt-2 space-y-1 text-[12.5px]">
+          {items.map((i) => (
+            <div key={i.id} className="flex justify-between gap-3">
+              <dt className="text-muted">{i.name}</dt>
+              <dd className="text-ink">{money(i.amount)}</dd>
+            </div>
+          ))}
+          {rest > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted">{t.rest(title)}</dt>
+              <dd className="text-ink">{money(rest)}</dd>
+            </div>
+          )}
+        </dl>
+      )}
+      {fromBank && (
         <Link to={`/bank?group=${group}&month=${key}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
           {t.seeBank}
         </Link>

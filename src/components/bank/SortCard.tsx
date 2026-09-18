@@ -5,7 +5,7 @@ import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
 import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
-import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
+import { SPEND_GROUP_META, SPEND_GROUPS, spendGroupOf } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
@@ -163,7 +163,14 @@ export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBi
   const person = !!mobileKey(party);
   // A payee with a rule already is usually changed for these lines only (one shop for a party), so that is the default.
   const ruled = !!plan.bank?.merchants?.[merchant.key];
-  const guessed = !!current && !ruled && merchant.lines[0]?.class === 'spend' && !plan.bank?.lines?.[merchant.lines[0].id ?? ''];
+  // Placed by Finly's own list or a bill's name, not by anything the user said.
+  const first = merchant.lines[0];
+  const onItem = first?.class === 'expense' ? plan.expenses.find((e) => e.id === first.expenseId) : undefined;
+  const guessed =
+    !!current &&
+    !ruled &&
+    !plan.bank?.lines?.[first?.id ?? ''] &&
+    (first?.class === 'spend' || (!!onItem && !(onItem.bankMatch && normalizeParty(onItem.bankMatch.counterparty) === normalizeParty(party))));
   const [remember, setRemember] = useState(!person && !ruled);
 
   const options: { value: Choice; label: string }[] = [
@@ -195,7 +202,12 @@ export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBi
       const e = plan.expenses.find((x) => x.id === id);
       // A bill has one payee. One it already knows (or a Klarna mark) is kept; another store, or a person, is these lines only.
       const taken = e?.bankMatch && normalizeParty(e.bankMatch.counterparty) !== normalizeParty(party);
-      if (!remember || taken) {
+      if (!remember) {
+        for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { expenseId: id });
+      } else if (e && spendGroupOf(e)) {
+        // Groceries has many stores: the payee is remembered on its own, not as the item's one payee.
+        setMerchantRule(merchant.key, { expenseId: id });
+      } else if (taken) {
         for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { expenseId: id });
       } else {
         // A fixed bill the bank shows at another amount than planned (a family plan shared with friends) is learnt at what the bank shows.

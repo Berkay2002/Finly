@@ -1,5 +1,5 @@
 import { spendGroupOf } from './everyday';
-import { bundledGroup, passThroughBrand } from './merchants';
+import { bundledGroup, bundledItem, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
 import { mobileKey } from './vcard';
 import { savingsPots } from './savings';
@@ -312,8 +312,12 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       applyRule(tx, { expenseId: bill.id });
       continue;
     }
+    // A chain Finly knows goes on the plan's item for it (ICA on groceries, Foodora on takeaway) when there is one, else its group.
+    const slug = bundledItem(tx.merchantKey!);
+    const item = slug ? expenses.find((e) => e.subcategory === slug) : undefined;
     const group = bundledGroup(tx.merchantKey!);
-    if (group) applyRule(tx, { group });
+    if (item) applyRule(tx, { expenseId: item.id });
+    else if (group) applyRule(tx, { group });
   }
   // A line placed on an everyday item (groceries, restaurants) is that group's spending too: the group total is what the month runs on.
   const groupOfItem = new Map(expenses.map((e) => [e.id, spendGroupOf(e)]));

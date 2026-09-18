@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { lentOut, partyLabel, spentOf, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { lentOut, partyLabel, spentOf, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney, formatMonthKey } from '@/engine/format';
 import { expenseName } from '@/engine/taxonomy';
@@ -13,7 +13,7 @@ import { InRow, Row } from '@/components/bank/SortCard';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
-import { SelectField, TextField } from '@/components/ui/fields';
+import { SelectField, Switch, TextField } from '@/components/ui/fields';
 
 type Place = 'all' | 'unsorted' | SpendGroup | 'bills' | 'transfers' | 'people' | 'ignored' | 'in';
 
@@ -54,6 +54,7 @@ export function BankPaymentsPage() {
   const [params] = useSearchParams();
   const [place, setPlace] = useState<Place>((params.get('group') as Place | null) ?? 'all');
   const [search, setSearch] = useState('');
+  const [byPayee, setByPayee] = useState(false);
 
   // A change here places lines at once instead of at the next read from the bank.
   useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
@@ -77,6 +78,8 @@ export function BankPaymentsPage() {
       (!needle || partyLabel(tx, contacts).toLowerCase().includes(needle) || (tx.description ?? '').toLowerCase().includes(needle)),
   );
   const counted = Math.round(rows.reduce((sum, tx) => sum + spentOf(tx), 0) * 100) / 100;
+  // One row a payee, its lines together, to set where it goes once; money in and statements stay one to a line.
+  const payees = byPayee ? toSort(rows, '', contacts, true) : undefined;
 
   const places: { value: Place; label: string }[] = [
     { value: 'all', label: t.page.all },
@@ -107,10 +110,12 @@ export function BankPaymentsPage() {
           <SelectField label={t.page.month} size="sm" value={month} onValueChange={setMonth} options={months.map((m) => ({ value: m, label: formatMonthKey(m) }))} className="w-40" />
           <SelectField label={t.page.place} size="sm" value={place} onValueChange={setPlace} options={places} className="w-44" />
           <TextField label={t.page.search} value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1 sm:max-w-xs" />
+          <Switch checked={byPayee} onChange={setByPayee} description={t.page.byPayee} />
         </div>
         <p className="tabular mb-1 text-[12.5px] text-muted">{t.page.summary(rows.length, formatMoney(counted, currency))}</p>
         {rows.length ? (
           <ul className="divide-y divide-line">
+            {payees?.map((m) => <Row key={m.key} merchant={m} onAddBill={expenses.openNew} />)}
             {rows.map((tx) =>
               tx.amount > 0 ? (
                 tx.class === 'unsorted' && tx.id ? (
@@ -120,7 +125,7 @@ export function BankPaymentsPage() {
                 )
               ) : tx.class === 'statement' ? (
                 <Plain key={tx.id ?? `${tx.date}${tx.amount}`} tx={tx} label={t.page.statement} />
-              ) : (
+              ) : payees ? null : (
                 <Row key={tx.id ?? `${tx.date}${tx.amount}`} merchant={single(tx)} onAddBill={expenses.openNew} />
               ),
             )}

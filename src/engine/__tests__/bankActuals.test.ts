@@ -255,12 +255,24 @@ describe('money out', () => {
     const groceries = expense({ id: 'groceries', name: 'Groceries', amount: 4000, category: 'living', subcategory: 'groceries', fixed: false });
     const bank = { provider: 'p', appId: 'x', sessions: [], merchants: { ICANARASTR: { expenseId: 'groceries' } } };
     const out = classifyTransactions(
-      [tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' }), tx({ id: 'b', amount: -30, date: '2026-09-11', kind: 'card', counterparty: 'HEMKOP NORRK' })],
-      { income: [], expenses: [groceries], bank },
+      [tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' }), tx({ id: 'b', amount: -30, date: '2026-09-11', kind: 'card', counterparty: 'KIOSKEN AB' })],
+      { income: [], expenses: [groceries], bank: { ...bank, merchants: { ...bank.merchants, KIOSKENAB: { group: 'food' } } } },
       OWN,
     );
     expect(out[0]).toMatchObject({ class: 'expense', expenseId: 'groceries', group: 'food' });
     expect(spendByMonth(out, new Date(2026, 8, 16)).food['2026-09']).toMatchObject({ amount: 880 });
+    expect(billsByMonth(out)).toEqual({ groceries: { '2026-09': 850 } });
+  });
+
+  it('a chain Finly knows lands on the plan item for it, so groceries and restaurants keep their own bills', () => {
+    const groceries = expense({ id: 'groceries', name: 'Groceries', amount: 4000, category: 'living', subcategory: 'groceries', fixed: false });
+    const out = classifyTransactions(
+      [tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'HEMKOP NORRK' }), tx({ id: 'b', amount: -129, date: '2026-09-11', kind: 'card', counterparty: 'MAX BURGERS' })],
+      { income: [], expenses: [groceries], bank: { provider: 'p', appId: 'x', sessions: [] } },
+      OWN,
+    );
+    expect(out[0]).toMatchObject({ class: 'expense', expenseId: 'groceries', group: 'food' });
+    expect(out[1]).toMatchObject({ class: 'spend', group: 'food' });
     expect(billsByMonth(out)).toEqual({ groceries: { '2026-09': 850 } });
   });
 

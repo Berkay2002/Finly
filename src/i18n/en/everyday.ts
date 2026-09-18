@@ -46,6 +46,7 @@ export default {
     updated: (date: string) => `(updated ${date})`,
     fromBank: '(from your bank)',
     seeBank: 'See the bank payments behind this',
+    rest: (title: string) => `Other ${title.toLowerCase()}`,
     dayOf: (day: number, days: number) => `Day ${day} of ${days}, expected by now`,
     planned: 'Planned',
     plannedForMonth: 'Planned for the month',

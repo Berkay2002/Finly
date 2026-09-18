@@ -162,6 +162,7 @@ export default {
     month: 'Månad',
     place: 'Visar',
     search: 'Sök mottagare',
+    byPayee: 'En rad per mottagare',
     all: 'Allt',
     unsorted: 'Inte sorterat än',
     bills: 'Räkningar',

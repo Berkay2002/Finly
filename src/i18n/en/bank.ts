@@ -160,6 +160,7 @@ export default {
     month: 'Month',
     place: 'Showing',
     search: 'Search payee',
+    byPayee: 'One row a payee',
     all: 'Everything',
     unsorted: 'Not sorted yet',
     bills: 'Bills',

@@ -47,6 +47,7 @@ export default {
     updated: (date) => `(uppdaterat ${date})`,
     fromBank: '(från din bank)',
     seeBank: 'Se bankbetalningarna bakom',
+    rest: (title) => `Övrigt inom ${title.toLowerCase()}`,
     dayOf: (day, days) => `Dag ${day} av ${days}, väntat hittills`,
     planned: 'Planerat',
     plannedForMonth: 'Planerat för månaden',
