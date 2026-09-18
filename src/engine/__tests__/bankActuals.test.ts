@@ -52,7 +52,7 @@ describe('internal transfers', () => {
   });
 
   it('a transfer to a place the plan has an account at is between own accounts, even with no IBAN', () => {
-    const plan = { income: [], accounts: [{ id: 'isk', name: 'ISK', institution: 'Avanza', kind: 'isk' as const, balance: 0 }] };
+    const plan = { income: [], accounts: [{ id: 'isk', name: 'ISK', institutionDomain: 'avanza.se', kind: 'isk' as const, balance: 0 }] };
     const [avanza, klarna] = classifyTransactions(
       [tx({ amount: -3000, date: '2026-08-27', kind: 'transfer', counterparty: 'AVANZA BANK' }), tx({ amount: -1200, date: '2026-08-26', kind: 'transfer', counterparty: 'K*KLARNA' })],
       plan,
@@ -98,8 +98,24 @@ describe('money out', () => {
       plan(),
       OWN,
     );
-    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['expense', 'el'], ['expense', 'spotify'], ['unsorted', undefined], ['unsorted', undefined]]);
-    expect(billsByMonth(out)).toEqual({ el: { '2026-09': 1043 }, spotify: { '2026-09': 129 } });
+    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['expense', 'el'], ['expense', 'spotify'], ['unsorted', undefined], ['expense', 'el']]);
+    expect(billsByMonth(out)).toEqual({ el: { '2026-09': 2086 }, spotify: { '2026-09': 129 } });
+  });
+
+  it('a bill payment of exactly the amount of one item is that item, whatever the payee is called', () => {
+    const rent = expense({ id: 'rent', name: 'Rent', amount: 4760, fixed: true });
+    const groceries = expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4800, fixed: false });
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -4760, date: '2026-08-25', kind: 'transfer', counterparty: 'HELLESEN-HANSEN MATS & C' }),
+        tx({ id: 'b', amount: -4760, date: '2026-08-26', kind: 'card', counterparty: 'ELGIGANTEN' }),
+        tx({ id: 'c', amount: -4700, date: '2026-08-27', kind: 'transfer', counterparty: 'SOMEONE ELSE' }),
+        tx({ id: 'd', amount: -219, date: '2026-08-25', kind: 'card', counterparty: 'SPOTIFY P460' }),
+      ],
+      { income: [], expenses: [rent, groceries, expense({ id: 'spotify', name: 'Spotify', amount: 219, fixed: true })] },
+      OWN,
+    );
+    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['expense', 'rent'], ['unsorted', undefined], ['unsorted', undefined], ['expense', 'spotify']]);
   });
 
   it('a choice for the line beats the payee rule, which beats the bundled list', () => {
@@ -133,6 +149,7 @@ describe('money out', () => {
       { income: [], expenses: [fortum] },
       OWN,
     );
+    expect(toSort(out).map((m) => [m.key, !!m.hint])).toEqual([['EONKUNDSUPPORT', true], ['NETFLIXCOM', true], ['KKLARNA', false], ['STADIUMOUTL', false]]);
     const by = Object.fromEntries(toSort(out).map((m) => [m.key, m.lines]));
     expect(recurringHint(by.EONKUNDSUPPORT)).toEqual({ amount: 1043, day: 1, fixed: false, bill: true });
     expect(recurringHint(by.NETFLIXCOM)).toEqual({ amount: 129, day: 25, fixed: true, bill: false });
@@ -157,6 +174,7 @@ describe('money out', () => {
       ['KKLARNA', 1, 1200, true],
       ['STADIUMOUTL', 2, 500, false],
     ]);
+    expect(toSort(out, '2026-09-11').map((m) => m.key)).toEqual(['STADIUMOUTL']);
   });
 });
 

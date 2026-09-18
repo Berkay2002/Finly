@@ -1,5 +1,6 @@
 import { bundledGroup, isPassThrough } from './merchants';
 import { monthKeyOf } from './metrics';
+import { isEverydaySpend } from './taxonomy';
 import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
 /**
@@ -134,7 +135,13 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
   } else tx.class = rule.action === 'transfer' ? 'internal_transfer' : 'ignored';
 }
 
-/** The bill a payment is for, by what was learnt about the payee, or by name on a plain bill payment. */
+const BILL_KINDS: ReadonlySet<BankTxKind | undefined> = new Set<BankTxKind>(['payment', 'direct_debit', 'transfer', 'credit_transfer']);
+
+/**
+ * The bill a payment is for: by what was learnt about the payee, by the item's name on any line, or,
+ * on a bill payment (not a card purchase), by being the one fixed item with exactly that amount, the
+ * way rent goes to a landlord's name that the plan never mentions.
+ */
 function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undefined {
   const key = tx.merchantKey ?? '';
   const paid = -tx.amount;
@@ -144,8 +151,12 @@ function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undef
     return e.fixed ? closeTo(paid, e.amount) : true;
   });
   if (learnt) return learnt;
-  if (tx.kind !== 'payment' && tx.kind !== 'direct_debit') return undefined;
-  return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)));
+  const byName = expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, e.amount)));
+  if (byName) return byName;
+  if (!BILL_KINDS.has(tx.kind) || bundledGroup(key)) return undefined;
+  // Fixed items only: a variable bill near another's amount would be taken for it and then remembered.
+  const byAmount = expenses.filter((e) => e.fixed && !isEverydaySpend(e) && paid === e.amount);
+  return byAmount.length === 1 ? byAmount[0] : undefined;
 }
 
 export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: OwnAccount[]): ClassifiedTx[] {
@@ -153,7 +164,9 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
   const accountOf = new Map(own.map((o) => [o.externalId, o.accountId]));
   const out: ClassifiedTx[] = txs.map((tx) => ({ ...tx, class: 'unsorted', merchantKey: merchantKey(tx) }));
   const booked = out.filter((tx) => !tx.pending);
-  const institutions = (plan.accounts ?? []).map((a) => normalizeParty(a.institution)).filter((s) => s.length >= 3);
+  const institutions = (plan.accounts ?? [])
+    .flatMap((a) => [normalizeParty(a.institution), normalizeParty(a.institutionDomain?.replace(/^www\./, '').split('.')[0])])
+    .filter((s) => s.length >= 4);
   const expenses = (plan.expenses ?? []).filter((e) => !e.includedElsewhere);
 
   // Between the user's own accounts: named by the bank, the same sum leaving one and reaching another,
@@ -265,13 +278,18 @@ export interface MerchantToSort {
   /** Klarna and the like: each line is placed on its own, nothing is remembered for the payee. */
   passThrough: boolean;
   lines: ClassifiedTx[];
+  /** Set when the payee looks like a monthly bill the plan does not have. */
+  hint?: RecurringHint;
 }
 
-/** Money out nobody has placed, by payee, biggest first. */
-export function toSort(classified: ClassifiedTx[]): MerchantToSort[] {
+/**
+ * Money out nobody has placed, by payee: likely bills first, then biggest first. `since` leaves out
+ * lines too old to change any month the bank still writes.
+ */
+export function toSort(classified: ClassifiedTx[], since = ''): MerchantToSort[] {
   const by = new Map<string, MerchantToSort>();
   for (const tx of classified) {
-    if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted') continue;
+    if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
     const key = tx.merchantKey ?? '';
     const m = by.get(key) ?? { key, label: tx.counterparty ?? tx.description ?? '', count: 0, total: 0, lastDate: tx.date, passThrough: isPassThrough(key), lines: [] };
     m.count += 1;
@@ -280,7 +298,8 @@ export function toSort(classified: ClassifiedTx[]): MerchantToSort[] {
     m.lines.push(tx);
     by.set(key, m);
   }
-  return [...by.values()].sort((a, b) => b.total - a.total);
+  for (const m of by.values()) if (!m.passThrough) m.hint = recurringHint(m.lines);
+  return [...by.values()].sort((a, b) => Number(!!b.hint) - Number(!!a.hint) || b.total - a.total);
 }
 
 export interface RecurringHint {

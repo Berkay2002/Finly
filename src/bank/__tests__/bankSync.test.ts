@@ -125,7 +125,7 @@ describe('syncBank', () => {
     ));
     await syncBank({ force: true });
     const plan = () => usePlanStore.getState().plan;
-    expect(plan().expenses.find((e) => e.id === el)!.actuals).toEqual({ [month]: 1043 });
+    expect(plan().expenses.find((e) => e.id === el)!).toMatchObject({ actuals: { [month]: 1043 }, bankMatch: { counterparty: 'FORTUM MARKETS AB' } });
     expect(plan().everydaySpend?.food?.[month]).toEqual({ amount: 850, asOf: day(today.getDate()), source: 'bank' });
     expect(plan().everydaySpend?.leisure?.[month]).toEqual({ amount: 499, asOf: day(today.getDate()), source: 'bank' });
     expect(plan().everydaySpend?.transport?.[month]).toEqual({ amount: 300 });

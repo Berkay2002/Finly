@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { billsByMonth, classifyTransactions, mergeWindow, receivedByMonth, spendByMonth, type BankTx, type ClassifiedTx, type OwnAccount } from '@/engine/bankActuals';
 import { SPEND_GROUPS } from '@/engine/everyday';
+import { isPassThrough } from '@/engine/merchants';
 import { monthKeyOf } from '@/engine/metrics';
 import { usePlanStore } from '@/store/planStore';
 import { useSyncStore } from '@/sync/syncStore';
@@ -56,6 +57,12 @@ export function reconcileSpending(now: Date = new Date()): void {
   if (!Object.values(useBankStore.getState().txs).some((list) => list.length)) return;
   const classified = classifiedTxs();
   const months = [monthKeyOf(now), monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1))];
+  // A bill recognised by name or amount is remembered by its payee, so it is still found when the amount moves.
+  for (const tx of classified) {
+    if (tx.class !== 'expense' || !tx.expenseId || isPassThrough(tx.merchantKey ?? '')) continue;
+    const item = usePlanStore.getState().plan.expenses.find((e) => e.id === tx.expenseId);
+    if (item && !item.bankMatch) usePlanStore.getState().updateExpense(item.id, { bankMatch: { counterparty: tx.counterparty ?? tx.description ?? '' } });
+  }
   const bills = billsByMonth(classified);
   for (const item of usePlanStore.getState().plan.expenses) {
     for (const month of months) {

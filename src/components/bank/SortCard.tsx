@@ -6,6 +6,7 @@ import { useBankStore } from '@/bank/bankStore';
 import { recurringHint, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
+import { monthKeyOf } from '@/engine/metrics';
 import { expenseName } from '@/engine/taxonomy';
 import type { LineChoice, SpendGroup } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -31,13 +32,17 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
 
   const merchants = useMemo(
-    () => toSort(classifiedTxs()),
+    () => {
+      // Only this month and the last: what is older changes nothing the bank still writes.
+      const now = new Date();
+      return toSort(classifiedTxs(), `${monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1))}-01`);
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifiedTxs reads both stores
     [txs, plan],
   );
   if (!merchants.length) return null;
 
-  const count = merchants.reduce((n, m) => n + m.count, 0);
+  const count = merchants.reduce((n, m) => n + (m.passThrough ? m.count : 1), 0);
   const names = merchants.map((m) => m.label);
 
   return (
@@ -95,7 +100,7 @@ function Row({ merchant, line, onAddBill }: { merchant: MerchantToSort; line?: C
   const { setMerchantRule, setLineChoice, updateExpense } = usePlanStore();
   const [remember, setRemember] = useState(!merchant.passThrough);
   const lines = line ? [line] : merchant.lines;
-  const hint = recurringHint(lines, line ? Math.abs(line.amount) : undefined);
+  const hint = line ? recurringHint(merchant.lines, Math.abs(line.amount)) : merchant.hint;
 
   const options: { value: Choice; label: string }[] = [
     ...(hint ? [{ value: 'new' as const, label: t.addBill }] : []),
