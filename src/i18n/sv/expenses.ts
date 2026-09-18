@@ -99,6 +99,8 @@ export default {
     paidVia: 'Betalas via',
     paidViaBank: 'Mitt konto eller kort',
     paidViaHint: 'En faktura från Klarna eller PayPal samlar allt som köpts den månaden. Markerar du det här kan banken bekräfta det från fakturan.',
+    sharedBy: 'Delas med',
+    sharedByHint: 'De som swishar dig sin andel, bland dem som betalat dig förut. En andel räknas då bara när den kommer från någon av dem.',
     sharedWith: 'Andra som betalar tillbaka till dig',
     sharedWithHint: 'För en familjeplan du betalar och delar. Låt beloppet vara din egen andel. Bankraden väntas på allas andelar tillsammans, och pengar in på ungefär en andel från vem som helst räknas som deras.',
     calculatedAmount: 'Beräknat belopp',

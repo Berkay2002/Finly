@@ -202,6 +202,12 @@ describe('money out', () => {
     const out = classifyTransactions(lines, { income: [], expenses: [spotify] }, OWN);
     expect(out.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'expense', 'unsorted']);
     expect(billsByMonth(out)).toEqual({ spotify: { '2026-09': 36.5 } });
+
+    // Named people: only they count, one share each a month, however many others send the same amount.
+    const named = { ...spotify, sharedWith: undefined, sharedBy: ['702330253', '731234567'] };
+    const more = [...lines, tx({ id: 's1b', amount: 36.5, date: '2026-09-20', kind: 'swish', counterparty: '46702330253' })];
+    const byName = classifyTransactions(more, { income: [], expenses: [named] }, OWN);
+    expect(byName.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'expense', 'unsorted', 'unsorted']);
   });
 
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {

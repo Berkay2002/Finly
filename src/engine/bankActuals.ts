@@ -182,9 +182,14 @@ function splitStatements(statements: ClassifiedTx[], expenses: ExpenseItem[]): v
   }
 }
 
+/** How many others pay a share of a bill: the people named, else the number given. */
+function sharerCount(e: Pick<ExpenseItem, 'sharedWith' | 'sharedBy'>): number {
+  return e.sharedBy?.length || e.sharedWith || 0;
+}
+
 /** What the bank shows for a bill: the person's share times everyone paying it. */
-function fullAmount(e: Pick<ExpenseItem, 'amount' | 'sharedWith'>): number {
-  return e.amount * ((e.sharedWith ?? 0) + 1);
+function fullAmount(e: Pick<ExpenseItem, 'amount' | 'sharedWith' | 'sharedBy'>): number {
+  return e.amount * (sharerCount(e) + 1);
 }
 
 /**
@@ -203,12 +208,16 @@ function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undef
   return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, fullAmount(e))));
 }
 
-/** The payee for showing: a Swish line carries a phone number, shown as the person's name when `names` has it, else the way Swedes write one. */
+/** A person by mobile number: their name when `names` has it, else the number the way Swedes write one. */
+export function personLabel(key: string, names?: Record<string, string>): string {
+  return names?.[key] ?? `0${key.slice(0, 2)}-${key.slice(2, 5)} ${key.slice(5, 7)} ${key.slice(7)}`;
+}
+
+/** The payee for showing: a Swish line carries a phone number, shown as the person. */
 export function partyLabel(tx: Pick<BankTx, 'counterparty' | 'description'>, names?: Record<string, string>): string {
   const raw = (tx.counterparty ?? tx.description ?? '').trim();
   const key = mobileKey(raw);
-  if (!key) return raw;
-  return `Swish · ${names?.[key] ?? `0${key.slice(0, 2)}-${key.slice(2, 5)} ${key.slice(5, 7)} ${key.slice(7)}`}`;
+  return key ? `Swish · ${personLabel(key, names)}` : raw;
 }
 
 export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: OwnAccount[]): ClassifiedTx[] {
@@ -316,18 +325,31 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       tx.class = 'ignored';
     } else if (rule && 'expenseId' in rule && rule.amount !== undefined && closeTo(tx.amount, rule.amount)) applyRule(tx, rule);
   }
-  // A bill shared with others: money in of about one share is a share, up to as many a month as there are others.
-  const shared = expenses.filter((e) => (e.sharedWith ?? 0) > 0 && e.amount > 0);
+  // A bill shared with others: money in of about one share is a share. From the people named, one each a
+  // month; with only a count, from anyone, up to that many a month.
+  const shared = expenses.filter((e) => sharerCount(e) > 0 && e.amount > 0);
   if (shared.length) {
     const shares = new Map<string, number>();
-    const keyOf = (id: string, date: string) => `${id}:${date.slice(0, 7)}`;
-    for (const tx of booked) if (tx.amount > 0 && tx.class === 'expense' && tx.expenseId) shares.set(keyOf(tx.expenseId, tx.date), (shares.get(keyOf(tx.expenseId, tx.date)) ?? 0) + 1);
+    const bump = (k: string) => shares.set(k, (shares.get(k) ?? 0) + 1);
+    const count = (tx: ClassifiedTx, id: string) => {
+      const m = `${id}:${tx.date.slice(0, 7)}`;
+      bump(m);
+      const person = mobileKey(tx.counterparty);
+      if (person) bump(`${m}:${person}`);
+    };
+    for (const tx of booked) if (tx.amount > 0 && tx.class === 'expense' && tx.expenseId) count(tx, tx.expenseId);
     for (const tx of booked) {
       if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
-      const e = shared.find((s) => closeTo(tx.amount, s.amount) && (shares.get(keyOf(s.id, tx.date)) ?? 0) < s.sharedWith!);
+      const person = mobileKey(tx.counterparty);
+      const e = shared.find((s) => {
+        if (!closeTo(tx.amount, s.amount)) return false;
+        const m = `${s.id}:${tx.date.slice(0, 7)}`;
+        if (s.sharedBy?.length) return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
+        return (shares.get(m) ?? 0) < sharerCount(s);
+      });
       if (!e) continue;
       applyRule(tx, { expenseId: e.id });
-      shares.set(keyOf(e.id, tx.date), (shares.get(keyOf(e.id, tx.date)) ?? 0) + 1);
+      count(tx, e.id);
     }
   }
   return out;

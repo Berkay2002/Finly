@@ -58,13 +58,15 @@ import { HouseholdFoodEstimator } from './HouseholdFood';
 import { BrandPicker } from './BrandPicker';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
-import { normalizeParty } from '@/engine/bankActuals';
+import { normalizeParty, personLabel } from '@/engine/bankActuals';
+import { mobileKey } from '@/engine/vcard';
+import { useBankStore } from '@/bank/bankStore';
 import { PASS_THROUGH_LABEL, passThroughBrand } from '@/engine/merchants';
 import { Button } from '@/components/ui/Button';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Chip } from '@/components/ui/Chip';
 import { CATEGORY_ICON } from '@/components/ui/icons';
-import { CountField, DateField, MoneyField, SelectField, Switch, TextField, TogglePill } from '@/components/ui/fields';
+import { CountField, DateField, Label, MoneyField, SelectField, Switch, TextField, TogglePill } from '@/components/ui/fields';
 import { Sheet } from '@/components/ui/Sheet';
 import { ItemRow } from './ItemRow';
 
@@ -184,6 +186,54 @@ export function fromSuggestion(s: ExpenseSuggestion): Draft {
 }
 
 /** "Klarna" or "PayPal" when this item is paid through one of them. */
+/**
+ * Who pays a share of this back. The people who have Swished the person before are offered by name
+ * (from the contacts on this device) or number; with no bank lines to pick from, a count does.
+ */
+function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'sharedWith' | 'sharedBy'>; set: (patch: Partial<ExpenseItem>) => void }) {
+  const tf = useT().expenses.form;
+  const txs = useBankStore((s) => s.txs);
+  const contacts = useBankStore((s) => s.contacts);
+  const chosen = draft.sharedBy ?? [];
+  const people = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const tx of Object.values(txs).flat()) {
+      const key = tx.amount > 0 && !tx.pending ? mobileKey(tx.counterparty) : undefined;
+      if (key && (!seen.has(key) || seen.get(key)! < tx.date)) seen.set(key, tx.date);
+    }
+    const keys = [...seen.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([k]) => k);
+    return [...new Set([...chosen, ...keys])];
+  }, [txs, chosen]);
+  if (!people.length) {
+    return <CountField label={tf.sharedWith} hint={tf.sharedWithHint} min={0} value={draft.sharedWith ?? 0} onValueChange={(n) => set({ sharedWith: n > 0 ? Math.floor(n) : undefined })} />;
+  }
+  const toggle = (key: string) => {
+    const next = chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key];
+    set({ sharedBy: next.length ? next : undefined, sharedWith: next.length || undefined });
+  };
+  return (
+    <div>
+      <Label hint={tf.sharedByHint}>{tf.sharedBy}</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {people.map((key) => {
+          const on = chosen.includes(key);
+          return (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggle(key)}
+              className={clsx('rounded-full border px-3 py-1 text-[12.5px] transition', on ? 'border-brand-solid bg-brand-50 text-brand-700' : 'border-line text-muted hover:bg-page')}
+            >
+              {personLabel(key, contacts)}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function paidVia(e: Pick<ExpenseItem, 'bankMatch'>): string | undefined {
   const brand = passThroughBrand(normalizeParty(e.bankMatch?.counterparty));
   return brand && PASS_THROUGH_LABEL[brand];
@@ -528,9 +578,7 @@ function ExpenseDetailForm({
         onValueChange={(brand) => set({ bankMatch: brand ? { counterparty: brand } : undefined })}
         options={[{ value: '', label: tf.paidViaBank }, ...(['KLARNA', 'PAYPAL'] as const).map((b) => ({ value: b, label: PASS_THROUGH_LABEL[b] }))]}
       />
-      {draft.tags.includes('subscription') && (
-        <CountField label={tf.sharedWith} hint={tf.sharedWithHint} min={0} value={draft.sharedWith ?? 0} onValueChange={(n) => set({ sharedWith: n > 0 ? Math.floor(n) : undefined })} />
-      )}
+      {draft.tags.includes('subscription') && <SharedWith draft={draft} set={set} />}
       {draft.bankMatch && !paidVia(draft) && (
         <div className="flex items-center justify-between gap-3 text-[12.5px] text-muted">
           <span>{t.bank.income.recognised(draft.bankMatch.counterparty)}</span>

@@ -76,6 +76,8 @@ export default {
     paidVia: 'Paid through',
     paidViaBank: 'My account or card',
     paidViaHint: 'A Klarna or PayPal statement bundles everything bought that month. Marking this lets the bank confirm it from the statement.',
+    sharedBy: 'Shared with',
+    sharedByHint: 'The people who Swish you their share, from those who have paid you before. A share is then only counted when it comes from one of them.',
     sharedWith: 'Others paying you back',
     sharedWithHint: 'For a family plan you pay and split. Keep the amount as your own share. The bank line is expected at everyone\'s shares together, and money in of about one share from anyone counts as theirs.',
     calculatedAmount: 'Calculated amount',

@@ -229,6 +229,8 @@ export interface ExpenseItem {
    * share; the bank shows the whole bill, and money in of about a share from anyone is a share.
    */
   sharedWith?: number;
+  /** The people themselves, by mobile number (see `mobileKey`), when known: then a share comes only from them, one each a month, and `sharedWith` is their count. */
+  sharedBy?: string[];
 }
 
 /**
