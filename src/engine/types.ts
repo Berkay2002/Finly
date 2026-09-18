@@ -332,14 +332,16 @@ export interface BankSession {
 }
 
 /** What a payee's lines are, once the user has said: everyday spending in a group, a bill, money between own accounts, or nothing to count. */
-export type MerchantRule = { group: SpendGroup } | { expenseId: string } | { action: 'ignore' | 'transfer' };
+/** `amount` on a bill rule: only lines of about that size, which tells a friend's monthly share of a bill from anything else they send. */
+export type MerchantRule = { group: SpendGroup } | { expenseId: string; amount?: number } | { action: 'ignore' | 'transfer' };
 
 /** One line sorted on its own, for payees that carry different things each time (Klarna, PayPal). */
 /**
  * `potId`: moved into that savings pot (see `savingsPots`), a transfer, not spending. `lent`: bought for
- * someone else, counted as spent until it comes back. `repays`: money in that pays a lent line back.
+ * someone else, counted as spent until it comes back. `settled`: lent, nothing more coming; the rest was own spending.
+ * `repays`: money in that pays a lent line back. `expenseId` on money in: someone's share of that bill.
  */
-export type LineChoice = { group: SpendGroup } | { expenseId: string } | { potId: string } | { action: 'ignore' | 'lent' } | { repays: string };
+export type LineChoice = { group: SpendGroup } | { expenseId: string } | { potId: string } | { action: 'ignore' | 'lent' | 'settled' } | { repays: string };
 
 export interface BankSetup {
   provider: string;

@@ -47,8 +47,9 @@ export interface ClassifiedTx extends BankTx {
   /** A Klarna or PayPal statement: the subscriptions it is known to carry, and what is left, spent on who knows what. */
   bills?: { expenseId: string; amount: number }[];
   remainder?: number;
-  /** Paid for someone else: what has come back so far. */
+  /** Paid for someone else: what has come back so far, and whether nothing more is expected. */
   repaid?: number;
+  settled?: boolean;
   /** A transfer the user said goes into this savings pot. */
   potId?: string;
   /** The payee, normalised: what rules are keyed by. */
@@ -143,7 +144,15 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
   } else if ('potId' in rule) {
     tx.class = 'internal_transfer';
     tx.potId = rule.potId;
-  } else if ('action' in rule) tx.class = rule.action === 'transfer' ? 'internal_transfer' : rule.action === 'lent' ? 'lent' : 'ignored';
+  } else if ('action' in rule) {
+    tx.class = rule.action === 'transfer' ? 'internal_transfer' : rule.action === 'ignore' ? 'ignored' : 'lent';
+    if (rule.action === 'settled') tx.settled = true;
+  }
+}
+
+/** A bill rule learnt with an amount is for lines of about that size only. */
+function ruleFits(rule: MerchantRule, amount: number): boolean {
+  return !('expenseId' in rule) || rule.amount === undefined || closeTo(amount, rule.amount);
 }
 
 /**
@@ -265,7 +274,7 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       continue;
     }
     const rule = plan.bank?.merchants?.[tx.merchantKey!];
-    if (rule) {
+    if (rule && ruleFits(rule, -tx.amount)) {
       applyRule(tx, rule);
       continue;
     }
@@ -287,18 +296,20 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     }
     if (hits.length === 1) tx.potId = hits[0].id;
   }
-  // Money in that is not income: dismissed, or a friend paying back what was bought for them.
+  // Money in that is not income: dismissed, a friend paying back what was bought for them, or someone's share of a bill.
   const lentById = new Map(booked.filter((tx) => tx.class === 'lent' && tx.id).map((tx) => [tx.id!, tx]));
   for (const tx of booked) {
-    const line = tx.id && tx.amount > 0 && tx.class === 'unsorted' ? plan.bank?.lines?.[tx.id] : undefined;
-    if (!line) continue;
-    if ('action' in line) tx.class = 'ignored';
-    else if ('repays' in line) {
+    if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
+    const line = tx.id ? plan.bank?.lines?.[tx.id] : undefined;
+    const rule = plan.bank?.merchants?.[tx.merchantKey!];
+    if (line && 'expenseId' in line) applyRule(tx, line);
+    else if (line && 'action' in line) tx.class = 'ignored';
+    else if (line && 'repays' in line) {
       const lent = lentById.get(line.repays);
       if (!lent) continue;
       lent.repaid = round2((lent.repaid ?? 0) + tx.amount);
       tx.class = 'ignored';
-    }
+    } else if (rule && 'expenseId' in rule && rule.amount !== undefined && closeTo(tx.amount, rule.amount)) applyRule(tx, rule);
   }
   return out;
 }
@@ -307,7 +318,7 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /** Money out for someone else that has not come back in full: booked, biggest first. */
 export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
-  return classified.filter((tx) => tx.class === 'lent' && !tx.pending && -tx.amount - (tx.repaid ?? 0) > 0).sort((a, b) => a.amount - b.amount);
+  return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && -tx.amount - (tx.repaid ?? 0) > 0).sort((a, b) => a.amount - b.amount);
 }
 
 /**
@@ -366,7 +377,8 @@ export function toSort(classified: ClassifiedTx[], since = '', names?: Record<st
   const by = new Map<string, MerchantToSort>();
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
-    const key = tx.merchantKey ?? '';
+    // A person is sorted one line at a time: what they are sent means something different each time.
+    const key = mobileKey(tx.counterparty) ? `${tx.merchantKey}#${tx.id}` : (tx.merchantKey ?? '');
     const m = by.get(key) ?? { key, label: partyLabel(tx, names), count: 0, total: 0, lastDate: tx.date, lines: [] };
     m.count += 1;
     m.total = round2(m.total - tx.amount);

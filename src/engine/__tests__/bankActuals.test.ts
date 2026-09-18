@@ -161,6 +161,33 @@ describe('money out', () => {
     expect(lentOut(repaid)).toEqual([]);
   });
 
+  it('a person is sorted one line at a time, and what is settled stops waiting but stays spent', () => {
+    const bank = { provider: 'p', appId: 'x', sessions: [] };
+    const lines = [
+      tx({ id: 'a', amount: -150, date: '2026-09-02', kind: 'swish', counterparty: '46702330253' }),
+      tx({ id: 'b', amount: -400, date: '2026-09-09', kind: 'swish', counterparty: '46702330253' }),
+    ];
+    expect(toSort(classifyTransactions(lines, { income: [] }, OWN)).map((m) => [m.key, m.count])).toEqual([['46702330253#b', 1], ['46702330253#a', 1]]);
+    const settled = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { b: { action: 'settled' } } } }, OWN);
+    expect(lentOut(settled)).toEqual([]);
+    expect(spendByMonth(settled, new Date(2026, 8, 16)).leisure['2026-09']).toMatchObject({ amount: 550 });
+  });
+
+  it("a friend's share of a bill lowers what the bill cost, by the line or by their monthly amount", () => {
+    const spotify = expense({ id: 'spotify', name: 'Spotify', amount: 36.5, fixed: true, bankMatch: { counterparty: 'SPOTIFY', amount: 219 } });
+    const bank = { provider: 'p', appId: 'x', sessions: [] };
+    const lines = [
+      tx({ id: 'bill', amount: -219, date: '2026-09-01', kind: 'card', counterparty: 'SPOTIFY' }),
+      tx({ id: 'share', amount: 36.5, date: '2026-09-03', kind: 'swish', counterparty: '46702330253' }),
+      tx({ id: 'lunch', amount: 150, date: '2026-09-10', kind: 'swish', counterparty: '46702330253' }),
+    ];
+    const byLine = classifyTransactions(lines, { income: [], expenses: [spotify], bank: { ...bank, lines: { share: { expenseId: 'spotify' } } } }, OWN);
+    expect(byLine.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
+    expect(billsByMonth(byLine)).toEqual({ spotify: { '2026-09': 182.5 } });
+    const monthly = classifyTransactions(lines, { income: [], expenses: [spotify], bank: { ...bank, merchants: { '46702330253': { expenseId: 'spotify', amount: 36.5 } } } }, OWN);
+    expect(monthly.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
+  });
+
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {
     const rent = expense({ id: 'rent', name: 'Rent', amount: 4760, fixed: true });
     const groceries = expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4800, fixed: false });

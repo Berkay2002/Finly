@@ -8,6 +8,7 @@ import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
+import { mobileKey } from '@/engine/vcard';
 import { expenseName } from '@/engine/taxonomy';
 import type { SpendGroup } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -49,9 +50,10 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifiedTxs reads both stores
     [txs, plan, contacts],
   );
-  if (!merchants.length && !lent.length) return null;
+  if (!merchants.length && !lent.length && !incoming.length) return null;
 
-  const names = merchants.map((m) => m.label);
+  const count = merchants.length + incoming.length;
+  const names = [...merchants.map((m) => m.label), ...incoming.map((i) => partyLabel(i, contacts))];
 
   return (
     <>
@@ -62,9 +64,9 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
       >
         <IconTile icon="card-upcoming" accent="blue" size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13.5px] font-medium text-ink">{merchants.length ? t.strip(merchants.length) : t.lentTitle}</div>
+          <div className="truncate text-[13.5px] font-medium text-ink">{count ? t.strip(count) : t.lentTitle}</div>
           <div className="truncate text-[12px] text-muted">
-            {merchants.length ? t.stripDetail(names.slice(0, 3), Math.max(0, names.length - 3)) : t.lentDetail(lent.map((tx) => partyLabel(tx, contacts)))}
+            {count ? t.stripDetail(names.slice(0, 3), Math.max(0, names.length - 3)) : t.lentDetail(lent.map((tx) => partyLabel(tx, contacts)))}
           </div>
         </div>
         <span className="inline-flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-brand-700">
@@ -96,6 +98,16 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
             </ul>
           </div>
         )}
+        {incoming.length > 0 && (
+          <div className="mb-4">
+            <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.inTitle}</div>
+            <ul className="divide-y divide-line">
+              {incoming.map((tx) => (
+                <InRow key={tx.id} tx={tx} lent={lent} />
+              ))}
+            </ul>
+          </div>
+        )}
         {merchants.length > 0 ? (
           <ul className="divide-y divide-line">
             {merchants.map((m) => (
@@ -119,10 +131,12 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
   const currency = useCurrency();
   const t = useT().bank.sort;
   const { setMerchantRule, setLineChoice, updateExpense } = usePlanStore();
-  const [remember, setRemember] = useState(true);
   const hint = merchant.hint;
   // A bill learns the payee as the bank writes it, not the label shown: a Swish number may carry a name now.
   const party = merchant.lines[0]?.counterparty ?? merchant.label;
+  // A person is never remembered: the next thing they are sent means something else.
+  const person = !!mobileKey(party);
+  const [remember, setRemember] = useState(!person);
 
   const options: { value: Choice; label: string }[] = [
     ...(hint ? [{ value: 'new' as const, label: t.addBill }] : []),
@@ -139,7 +153,10 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
       const draft = customDraft(hint.bill ? 'living' : 'leisure', titleCase(merchant.label), hint.bill ? [] : ['subscription']);
       onAddBill({ ...draft, amount: hint.amount, fixed: hint.fixed, bankMatch: { counterparty: party } });
     } else if (choice.startsWith('bill:')) {
-      updateExpense(choice.slice(5), { bankMatch: { counterparty: party } });
+      // A fixed bill the bank shows at another amount than planned (a family plan shared with friends) is learnt at what the bank shows.
+      const e = plan.expenses.find((x) => x.id === choice.slice(5));
+      const paid = Math.round((merchant.total / merchant.count) * 100) / 100;
+      updateExpense(choice.slice(5), { bankMatch: { counterparty: party, ...(e?.fixed && Math.abs(paid - e.amount) > 0.5 ? { amount: paid } : {}) } });
     } else if (choice.startsWith('pot:')) {
       // These lines go to that pot; later ones to the same place are transfers, told apart by their monthly amounts.
       for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { potId: choice.slice(4) });
@@ -167,7 +184,48 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
         <SelectField size="sm" value={'' as Choice} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0" />
       </div>
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
-      <Switch className="mt-1.5" checked={remember} onChange={setRemember} description={t.remember} />
+      {!person && <Switch className="mt-1.5" checked={remember} onChange={setRemember} description={t.remember} />}
+    </li>
+  );
+}
+
+/** Money in from a person: paying back what was bought for them, their share of a bill, or nothing to count. */
+function InRow({ tx, lent }: { tx: ClassifiedTx; lent: ClassifiedTx[] }) {
+  const plan = usePlan();
+  const currency = useCurrency();
+  const contacts = useBankStore((s) => s.contacts);
+  const t = useT().bank.sort;
+  const { setMerchantRule, setLineChoice } = usePlanStore();
+  const [monthly, setMonthly] = useState(false);
+  const choose = (v: string) => {
+    if (v === 'ignore') setLineChoice(tx.id!, { action: 'ignore' });
+    else if (v.startsWith('repays:')) setLineChoice(tx.id!, { repays: v.slice(7) });
+    else if (monthly) setMerchantRule(tx.merchantKey!, { expenseId: v.slice(6), amount: tx.amount });
+    else setLineChoice(tx.id!, { expenseId: v.slice(6) });
+  };
+  return (
+    <li className="py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx, contacts)}</div>
+          <div className="tabular text-[12px] text-muted">
+            {formatDate(tx.date)} · {formatMoney(tx.amount, currency)}
+          </div>
+        </div>
+        <SelectField
+          size="sm"
+          value=""
+          placeholder={t.thisIs}
+          onValueChange={choose}
+          options={[
+            ...lent.map((l) => ({ value: `repays:${l.id}`, label: t.paysBack(`${partyLabel(l, contacts)} · ${formatMoney(-l.amount - (l.repaid ?? 0), currency)}`) })),
+            ...plan.expenses.map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
+            { value: 'ignore', label: t.inIgnore },
+          ]}
+          className="w-44 shrink-0"
+        />
+      </div>
+      <Switch className="mt-1.5" checked={monthly} onChange={setMonthly} description={t.everyMonth} />
     </li>
   );
 }
@@ -191,10 +249,11 @@ function LentRow({ tx, incoming }: { tx: ClassifiedTx; incoming: ClassifiedTx[] 
         size="sm"
         value=""
         placeholder={t.paidBackBy}
-        onValueChange={(id) => (id === 'settled' ? setLineChoice(tx.id!, { action: 'ignore' }) : setLineChoice(id, { repays: tx.id! }))}
+        onValueChange={(id) => setLineChoice(id === 'settled' || id === 'mine' ? tx.id! : id, id === 'settled' ? { action: 'ignore' } : id === 'mine' ? { action: 'settled' } : { repays: tx.id! })}
         options={[
           ...incoming.map((i) => ({ value: i.id!, label: `${partyLabel(i, contacts)} · ${formatDate(i.date)} · ${formatMoney(i.amount, currency)}` })),
           { value: 'settled', label: t.settled },
+          { value: 'mine', label: t.mine },
         ]}
         className="w-44 shrink-0"
       />
