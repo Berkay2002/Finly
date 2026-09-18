@@ -73,6 +73,7 @@ export default {
     subscriptionsSubtitle: 'Alla poster taggade som prenumeration.',
     largest: 'Störst i den här delen',
     perYearShort: (amount) => `${amount}/år`,
+    thisMonthShort: (amount) => `${amount} den här månaden`,
     comingUp: 'Kommande',
     spreadTitle: 'Varför slå ut oregelbundna kostnader?',
     spreadBody:

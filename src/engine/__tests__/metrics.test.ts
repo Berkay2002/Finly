@@ -398,3 +398,22 @@ describe('computeMetrics — an item that may be nothing at all, while the bank 
     expect(computeMetrics(plan, NOW).actuals.byCategory.transport).toBe(700);
   });
 });
+
+describe('computeMetrics — a bill that may be nothing at all, once the bank has seen it', () => {
+  it('counts electronics as nothing until a line shows, then as what was paid', () => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.bank = { provider: 'p', appId: 'x', sessions: [{ id: 's', aspsp: 'SEB', country: 'SE', validUntil: '2027-01-01', accounts: {} }] };
+    const item = expense({ id: 'gear', name: 'Electronics', amount: 0, category: 'planned', subcategory: 'electronics', frequency: 'monthly', fixed: false, range: { low: 0, high: 1000 } });
+    plan.expenses = [item];
+    expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(500);
+    plan.expenses = [{ ...item, bankMatch: { counterparty: 'CLAS OHLSON' } }];
+    expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(0);
+    expect(computeMetrics(plan, NOW).actuals.pending.map((p) => p.id)).toEqual(['gear']);
+    plan.expenses = [{ ...item, bankMatch: { counterparty: 'CLAS OHLSON' }, actuals: { '2026-09': 350 } }];
+    expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(350);
+    plan.expenses = [item];
+    plan.bank.lines = { l1: { expenseId: 'gear' } };
+    expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(0);
+  });
+});

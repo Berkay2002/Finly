@@ -42,6 +42,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
   const committed = lines.filter((l) => l.committed).reduce((a, l) => a + l.monthly, 0);
   const share = m.income.total > 0 ? total / m.income.total : 0;
   const largest = [...lines].sort((a, b) => b.monthly - a.monthly).slice(0, 5);
+  const thisMonth = new Map(m.actuals.confirmed.map((c) => [c.id, c.actual]));
   const range = m.range.byCategory[category];
   const ranged = range.high > range.low;
 
@@ -169,7 +170,9 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
                     <span className="w-4 text-right text-muted">{i + 1}.</span>
                     <span className="min-w-0 flex-1 truncate text-ink">{lineName(l)}</span>
                     <span className="tabular font-medium text-ink">{money(l.monthly)}</span>
-                    <span className="tabular w-24 shrink-0 whitespace-nowrap text-right text-[12px] text-muted">{s.perYearShort(money(l.annual))}</span>
+                    <span className="tabular w-32 shrink-0 whitespace-nowrap text-right text-[12px] text-muted">
+                      {thisMonth.has(l.id) ? s.thisMonthShort(money(thisMonth.get(l.id)!)) : s.perYearShort(money(l.annual))}
+                    </span>
                   </li>
                 ))}
               </ol>

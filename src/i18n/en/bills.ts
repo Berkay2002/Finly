@@ -69,6 +69,7 @@ export default {
     subscriptionsSubtitle: 'All subscription-tagged items.',
     largest: 'Largest in this section',
     perYearShort: (amount: string) => `${amount}/yr`,
+    thisMonthShort: (amount: string) => `${amount} this month`,
     comingUp: 'Coming up',
     spreadTitle: 'Why spread irregular costs?',
     spreadBody: 'A 12,000 holiday is 1,000 per month. Provisioning like this keeps expensive months from surprising you.',

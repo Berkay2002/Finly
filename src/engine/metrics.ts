@@ -456,6 +456,11 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const food = foodSummary(everyday.food, active);
   // A group's total for the whole month replaces the estimates of every item in it at once.
   const byId = new Map(lines.map((l) => [l.id, l]));
+  // Bills the bank has seen before: a payee learnt, or lines sorted into them. With the bank on, one of those that
+  // may be nothing at all (a range from 0) counts as nothing this month until a line shows, like everyday spending.
+  const bankOn = !!plan.bank?.sessions.length;
+  const bankSeen = new Set(Object.values(plan.bank?.lines ?? {}).map((c) => ('expenseId' in c ? c.expenseId : '')));
+  const zeroUntilSeen = (e: ExpenseItem, l: CostLine) => bankOn && l.varies && l.monthlyLow === 0 && (!!e.bankMatch || bankSeen.has(e.id));
   const loggedIds = new Set<string>();
   let everydayVariance = 0;
   // While the bank feeds a running month, an item that may be nothing at all (a range from 0) counts only once the
@@ -473,6 +478,7 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   }
   const confirmed: ActualLine[] = [];
   const pending: PendingBill[] = [];
+  const nothingYet: CostLine[] = [];
   for (const e of active) {
     const line = byId.get(e.id);
     if (!line) continue;
@@ -484,12 +490,14 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
       confirmed.push({ ...bill, actual, variance: actual - line.monthly });
     } else if (awaitsActual(e)) {
       pending.push(bill);
+      if (zeroUntilSeen(e, line)) nothingYet.push(line);
     }
   }
   const confirmedIds = new Set([...confirmed.map((l) => l.id), ...loggedIds]);
-  const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance;
+  const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance - sum(nothingYet.map((l) => l.monthly));
   const actualByCategory = { ...byCategory };
   for (const l of confirmed) actualByCategory[l.category] += l.variance;
+  for (const l of nothingYet) actualByCategory[l.category] -= l.monthly;
   for (const e of active) {
     if (e.frequency === 'once' && isDatedInMonth(e.nextDate, now)) actualByCategory[e.category] += typicalAmount(e) - (byId.get(e.id)?.monthly ?? 0);
   }
