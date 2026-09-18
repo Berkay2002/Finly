@@ -1,5 +1,6 @@
 import { bundledGroup, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
+import { mobileKey } from './vcard';
 import { savingsPots } from './savings';
 import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
@@ -188,11 +189,12 @@ function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undef
   return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, e.amount)));
 }
 
-/** The payee for showing: a Swish line carries a phone number, shown the way Swedes write one. */
-export function partyLabel(tx: Pick<BankTx, 'counterparty' | 'description'>): string {
+/** The payee for showing: a Swish line carries a phone number, shown as the person's name when `names` has it, else the way Swedes write one. */
+export function partyLabel(tx: Pick<BankTx, 'counterparty' | 'description'>, names?: Record<string, string>): string {
   const raw = (tx.counterparty ?? tx.description ?? '').trim();
-  const m = raw.replace(/\s/g, '').match(/^(?:\+?46|0)(7\d{8})$/);
-  return m ? `Swish · 0${m[1].slice(0, 2)}-${m[1].slice(2, 5)} ${m[1].slice(5, 7)} ${m[1].slice(7)}` : raw;
+  const key = mobileKey(raw);
+  if (!key) return raw;
+  return `Swish · ${names?.[key] ?? `0${key.slice(0, 2)}-${key.slice(2, 5)} ${key.slice(5, 7)} ${key.slice(7)}`}`;
 }
 
 export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: OwnAccount[]): ClassifiedTx[] {
@@ -360,12 +362,12 @@ export interface MerchantToSort {
  * Money out nobody has placed, by payee: likely bills first, then biggest first. `since` leaves out
  * lines too old to change any month the bank still writes.
  */
-export function toSort(classified: ClassifiedTx[], since = ''): MerchantToSort[] {
+export function toSort(classified: ClassifiedTx[], since = '', names?: Record<string, string>): MerchantToSort[] {
   const by = new Map<string, MerchantToSort>();
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
     const key = tx.merchantKey ?? '';
-    const m = by.get(key) ?? { key, label: partyLabel(tx), count: 0, total: 0, lastDate: tx.date, lines: [] };
+    const m = by.get(key) ?? { key, label: partyLabel(tx, names), count: 0, total: 0, lastDate: tx.date, lines: [] };
     m.count += 1;
     m.total = round2(m.total - tx.amount);
     if (tx.date > m.lastDate) m.lastDate = tx.date;

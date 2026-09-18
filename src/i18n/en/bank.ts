@@ -137,6 +137,9 @@ export default {
     ignore: 'Not spending, leave out',
     done: 'Done',
     empty: 'Everything from the bank is sorted.',
+    importContacts: 'Name Swish numbers',
+    contactsHint: 'Export your contacts to a file (iPhone: Contacts → Lists → hold All Contacts → Export) and pick it here. It stays on this device.',
+    contactsCount: (count: number) => `${count} contacts on this device`,
   },
   legal: {
     privacyTitle: 'Privacy',

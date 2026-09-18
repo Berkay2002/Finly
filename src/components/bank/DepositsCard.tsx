@@ -20,6 +20,7 @@ export function DepositsCard() {
   const plan = usePlan();
   const currency = useCurrency();
   const txs = useBankStore((s) => s.txs);
+  const contacts = useBankStore((s) => s.contacts);
   const updateIncome = usePlanStore((s) => s.updateIncome);
   const t = useT().bank.income;
 
@@ -46,7 +47,7 @@ export function DepositsCard() {
         {deposits.map((tx, i) => (
           <li key={`${tx.account}-${tx.date}-${tx.amount}-${i}`} className="flex items-center gap-3 py-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx) || t.unknownSender}</div>
+              <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx, contacts) || t.unknownSender}</div>
               <div className="tabular text-[12px] text-muted">
                 {formatDate(tx.date)} · {formatMoney(tx.amount, tx.currency || currency)}
               </div>

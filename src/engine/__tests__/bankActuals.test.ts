@@ -182,6 +182,7 @@ describe('money out', () => {
     expect(partyLabel({ counterparty: '+46 70 233 02 53' })).toBe('Swish · 070-233 02 53');
     expect(partyLabel({ counterparty: '1065578522 A' })).toBe('1065578522 A');
     expect(partyLabel({ counterparty: 'ICA NARA STR' })).toBe('ICA NARA STR');
+    expect(partyLabel({ counterparty: '46702330253' }, { '702330253': 'Anna Berg' })).toBe('Swish · Anna Berg');
   });
 
   it('a choice for the line beats the payee rule, which beats the bundled list', () => {

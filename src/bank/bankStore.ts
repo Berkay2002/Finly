@@ -46,6 +46,8 @@ interface BankState {
    * key fetches its own; what is worked out from them (income received) does go to the plan.
    */
   txs: Record<string, BankTx[]>;
+  /** Names by mobile number, from a contacts file the person imported; only to put a name on a Swish line. */
+  contacts: Record<string, string>;
   /** In memory only. */
   syncing: boolean;
 
@@ -55,6 +57,7 @@ interface BankState {
   setPendingMapping: (pending: BankState['pendingMapping']) => void;
   setAccounts: (accounts: Record<string, BankAccountState>, lastSyncedAt?: string) => void;
   setTxs: (txs: Record<string, BankTx[]>) => void;
+  setContacts: (contacts: Record<string, string>) => void;
   setSyncing: (syncing: boolean) => void;
   forget: () => void;
 }
@@ -68,6 +71,7 @@ export const useBankStore = create<BankState>()(
       hasKey: false,
       accounts: {},
       txs: {},
+      contacts: {},
       syncing: false,
 
       setHasKey: (hasKey) => set({ hasKey }),
@@ -76,13 +80,14 @@ export const useBankStore = create<BankState>()(
       setPendingMapping: (pendingMapping) => set({ pendingMapping }),
       setAccounts: (accounts, lastSyncedAt) => set((s) => ({ accounts, lastSyncedAt: lastSyncedAt ?? s.lastSyncedAt })),
       setTxs: (txs) => set({ txs }),
+      setContacts: (contacts) => set({ contacts }),
       setSyncing: (syncing) => set({ syncing }),
       forget: () => set({ hasKey: false, sharedPem: undefined, pendingAuth: undefined, pendingMapping: undefined, accounts: {}, txs: {}, lastSyncedAt: undefined }),
     }),
     {
       // Not sessionStorage: the bank's app often hands the person back in a new tab.
       name: 'finly.bank.v1',
-      partialize: ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }) => ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt }),
+      partialize: ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts }) => ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts }),
     },
   ),
 );
