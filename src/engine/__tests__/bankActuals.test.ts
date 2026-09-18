@@ -208,6 +208,19 @@ describe('money out', () => {
     const more = [...lines, tx({ id: 's1b', amount: 36.5, date: '2026-09-20', kind: 'swish', counterparty: '46702330253' })];
     const byName = classifyTransactions(more, { income: [], expenses: [named] }, OWN);
     expect(byName.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'expense', 'unsorted', 'unsorted']);
+
+    // A bank transfer names nobody, only what the sender wrote: one of about a share takes a slot still open, and no more.
+    const byTransfer = classifyTransactions(
+      [
+        lines[0],
+        tx({ id: 't1', amount: 37, date: '2026-09-04', kind: 'credit_transfer', counterparty: 'SPOTIFY SEPT' }),
+        tx({ id: 't2', amount: 36, date: '2026-09-05', kind: 'credit_transfer', counterparty: 'HYRA' }),
+        tx({ id: 't3', amount: 36.5, date: '2026-09-06', kind: 'credit_transfer', counterparty: 'SPOTIFY' }),
+      ],
+      { income: [], expenses: [named] },
+      OWN,
+    );
+    expect(byTransfer.map((t) => t.class)).toEqual(['expense', 'expense', 'expense', 'unsorted']);
   });
 
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {

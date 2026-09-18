@@ -326,7 +326,8 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     } else if (rule && 'expenseId' in rule && rule.amount !== undefined && closeTo(tx.amount, rule.amount)) applyRule(tx, rule);
   }
   // A bill shared with others: money in of about one share is a share. From the people named, one each a
-  // month; with only a count, from anyone, up to that many a month.
+  // month; with only a count, from anyone, up to that many a month. A bank transfer carries no sender, only
+  // what they wrote, so one of about a share fills a slot the named people have left open.
   const shared = expenses.filter((e) => sharerCount(e) > 0 && e.amount > 0);
   if (shared.length) {
     const shares = new Map<string, number>();
@@ -344,7 +345,7 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       const e = shared.find((s) => {
         if (!closeTo(tx.amount, s.amount)) return false;
         const m = `${s.id}:${tx.date.slice(0, 7)}`;
-        if (s.sharedBy?.length) return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
+        if (s.sharedBy?.length && tx.kind !== 'credit_transfer') return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
         return (shares.get(m) ?? 0) < sharerCount(s);
       });
       if (!e) continue;
