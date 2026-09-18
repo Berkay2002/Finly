@@ -528,6 +528,9 @@ function ExpenseDetailForm({
         onValueChange={(brand) => set({ bankMatch: brand ? { counterparty: brand } : undefined })}
         options={[{ value: '', label: tf.paidViaBank }, ...(['KLARNA', 'PAYPAL'] as const).map((b) => ({ value: b, label: PASS_THROUGH_LABEL[b] }))]}
       />
+      {draft.tags.includes('subscription') && (
+        <CountField label={tf.sharedWith} hint={tf.sharedWithHint} min={0} value={draft.sharedWith ?? 0} onValueChange={(n) => set({ sharedWith: n > 0 ? Math.floor(n) : undefined })} />
+      )}
       {draft.bankMatch && !paidVia(draft) && (
         <div className="flex items-center justify-between gap-3 text-[12.5px] text-muted">
           <span>{t.bank.income.recognised(draft.bankMatch.counterparty)}</span>

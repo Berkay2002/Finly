@@ -224,6 +224,11 @@ export interface ExpenseItem {
   brandDomain?: string;
   /** How the payment shows up at the bank. Set from the sort sheet; the bank then fills `actuals`. */
   bankMatch?: ExpenseBankMatch;
+  /**
+   * How many other people pay their equal share back to the person. `amount` stays the person's own
+   * share; the bank shows the whole bill, and money in of about a share from anyone is a share.
+   */
+  sharedWith?: number;
 }
 
 /**

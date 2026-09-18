@@ -190,6 +190,20 @@ describe('money out', () => {
     expect(monthly.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
   });
 
+  it('a bill shared with others is found at everyone\'s shares, and money in of about one share is a share, no more a month than there are others', () => {
+    const spotify = expense({ id: 'spotify', name: 'Spotify', amount: 36.5, fixed: true, sharedWith: 2 });
+    const lines = [
+      tx({ id: 'bill', amount: -109.5, date: '2026-09-01', kind: 'card', counterparty: 'SPOTIFY' }),
+      tx({ id: 's1', amount: 37, date: '2026-09-03', kind: 'swish', counterparty: '46702330253' }),
+      tx({ id: 'lunch', amount: 150, date: '2026-09-05', kind: 'swish', counterparty: '46702330253' }),
+      tx({ id: 's2', amount: 36, date: '2026-09-06', kind: 'swish', counterparty: '46731234567' }),
+      tx({ id: 's3', amount: 36.5, date: '2026-09-08', kind: 'swish', counterparty: '46760000000' }),
+    ];
+    const out = classifyTransactions(lines, { income: [], expenses: [spotify] }, OWN);
+    expect(out.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'expense', 'unsorted']);
+    expect(billsByMonth(out)).toEqual({ spotify: { '2026-09': 36.5 } });
+  });
+
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {
     const rent = expense({ id: 'rent', name: 'Rent', amount: 4760, fixed: true });
     const groceries = expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4800, fixed: false });

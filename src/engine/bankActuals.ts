@@ -171,7 +171,7 @@ function splitStatements(statements: ClassifiedTx[], expenses: ExpenseItem[]): v
       seen.add(key);
       for (const e of expenses) {
         if (passThroughBrand(normalizeParty(e.bankMatch?.counterparty)) !== brand) continue;
-        const take = Math.min(left, e.bankMatch?.amount ?? e.amount);
+        const take = Math.min(left, e.bankMatch?.amount ?? fullAmount(e));
         if (take <= 0) continue;
         tx.bills.push({ expenseId: e.id, amount: round2(take) });
         left = round2(left - take);
@@ -180,6 +180,11 @@ function splitStatements(statements: ClassifiedTx[], expenses: ExpenseItem[]): v
     tx.remainder = left;
     tx.month = tx.date.slice(0, 7);
   }
+}
+
+/** What the bank shows for a bill: the person's share times everyone paying it. */
+function fullAmount(e: Pick<ExpenseItem, 'amount' | 'sharedWith'>): number {
+  return e.amount * ((e.sharedWith ?? 0) + 1);
 }
 
 /**
@@ -192,10 +197,10 @@ function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undef
   const learnt = expenses.find((e) => {
     if (!e.bankMatch || !sameParty(key, e.bankMatch.counterparty)) return false;
     if (e.bankMatch.amount !== undefined) return closeTo(paid, e.bankMatch.amount);
-    return e.fixed ? closeTo(paid, e.amount) : true;
+    return e.fixed ? closeTo(paid, fullAmount(e)) : true;
   });
   if (learnt) return learnt;
-  return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, e.amount)));
+  return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, fullAmount(e))));
 }
 
 /** The payee for showing: a Swish line carries a phone number, shown as the person's name when `names` has it, else the way Swedes write one. */
@@ -310,6 +315,20 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       lent.repaid = round2((lent.repaid ?? 0) + tx.amount);
       tx.class = 'ignored';
     } else if (rule && 'expenseId' in rule && rule.amount !== undefined && closeTo(tx.amount, rule.amount)) applyRule(tx, rule);
+  }
+  // A bill shared with others: money in of about one share is a share, up to as many a month as there are others.
+  const shared = expenses.filter((e) => (e.sharedWith ?? 0) > 0 && e.amount > 0);
+  if (shared.length) {
+    const shares = new Map<string, number>();
+    const keyOf = (id: string, date: string) => `${id}:${date.slice(0, 7)}`;
+    for (const tx of booked) if (tx.amount > 0 && tx.class === 'expense' && tx.expenseId) shares.set(keyOf(tx.expenseId, tx.date), (shares.get(keyOf(tx.expenseId, tx.date)) ?? 0) + 1);
+    for (const tx of booked) {
+      if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
+      const e = shared.find((s) => closeTo(tx.amount, s.amount) && (shares.get(keyOf(s.id, tx.date)) ?? 0) < s.sharedWith!);
+      if (!e) continue;
+      applyRule(tx, { expenseId: e.id });
+      shares.set(keyOf(e.id, tx.date), (shares.get(keyOf(e.id, tx.date)) ?? 0) + 1);
+    }
   }
   return out;
 }
