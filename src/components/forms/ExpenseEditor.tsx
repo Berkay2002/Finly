@@ -58,8 +58,8 @@ import { HouseholdFoodEstimator } from './HouseholdFood';
 import { BrandPicker } from './BrandPicker';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
-import { normalizeParty, personKey, personLabel } from '@/engine/bankActuals';
-import { mobileKey } from '@/engine/vcard';
+import { closeTo, normalizeParty, personKey, personLabel } from '@/engine/bankActuals';
+import { matchContact } from '@/engine/vcard';
 import { useBankStore } from '@/bank/bankStore';
 import { PASS_THROUGH_LABEL, passThroughBrand } from '@/engine/merchants';
 import { Button } from '@/components/ui/Button';
@@ -186,40 +186,61 @@ export function fromSuggestion(s: ExpenseSuggestion): Draft {
 }
 
 /** "Klarna" or "PayPal" when this item is paid through one of them. */
+const isMobile = (key: string) => /^7\d{8}$/.test(key);
+/** A sender name the bank writes in capitals, the way a person writes it. */
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
+
 /**
- * Who pays a share of this back. The people who have Swished the person before are offered by name
- * (from the contacts on this device) or number; with no bank lines to pick from, a count does.
+ * Who pays a share of this back, from those who have paid in before: by Swish number, or by the sender name
+ * on a bank transfer. One person is one pill under both: a sender name the contacts on this device know is
+ * folded onto their number, kept in the plan (`bank.people`) once picked; a name nobody knows is linked by
+ * hand. Those who have sent about one share are offered; with no bank lines to pick from, a count does.
  */
-function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'sharedWith' | 'sharedBy'>; set: (patch: Partial<ExpenseItem>) => void }) {
+function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'amount' | 'sharedWith' | 'sharedBy'>; set: (patch: Partial<ExpenseItem>) => void }) {
   const tf = useT().expenses.form;
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
-  const chosen = draft.sharedBy ?? [];
-  const { people, labels } = useMemo(() => {
-    const seen = new Map<string, string>();
-    const labels = new Map<string, string>();
+  const bank = usePlanStore((s) => s.plan.bank);
+  const setBankSetup = usePlanStore((s) => s.setBankSetup);
+  const people = bank?.people;
+  const chosen = (draft.sharedBy ?? []).map((k) => people?.[k] ?? k);
+  const { list, mobiles, labels, guesses } = useMemo(() => {
+    const seen = new Map<string, { date: string; near: boolean; sender?: string }>();
+    const guesses: Record<string, string> = {};
     for (const tx of Object.values(txs).flat()) {
-      const key = tx.amount > 0 && !tx.pending ? personKey(tx) : undefined;
-      if (!key) continue;
-      if (!seen.has(key) || seen.get(key)! < tx.date) seen.set(key, tx.date);
-      // A transfer names its sender in capitals; a Swish only has the number, which the contacts may name.
-      labels.set(key, mobileKey(key) ? personLabel(key, contacts) : (tx.counterparty ?? key).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()));
+      const raw = tx.amount > 0 && !tx.pending ? personKey(tx) : undefined;
+      if (!raw) continue;
+      const guess = !isMobile(raw) && !people?.[raw] ? matchContact(tx.counterparty, contacts) : undefined;
+      if (guess) guesses[raw] = guess;
+      const id = people?.[raw] ?? guess ?? raw;
+      const p = seen.get(id) ?? { date: '', near: false };
+      if (p.date < tx.date) p.date = tx.date;
+      if (draft.amount > 0 && closeTo(tx.amount, draft.amount)) p.near = true;
+      if (!isMobile(raw)) p.sender = titleCase(tx.counterparty ?? raw);
+      seen.set(id, p);
     }
-    const keys = [...seen.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([k]) => k);
-    return { people: [...new Set([...chosen, ...keys])], labels };
-  }, [txs, contacts, chosen]);
-  if (!people.length) {
+    const all = [...seen.entries()].sort((a, b) => b[1].date.localeCompare(a[1].date));
+    const near = all.filter(([, p]) => p.near);
+    const list = [...new Set([...chosen, ...(near.length ? near : all).map(([k]) => k)])];
+    const labels = new Map(all.map(([k, p]) => [k, isMobile(k) ? (contacts[k] ?? p.sender ?? personLabel(k)) : (p.sender ?? k)]));
+    return { list, mobiles: all.map(([k]) => k).filter(isMobile), labels, guesses };
+  }, [txs, contacts, people, chosen, draft.amount]);
+  if (!list.length) {
     return <CountField label={tf.sharedWith} hint={tf.sharedWithHint} min={0} value={draft.sharedWith ?? 0} onValueChange={(n) => set({ sharedWith: n > 0 ? Math.floor(n) : undefined })} />;
   }
+  const name = (key: string) => labels.get(key) ?? (isMobile(key) ? personLabel(key, contacts) : key);
+  const link = (links: Record<string, string>) => bank && Object.keys(links).length && setBankSetup({ ...bank, people: { ...people, ...links } });
+  const choose = (next: string[]) => set({ sharedBy: next.length ? next : undefined, sharedWith: next.length || undefined });
   const toggle = (key: string) => {
-    const next = chosen.includes(key) ? chosen.filter((k) => k !== key) : [...chosen, key];
-    set({ sharedBy: next.length ? next : undefined, sharedWith: next.length || undefined });
+    if (chosen.includes(key)) return choose(chosen.filter((k) => k !== key));
+    link(Object.fromEntries(Object.entries(guesses).filter(([, id]) => id === key)));
+    choose([...chosen, key]);
   };
   return (
     <div>
       <Label hint={tf.sharedByHint}>{tf.sharedBy}</Label>
       <div className="flex flex-wrap gap-1.5">
-        {people.map((key) => {
+        {list.map((key) => {
           const on = chosen.includes(key);
           return (
             <button
@@ -229,11 +250,28 @@ function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'sharedWith' | 's
               onClick={() => toggle(key)}
               className={clsx('rounded-full border px-3 py-1 text-[12.5px] transition', on ? 'border-brand-solid bg-brand-50 text-brand-700' : 'border-line text-muted hover:bg-page')}
             >
-              {labels.get(key) ?? (mobileKey(key) ? personLabel(key, contacts) : key)}
+              {name(key)}
             </button>
           );
         })}
       </div>
+      {chosen
+        .filter((key) => !isMobile(key))
+        .map((key) => (
+          <SelectField
+            key={key}
+            size="sm"
+            className="mt-2"
+            label={tf.sharedBySwish(name(key))}
+            value=""
+            placeholder={tf.sharedByNone}
+            options={mobiles.filter((m) => !chosen.includes(m)).map((m) => ({ value: m, label: name(m) }))}
+            onValueChange={(mobile) => {
+              link({ [key]: mobile });
+              choose([...new Set(chosen.map((k) => (k === key ? mobile : k)))]);
+            }}
+          />
+        ))}
     </div>
   );
 }

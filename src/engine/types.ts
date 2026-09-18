@@ -361,6 +361,8 @@ export interface BankSetup {
   lines?: Record<string, LineChoice>;
   /** Money lent out and not yet back, as the bank lines say: owed to the person, so owned, not spent. Written by the device with the key. */
   lentOut?: number;
+  /** One person under two keys (see `personKey`): the sender name on their bank transfers → their Swish number. */
+  people?: Record<string, string>;
 }
 
 export interface Account {

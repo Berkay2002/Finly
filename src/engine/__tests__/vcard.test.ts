@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mobileKey, parseContacts } from '../vcard';
+import { matchContact, mobileKey, parseContacts } from '../vcard';
 
 describe('contacts from a vCard file', () => {
   it('reads names by Swedish mobile number, the way iPhone exports them', () => {
@@ -11,6 +11,15 @@ describe('contacts from a vCard file', () => {
       'BEGIN:VCARD', 'VERSION:4.0', 'N:Doe;Jo;;;', 'TEL;VALUE=uri:tel:+46-76-000-00-00', 'END:VCARD',
     ].join('\r\n');
     expect(parseContacts(vcf)).toEqual({ '702330253': 'Anna Berg', '731234567': 'Bo Svensson', '760000000': 'Jo Doe' });
+  });
+
+  it('finds the contact a transfer sender name is, when only one fits', () => {
+    const contacts = { '702330253': 'Jonatan Fredriksson', '731234567': 'Ludwig', '760000000': 'Emil Berg', '700000001': 'Anna Berg', '700000002': 'Anna Lund' };
+    expect(matchContact('JONATAN FRED', contacts)).toBe('702330253');
+    expect(matchContact('LUDWIG BOGE', contacts)).toBe('731234567');
+    expect(matchContact('EMILIN ISSA', contacts)).toBeUndefined();
+    expect(matchContact('ANNA', contacts)).toBeUndefined();
+    expect(matchContact(undefined, contacts)).toBeUndefined();
   });
 
   it('keys a number the way a Swish line writes it', () => {

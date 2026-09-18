@@ -150,7 +150,9 @@ async function run(force: boolean): Promise<void> {
         try {
           // Back from the last read or the newest booked line, whichever is older, so a gap is never skipped.
           const newest = txs[id].find((tx) => !tx.pending)?.date;
-          const since = previous?.lastSyncedAt && newest ? new Date(Math.min(Date.parse(previous.lastSyncedAt), Date.parse(`${newest}T12:00:00`))) : undefined;
+          // Lines kept from before the bank's kind was (Sept 2026) have none; one full read again fills it in.
+          const stale = txs[id].some((tx) => !tx.pending && !tx.kind);
+          const since = !stale && previous?.lastSyncedAt && newest ? new Date(Math.min(Date.parse(previous.lastSyncedAt), Date.parse(`${newest}T12:00:00`))) : undefined;
           const from = isoDay(daysBefore(since ?? now, since ? REFETCH_DAYS : FIRST_FETCH_DAYS));
           const keepFrom = isoDay(new Date(now.getFullYear(), now.getMonth() - KEEP_MONTHS, 1));
           txs[id] = mergeWindow(txs[id], await getTransactions(jwt, session.accounts[id], id, from), from, keepFrom);

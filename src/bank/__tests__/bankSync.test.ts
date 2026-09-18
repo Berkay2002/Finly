@@ -145,7 +145,7 @@ describe('syncBank', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
       urls.push(decodeURIComponent(String(url)));
       return Response.json(String(url).includes('transactions')
-        ? { transactions: [{ entry_reference: 'x', transaction_amount: { amount: '10.00', currency: 'SEK' }, credit_debit_indicator: 'DBIT', status: 'BOOK', booking_date: iso(newest), remittance_information: ['ICA'] }] }
+        ? { transactions: [{ entry_reference: 'x', bank_transaction_code: { description: 'Card purchase' }, transaction_amount: { amount: '10.00', currency: 'SEK' }, credit_debit_indicator: 'DBIT', status: 'BOOK', booking_date: iso(newest), remittance_information: ['ICA'] }] }
         : balances('1.00'));
     }));
     await syncBank({ force: true });

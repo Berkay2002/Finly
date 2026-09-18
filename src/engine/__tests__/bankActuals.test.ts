@@ -221,6 +221,12 @@ describe('money out', () => {
       OWN,
     );
     expect(byTransfer.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'unsorted']);
+
+    // One person under a Swish number and a sender name, linked in the plan: one share a month, by either, whichever key the item holds.
+    const bank = { provider: 'eb', appId: 'a', sessions: [], people: { JONATANFRED: '702330253' } };
+    const both = [lines[0], more[5], tx({ id: 't4', amount: 36.5, date: '2026-09-21', kind: 'credit_transfer', counterparty: 'JONATAN FRED' })];
+    expect(classifyTransactions(both, { income: [], expenses: [named], bank }, OWN).map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
+    expect(classifyTransactions(both, { income: [], expenses: [{ ...named, sharedBy: ['JONATANFRED', '731234567'] }], bank }, OWN).map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
   });
 
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {

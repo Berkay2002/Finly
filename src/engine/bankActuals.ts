@@ -129,7 +129,7 @@ function nameStems(item: Pick<ExpenseItem, 'name' | 'brandDomain'>): string[] {
   return [word, domain].filter((s) => s.length >= 4);
 }
 
-function closeTo(amount: number, target: number): boolean {
+export function closeTo(amount: number, target: number): boolean {
   return target > 0 && Math.abs(amount - target) <= target * AMOUNT_TOLERANCE;
 }
 
@@ -216,9 +216,11 @@ export function personLabel(key: string, names?: Record<string, string>): string
 /**
  * Who sent money in, as something stable to name them by: the phone number on a Swish, or the sender's
  * name the bank writes on a transfer (SEB gives no account, only the name, cut at 12 characters).
+ * `people` (see `BankSetup.people`) folds a sender name onto the same person's Swish number.
  */
-export function personKey(tx: Pick<BankTx, 'counterparty' | 'description' | 'kind'>): string | undefined {
-  return mobileKey(tx.counterparty ?? tx.description) ?? (tx.kind === 'credit_transfer' ? normalizeParty(tx.counterparty ?? tx.description) || undefined : undefined);
+export function personKey(tx: Pick<BankTx, 'counterparty' | 'description' | 'kind'>, people?: Record<string, string>): string | undefined {
+  const raw = mobileKey(tx.counterparty ?? tx.description) ?? (tx.kind === 'credit_transfer' ? normalizeParty(tx.counterparty ?? tx.description) || undefined : undefined);
+  return raw && (people?.[raw] ?? raw);
 }
 
 /** The payee for showing: a Swish line carries a phone number, shown as the person. */
@@ -337,22 +339,24 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
   // month; with only a count, from anyone, up to that many a month.
   const shared = expenses.filter((e) => sharerCount(e) > 0 && e.amount > 0);
   if (shared.length) {
+    const people = plan.bank?.people;
+    const who = (k: string) => people?.[k] ?? k;
     const shares = new Map<string, number>();
     const bump = (k: string) => shares.set(k, (shares.get(k) ?? 0) + 1);
     const count = (tx: ClassifiedTx, id: string) => {
       const m = `${id}:${tx.date.slice(0, 7)}`;
       bump(m);
-      const person = personKey(tx);
+      const person = personKey(tx, people);
       if (person) bump(`${m}:${person}`);
     };
     for (const tx of booked) if (tx.amount > 0 && tx.class === 'expense' && tx.expenseId) count(tx, tx.expenseId);
     for (const tx of booked) {
       if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
-      const person = personKey(tx);
+      const person = personKey(tx, people);
       const e = shared.find((s) => {
         if (!closeTo(tx.amount, s.amount)) return false;
         const m = `${s.id}:${tx.date.slice(0, 7)}`;
-        if (s.sharedBy?.length) return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
+        if (s.sharedBy?.length) return !!person && s.sharedBy.some((k) => who(k) === person) && !shares.get(`${m}:${person}`);
         return (shares.get(m) ?? 0) < sharerCount(s);
       });
       if (!e) continue;
