@@ -30,6 +30,8 @@ export default {
     homeHint: 'Value entered on the mortgage',
     otherProperty: 'Car & other property',
     otherPropertyHint: 'Value entered on the loan',
+    lentOut: 'Lent to people',
+    lentOutHint: 'Bank payments you marked as bought for someone else, not yet paid back. Owed to you, so not spent.',
     csn: 'CSN',
     csnHint: 'Low interest, paid off over many years',
     loans: 'Loans',

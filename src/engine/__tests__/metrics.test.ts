@@ -352,3 +352,15 @@ describe('money set aside for quarterly and yearly bills', () => {
     expect(nov.debt.lines[0].lump).toBeUndefined();
   });
 });
+
+describe("money lent out", () => {
+  it("is owned, not spent", () => {
+    const plan = prdExamplePlan();
+    const base = computeMetrics(plan, NOW).position;
+    plan.bank = { provider: "p", appId: "x", sessions: [], lentOut: 500 };
+    const p = computeMetrics(plan, NOW).position;
+    expect(p.lentOut).toBe(500);
+    expect(p.totalOwned).toBe(base.totalOwned + 500);
+    expect(p.netWorth).toBe(base.netWorth + 500);
+  });
+});

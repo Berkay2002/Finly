@@ -181,7 +181,7 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
             {t.lines(merchant.count, formatDate(merchant.lastDate))} · {formatMoney(merchant.total, currency)}
           </div>
         </div>
-        <SelectField size="sm" value={'' as Choice} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0" />
+        <SelectField size="sm" value={'' as Choice} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0 sm:w-64" />
       </div>
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
       {!person && <Switch className="mt-1.5" checked={remember} onChange={setRemember} description={t.remember} />}
@@ -222,7 +222,7 @@ function InRow({ tx, lent }: { tx: ClassifiedTx; lent: ClassifiedTx[] }) {
             ...plan.expenses.map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
             { value: 'ignore', label: t.inIgnore },
           ]}
-          className="w-44 shrink-0"
+          className="w-44 shrink-0 sm:w-64"
         />
       </div>
       <Switch className="mt-1.5" checked={monthly} onChange={setMonthly} description={t.everyMonth} />
@@ -255,7 +255,7 @@ function LentRow({ tx, incoming }: { tx: ClassifiedTx; incoming: ClassifiedTx[] 
           { value: 'settled', label: t.settled },
           { value: 'mine', label: t.mine },
         ]}
-        className="w-44 shrink-0"
+        className="w-44 shrink-0 sm:w-64"
       />
     </li>
   );

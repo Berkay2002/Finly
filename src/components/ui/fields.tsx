@@ -182,7 +182,9 @@ export function SelectField<T extends string>({
     const estimate = Math.min(options.length, 8) * 36 + 12;
     const below = window.innerHeight - r.bottom;
     const up = below < estimate + 8 && r.top > below;
-    setPos({ top: up ? r.top - 6 : r.bottom + 6, left: r.left, width: r.width, up });
+    // The list is never narrower than its labels need, and stays on screen when the trigger sits at the right edge.
+    const width = Math.max(r.width, Math.min(280, window.innerWidth - 16));
+    setPos({ top: up ? r.top - 6 : r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)), width, up });
   }, [options.length]);
 
   const openList = () => {

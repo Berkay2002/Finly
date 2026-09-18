@@ -51,6 +51,7 @@ export default {
     investments: 'Investeringar',
     home: 'Bostad',
     otherProperty: 'Bil & annan egendom',
+    lentOut: 'Utlånat till personer',
     csn: 'CSN',
     loans: 'Lån',
     netWorth: 'Nettoförmögenhet',

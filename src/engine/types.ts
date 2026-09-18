@@ -352,6 +352,8 @@ export interface BankSetup {
   merchants?: Record<string, MerchantRule>;
   /** By transaction id. Pruned to the months the device keeps. */
   lines?: Record<string, LineChoice>;
+  /** Money lent out and not yet back, as the bank lines say: owed to the person, so owned, not spent. Written by the device with the key. */
+  lentOut?: number;
 }
 
 export interface Account {

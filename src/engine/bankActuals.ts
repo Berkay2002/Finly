@@ -316,6 +316,11 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** What is still owed back on everything lent out. */
+export function lentTotal(classified: ClassifiedTx[]): number {
+  return round2(lentOut(classified).reduce((sum, tx) => sum - tx.amount - (tx.repaid ?? 0), 0));
+}
+
 /** Money out for someone else that has not come back in full: booked, biggest first. */
 export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
   return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && -tx.amount - (tx.repaid ?? 0) > 0).sort((a, b) => a.amount - b.amount);
@@ -333,8 +338,8 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
     if (tx.pending || tx.amount >= 0) continue;
     const group = tx.class === 'spend' ? tx.group : tx.class === 'unsorted' || tx.class === 'statement' || tx.class === 'lent' ? 'leisure' : undefined;
     if (!group) continue;
-    // Lent money is gone until it comes back; a statement counts for what no subscription explains.
-    const spent = tx.class === 'lent' ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
+    // Lent money is owed back, not spent, until the person says the rest was theirs; a statement counts for what no subscription explains.
+    const spent = tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : 0) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
     if (spent <= 0) continue;
     const month = tx.date.slice(0, 7);
     const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });

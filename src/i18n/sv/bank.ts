@@ -125,7 +125,7 @@ export default {
     subtitle: 'Allt här räknas redan som spenderat, under nöje och fritid tills du säger något annat. Sortera en mottagare en gång så följer varje betalning till den med.',
     lines: (count, last) => (count === 1 ? `1 betalning, ${last}` : `${count} betalningar, senast ${last}`),
     remember: 'Kom ihåg mottagaren',
-    lent: 'Köpt åt någon annan',
+    lent: 'Utlånat eller köpt åt någon annan',
     lentTitle: 'Väntar på att få tillbaka',
     lentDetail: (names) => `Väntar på att få tillbaka: ${names.join(', ')}`,
     paidBackBy: 'Betalades tillbaka av…',

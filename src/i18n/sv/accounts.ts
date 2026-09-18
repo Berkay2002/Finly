@@ -31,6 +31,8 @@ export default {
     homeHint: 'Värdet du angett på bolånet',
     otherProperty: 'Bil & annan egendom',
     otherPropertyHint: 'Värdet du angett på lånet',
+    lentOut: 'Utlånat till personer',
+    lentOutHint: 'Bankbetalningar du markerat som köpta åt någon annan, inte återbetalda än. Du har dem att fordra, så inte spenderade.',
     csn: 'CSN',
     csnHint: 'Låg ränta, betalas av under många år',
     loans: 'Lån',

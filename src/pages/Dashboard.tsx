@@ -110,6 +110,7 @@ export function Dashboard() {
     { icon: 'account-investment' as const, accent: 'green' as const, label: d.position.investments, value: p.investments },
     ...(p.home > 0 ? [{ icon: DEBT_ICON.mortgage, accent: 'lavender' as const, label: d.position.home, value: p.home }] : []),
     ...(p.otherProperty > 0 ? [{ icon: DEBT_ICON.car, accent: DEBT_ACCENT.car, label: d.position.otherProperty, value: p.otherProperty }] : []),
+    ...(p.lentOut > 0 ? [{ icon: 'stat-bank' as const, accent: 'blue' as const, label: d.position.lentOut, value: p.lentOut }] : []),
     ...(p.csnDebt > 0 ? [{ icon: DEBT_ICON.csn, accent: DEBT_ACCENT.csn, label: d.position.csn, value: -p.csnDebt }] : []),
     ...(otherDebt > 0 ? [{ icon: 'stat-bank' as const, accent: 'red' as const, label: d.position.loans, value: -otherDebt }] : []),
   ];

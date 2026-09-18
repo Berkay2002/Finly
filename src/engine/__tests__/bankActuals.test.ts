@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
+import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, lentTotal, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
@@ -143,7 +143,7 @@ describe('money out', () => {
     expect(toSort(out)).toEqual([]);
   });
 
-  it('money out for someone else is spent until their Swish brings it back', () => {
+  it('money out for someone else is owed back, not spent, until it comes back or the rest is called your own', () => {
     const lines = [
       tx({ id: 'buy', amount: -5889, date: '2026-09-09', kind: 'card', counterparty: 'INET AB' }),
       tx({ id: 'back', amount: 5889, date: '2026-09-14', kind: 'swish', counterparty: '46702330253' }),
@@ -151,14 +151,16 @@ describe('money out', () => {
     const bank = { provider: 'p', appId: 'x', sessions: [] };
     const lent = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { buy: { action: 'lent' } } } }, OWN);
     expect(lent.map((t) => t.class)).toEqual(['lent', 'unsorted']);
-    expect(spendByMonth(lent, new Date(2026, 8, 16)).leisure['2026-09']).toMatchObject({ amount: 5889 });
+    expect(spendByMonth(lent, new Date(2026, 8, 16)).leisure).toEqual({});
     expect(lentOut(lent).map((t) => t.id)).toEqual(['buy']);
+    expect(lentTotal(lent)).toBe(5889);
     expect(toSort(lent)).toEqual([]);
 
     const repaid = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { buy: { action: 'lent' }, back: { repays: 'buy' } } } }, OWN);
     expect(repaid.map((t) => t.class)).toEqual(['lent', 'ignored']);
     expect(spendByMonth(repaid, new Date(2026, 8, 16)).leisure).toEqual({});
     expect(lentOut(repaid)).toEqual([]);
+    expect(lentTotal(repaid)).toBe(0);
   });
 
   it('a person is sorted one line at a time, and what is settled stops waiting but stays spent', () => {
@@ -168,9 +170,9 @@ describe('money out', () => {
       tx({ id: 'b', amount: -400, date: '2026-09-09', kind: 'swish', counterparty: '46702330253' }),
     ];
     expect(toSort(classifyTransactions(lines, { income: [] }, OWN)).map((m) => [m.key, m.count])).toEqual([['46702330253#b', 1], ['46702330253#a', 1]]);
-    const settled = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { b: { action: 'settled' } } } }, OWN);
-    expect(lentOut(settled)).toEqual([]);
-    expect(spendByMonth(settled, new Date(2026, 8, 16)).leisure['2026-09']).toMatchObject({ amount: 550 });
+    const settled = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { a: { action: 'lent' }, b: { action: 'settled' } } } }, OWN);
+    expect(lentOut(settled).map((t) => t.id)).toEqual(['a']);
+    expect(spendByMonth(settled, new Date(2026, 8, 16)).leisure['2026-09']).toMatchObject({ amount: 400 });
   });
 
   it("a friend's share of a bill lowers what the bill cost, by the line or by their monthly amount", () => {

@@ -47,6 +47,7 @@ export function AccountsPage() {
     { label: t.totalAssets, value: p.totalAssets, strong: !hasNetWorth },
     ...(p.home > 0 ? [{ label: t.home, value: p.home, hint: t.homeHint }] : []),
     ...(p.otherProperty > 0 ? [{ label: t.otherProperty, value: p.otherProperty, hint: t.otherPropertyHint }] : []),
+    ...(p.lentOut > 0 ? [{ label: t.lentOut, value: p.lentOut, hint: t.lentOutHint }] : []),
     ...(p.csnDebt > 0 ? [{ label: t.csn, value: -p.csnDebt, hint: t.csnHint }] : []),
     ...(otherDebt > 0 ? [{ label: p.csnDebt > 0 ? t.otherLoans : t.loans, value: -otherDebt, hint: t.loansHint }] : []),
     ...(hasNetWorth ? [{ label: t.netWorth, value: p.netWorth, hint: t.netWorthHint, strong: true }] : []),

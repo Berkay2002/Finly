@@ -213,7 +213,9 @@ export interface PlanMetrics {
     home: number;
     /** What cars and other property bought with a loan are worth. */
     otherProperty: number;
-    /** totalAssets + home + otherProperty. */
+    /** Lent to people and not yet back, from the bank lines. Owned, since it is owed. */
+    lentOut: number;
+    /** totalAssets + home + otherProperty + lentOut. */
     totalOwned: number;
     /** Sum of loan balances. */
     totalDebt: number;
@@ -525,7 +527,8 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const cashInBank = byRole.everyday + byRole.cash_savings;
   const totalAssets = sum(Object.values(byRole));
   const property = loanAssets(plan.debts ?? []);
-  const totalOwned = totalAssets + property.home + property.other;
+  const lentOut = plan.bank?.lentOut ?? 0;
+  const totalOwned = totalAssets + property.home + property.other + lentOut;
   const netWorth = totalOwned - totalDebt;
   const capitalTax = capitalTaxSummary(plan, now, gov);
   // Tax already taken (KF by the insurer, interest by the bank) is out of the balances; the rest is still owed.
@@ -628,6 +631,7 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
       byRole,
       home: property.home,
       otherProperty: property.other,
+      lentOut,
       totalOwned,
       totalDebt,
       csnDebt,

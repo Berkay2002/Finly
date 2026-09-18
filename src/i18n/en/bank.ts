@@ -123,7 +123,7 @@ export default {
     subtitle: 'All of this already counts as spent, under fun & leisure until you say otherwise. Sort a payee once and every payment to it follows.',
     lines: (count: number, last: string) => (count === 1 ? `1 payment, ${last}` : `${count} payments, last ${last}`),
     remember: 'Remember this payee',
-    lent: 'Bought for someone else',
+    lent: 'Lent or bought for someone else',
     lentTitle: 'Waiting to be paid back',
     lentDetail: (names: string[]) => `Waiting to be paid back: ${names.join(', ')}`,
     paidBackBy: 'Paid back by…',

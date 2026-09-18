@@ -49,6 +49,7 @@ export default {
     investments: 'Investments',
     home: 'Home',
     otherProperty: 'Car & other property',
+    lentOut: 'Lent to people',
     csn: 'CSN',
     loans: 'Loans',
     netWorth: 'Net worth',

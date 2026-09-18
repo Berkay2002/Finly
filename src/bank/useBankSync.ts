@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { billsByMonth, classifyTransactions, mergeWindow, receivedByMonth, spendByMonth, type BankTx, type ClassifiedTx, type OwnAccount } from '@/engine/bankActuals';
+import { billsByMonth, lentTotal, classifyTransactions, mergeWindow, receivedByMonth, spendByMonth, type BankTx, type ClassifiedTx, type OwnAccount } from '@/engine/bankActuals';
 import { SPEND_GROUPS } from '@/engine/everyday';
 import { isPassThrough } from '@/engine/merchants';
 import { monthKeyOf } from '@/engine/metrics';
@@ -70,6 +70,9 @@ export function reconcileSpending(now: Date = new Date()): void {
       if (paid !== undefined && paid !== item.actuals?.[month]) usePlanStore.getState().setExpenseActual(item.id, month, paid);
     }
   }
+  const owed = lentTotal(classified);
+  const bank = usePlanStore.getState().plan.bank;
+  if (bank && (bank.lentOut ?? 0) !== owed) usePlanStore.getState().setBankSetup({ ...bank, lentOut: owed });
   const spend = spendByMonth(classified, now);
   for (const group of SPEND_GROUPS) {
     for (const month of months) {
