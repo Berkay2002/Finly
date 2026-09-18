@@ -96,6 +96,33 @@ export function SpendNudges({ nudges, currency }: { nudges: SpendNudge[]; curren
 }
 
 /** Everyday spending in a section broken down per week and day. Food has its own card with more. */
+/**
+ * The figure a group is planned at: what its items add up to, until the person types one for the whole group.
+ * Typing the items' own total again clears it.
+ */
+export function GroupBudget({ group, className }: { group: SpendGroup; className?: string }) {
+  const m = useMetrics();
+  const currency = useCurrency();
+  const { setEverydayBudget } = usePlanStore();
+  const t = useT().everyday.budget;
+  const g = m.everyday[group];
+  const money = (n: number) => formatMoney(n, currency);
+  return (
+    <div className={clsx('flex items-center justify-between gap-3', className)}>
+      <div className="min-w-0 text-[12px] text-muted">
+        {g.budget ? t.set(money(g.itemsTotal)) : g.high > g.low ? t.fromItems(money(g.low), money(g.high)) : t.fromItemsFlat}
+      </div>
+      <MoneyField
+        size="sm"
+        currency={currency}
+        value={g.monthly}
+        onValueChange={(v) => setEverydayBudget(group, v > 0 && Math.round(v) !== Math.round(g.itemsTotal) ? v : null)}
+        className="w-36 shrink-0"
+      />
+    </div>
+  );
+}
+
 export function EverydayCard({ group, subtitle }: { group: Exclude<SpendGroup, 'food'>; subtitle: string }) {
   const m = useMetrics();
   const currency = useCurrency();
@@ -105,6 +132,7 @@ export function EverydayCard({ group, subtitle }: { group: Exclude<SpendGroup, '
   return (
     <Card>
       <CardHeader icon={<IconTile icon={look.icon} accent={look.accent} size="sm" />} title={SPEND_GROUP_META[group].label} subtitle={subtitle} />
+      <GroupBudget group={group} className="mb-3" />
       <SpendTiles summary={g} currency={currency} />
       <SpendNudges nudges={g.nudges} currency={currency} />
     </Card>

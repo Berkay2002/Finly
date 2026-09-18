@@ -81,6 +81,8 @@ interface PlanState {
   setExpenseActual: (id: string, month: string, amount: number | null) => void;
   /** Record (or clear, with null) what was spent on a group of everyday spending in a month (YYYY-MM). */
   setEverydaySpend: (group: SpendGroup, month: string, entry: SpendEntry | null) => void;
+  /** Set (or clear, with null) the figure a whole group of everyday spending is planned at. */
+  setEverydayBudget: (group: SpendGroup, amount: number | null) => void;
 
   addAccount: (draft: Draft<Account>) => string;
   updateAccount: (id: string, patch: Partial<Account>) => void;
@@ -300,6 +302,13 @@ export const usePlanStore = create<PlanState>()(
               return { ...plan, everydaySpend: Object.keys(everydaySpend).length > 0 ? everydaySpend : undefined };
             }),
           ),
+        setEverydayBudget: (group, amount) =>
+          mutate((plan) => {
+            const everydayBudget = { ...(plan.everydayBudget ?? {}) };
+            if (amount && amount > 0) everydayBudget[group] = amount;
+            else delete everydayBudget[group];
+            return { ...plan, everydayBudget: Object.keys(everydayBudget).length > 0 ? everydayBudget : undefined };
+          }),
 
         addAccount: (draft) => {
           const id = draft.id ?? newId('acc');

@@ -21,6 +21,11 @@ export default {
       bankHint: 'Nights out, cinema, events and hobbies. Often under entertainment or leisure in the bank app.',
     },
   },
+  budget: {
+    set: (items: string) => `Your figure for the whole group · the items add up to ${items}`,
+    fromItems: (low: string, high: string) => `What the items add up to, ${low} to ${high} · type your own`,
+    fromItemsFlat: 'What the items add up to · type your own',
+  },
   tiles: {
     perMonth: 'Per month',
     perWeek: 'Per week',

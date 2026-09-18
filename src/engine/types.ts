@@ -586,6 +586,8 @@ export interface FinancialPlan {
   commute?: Commute;
   /** Everyday spending logged per month (YYYY-MM), by kind. */
   everydaySpend?: Partial<Record<SpendGroup, Record<string, SpendEntry>>>;
+  /** A figure typed for a whole group (food, getting around, fun), replacing what its items add up to. */
+  everydayBudget?: Partial<Record<SpendGroup, number>>;
   income: IncomeSource[];
   expenses: ExpenseItem[];
   accounts: Account[];

@@ -417,3 +417,24 @@ describe('computeMetrics — a bill that may be nothing at all, once the bank ha
     expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(0);
   });
 });
+
+describe('group budget', () => {
+  it('a figure typed for a group replaces what its items add up to, in the category, the range and the group', () => {
+    const plan = emptyPlan();
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [
+      expense({ id: 'groceries', name: 'Groceries', amount: 3200, category: 'living', subcategory: 'groceries', fixed: false }),
+      expense({ id: 'restaurants', name: 'Restaurants', amount: 0, category: 'living', subcategory: 'restaurants', fixed: false, range: { low: 0, high: 1200 } }),
+    ];
+    const before = computeMetrics(plan, NOW);
+    expect(before.expenses.byCategory.living).toBe(3800);
+    expect(before.everyday.food).toMatchObject({ monthly: 3800, itemsTotal: 3800 });
+    plan.everydayBudget = { food: 5000 };
+    const m = computeMetrics(plan, NOW);
+    expect(m.expenses.byCategory.living).toBe(5000);
+    expect(m.lifestyleCost).toBe(5000);
+    expect(m.range.byCategory.living).toEqual({ low: 3200, high: 5000 });
+    expect(m.everyday.food).toMatchObject({ monthly: 5000, low: 3200, high: 5000, itemsTotal: 3800, budget: 5000 });
+    expect(m.expenses.lines.map((l) => l.id)).toEqual(['groceries', 'restaurants']);
+  });
+});

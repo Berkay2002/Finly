@@ -1,7 +1,7 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { isIrregular, monthsPerPeriod, toMonthly } from './frequency';
-import { everydaySummaries, SPEND_GROUP_META, SPEND_GROUPS, spendEntryFor, type SpendSummary } from './everyday';
+import { everydaySummaries, SPEND_GROUP_META, SPEND_GROUPS, spendEntryFor, spendGroupOf, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paymentsPerYear, paysInMonth } from './debts';
 import { lumpPayment, type LumpPayment } from './periods';
@@ -386,15 +386,29 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
       isIrregular(e.frequency, e.occurrences) && step ? lumpPayment(amountSpread(e).typical, step, e.nextDate, now) : null;
     return lump ? { ...line, lump } : line;
   });
+  // A figure typed for a whole group replaces what its items add up to in every total; the items stay as the expected split.
+  const groupOf = new Map(active.map((e) => [e.id, spendGroupOf(e)]));
+  const budgetLines: CostLine[] = SPEND_GROUPS.flatMap((g) => {
+    const budget = plan.everydayBudget?.[g];
+    if (!budget) return [];
+    const ls = lines.filter((l) => groupOf.get(l.id) === g);
+    const low = sum(ls.map((l) => l.monthlyLow));
+    const monthly = budget - sum(ls.map((l) => l.monthly));
+    const monthlyLow = Math.min(low, budget) - low;
+    const monthlyHigh = budget - sum(ls.map((l) => l.monthlyHigh));
+    const meta = SPEND_GROUP_META[g];
+    return [{ id: `budget:${g}`, name: meta.label, category: meta.category, monthly, annual: monthly * 12, monthlyLow, monthlyHigh, varies: monthlyLow !== monthlyHigh, essential: false, committed: false, fixed: false }];
+  });
+  const costed = [...lines, ...budgetLines];
   const emptyByCategory = () => Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c, 0])) as Record<ExpenseCategory, number>;
   const byCategory = emptyByCategory();
   const byCategoryHeld = emptyByCategory();
-  for (const l of lines) {
+  for (const l of costed) {
     byCategory[l.category] += l.monthly;
     if (l.lump && !l.lump.paidThisMonth) byCategoryHeld[l.category] += l.monthly;
   }
 
-  const expenseTotal = sum(lines.map((l) => l.monthly));
+  const expenseTotal = sum(costed.map((l) => l.monthly));
   const essentialSpend = sum(lines.filter((l) => l.essential).map((l) => l.monthly));
   const fixed = sum(lines.filter((l) => l.fixed).map((l) => l.monthly));
   const committed = sum(lines.filter((l) => l.committed).map((l) => l.monthly));
@@ -443,16 +457,16 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
     high: sum(ls.map((l) => l.monthlyHigh)),
   });
   const withDebt = (r: Range): Range => ({ low: r.low + debtMonthly, high: r.high + debtMonthly });
-  const lifestyleRange = withDebt(rangeOf(lines));
+  const lifestyleRange = withDebt(rangeOf(costed));
   const essentialRange = withDebt(rangeOf(lines.filter((l) => l.essential)));
   const byCategoryRange = Object.fromEntries(
-    EXPENSE_CATEGORIES.map((c) => [c, rangeOf(lines.filter((l) => l.category === c))]),
+    EXPENSE_CATEGORIES.map((c) => [c, rangeOf(costed.filter((l) => l.category === c))]),
   ) as Record<ExpenseCategory, Range>;
   const hasRanges = lines.some((l) => l.varies);
 
   /* Actuals — bills confirmed for the viewed month */
   const month = monthKeyOf(now);
-  const everyday = everydaySummaries(active, plan.everydaySpend, month);
+  const everyday = everydaySummaries(active, plan.everydaySpend, month, plan.everydayBudget);
   const food = foodSummary(everyday.food, active);
   // A group's total for the whole month replaces the estimates of every item in it at once.
   const byId = new Map(lines.map((l) => [l.id, l]));
@@ -506,8 +520,8 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   }
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
   const monthLifestyleRange: Range = withDebt({
-    low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
-    high: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance,
+    low: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
+    high: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance,
   });
 
   /* Savings */

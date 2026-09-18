@@ -107,6 +107,9 @@ export interface SpendSummary {
   /** Spending you could realistically change soon (not committed). */
   flexible: number;
   itemIds: string[];
+  /** What the items add up to, which is `monthly` unless a budget was typed for the group. */
+  itemsTotal: number;
+  budget?: number;
   nudges: SpendNudge[];
   month: SpendMonth;
   history: SpendHistory;
@@ -193,6 +196,7 @@ export function spendSummary(
   active: ExpenseItem[],
   spend: Record<string, SpendEntry> | undefined,
   month: string,
+  budget?: number,
 ): SpendSummary {
   const items = active.filter((e) => spendGroupOf(e) === group);
   let monthly = 0;
@@ -214,11 +218,20 @@ export function spendSummary(
     }
   }
   nudges.sort((a, b) => b.monthly - a.monthly);
+  // A figure typed for the group is the plan; the items are its expected split. It is the high end, and the low end when below it.
+  const itemsTotal = monthly;
+  if (budget) {
+    monthly = budget;
+    low = Math.min(low, budget);
+    high = budget;
+  }
   return {
     group,
     monthly,
     low,
     high,
+    itemsTotal,
+    budget,
     weekly: monthlyToWeekly(monthly),
     daily: monthlyToDaily(monthly),
     flexible,
@@ -233,8 +246,9 @@ export function everydaySummaries(
   active: ExpenseItem[],
   spend: Partial<Record<SpendGroup, Record<string, SpendEntry>>> | undefined,
   month: string,
+  budgets?: Partial<Record<SpendGroup, number>>,
 ): Record<SpendGroup, SpendSummary> {
-  return Object.fromEntries(SPEND_GROUPS.map((g) => [g, spendSummary(g, active, spend?.[g], month)])) as Record<
+  return Object.fromEntries(SPEND_GROUPS.map((g) => [g, spendSummary(g, active, spend?.[g], month, budgets?.[g])])) as Record<
     SpendGroup,
     SpendSummary
   >;

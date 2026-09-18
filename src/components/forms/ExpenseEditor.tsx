@@ -53,6 +53,7 @@ import { brandedExpenseName } from '@/lib/brandLogo';
 import { useFoodPrices } from '@/lib/foodPrices';
 import { FX_CURRENCIES } from '@/lib/fx';
 import { fetchSpotAverage, previousMonthKey } from '@/lib/spotPrice';
+import { GroupBudget } from '@/components/everyday/EverydayCards';
 import { HomeFields } from './HomeFields';
 import { HouseholdFoodEstimator } from './HouseholdFood';
 import { BrandPicker } from './BrandPicker';
@@ -457,7 +458,10 @@ export function ExpenseEditor({
       {showGroups
         ? grouped.map(([group, list]) => (
             <div key={group}>
-              <h3 className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-faint">{groupLabel(group)}</h3>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h3 className="text-[12px] font-semibold uppercase tracking-wide text-faint">{groupLabel(group)}</h3>
+                {group === 'Food & drink' && <GroupBudget group="food" className="min-w-0 flex-1 justify-end" />}
+              </div>
               <div className="space-y-2">{list.map(row)}</div>
             </div>
           ))

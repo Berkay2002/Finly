@@ -22,6 +22,11 @@ export default {
       bankHint: 'Utekvällar, bio, evenemang och hobbyer. Ligger ofta under nöjen eller fritid i bankappen.',
     },
   },
+  budget: {
+    set: (items) => `Din siffra för hela gruppen · posterna blir ${items}`,
+    fromItems: (low, high) => `Vad posterna blir, ${low} till ${high} · skriv en egen`,
+    fromItemsFlat: 'Vad posterna blir · skriv en egen',
+  },
   tiles: {
     perMonth: 'Per månad',
     perWeek: 'Per vecka',

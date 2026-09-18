@@ -90,6 +90,8 @@ describe('spending groups', () => {
   });
 
   it('sums a group per month, week and day', () => {
+    const b = spendSummary('transport', [fuel()], undefined, '2026-09', 500);
+    expect(b).toMatchObject({ monthly: 500, low: 500, high: 500, itemsTotal: 900, budget: 500 });
     const s = spendSummary('transport', [fuel(), parking(), flights()], undefined, '2026-09');
     const monthly = 900 + 25 * occurrencesPerMonth({ times: 3, per: 'week' });
     expect(s.monthly).toBeCloseTo(monthly, 6);
