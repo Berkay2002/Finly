@@ -213,6 +213,14 @@ export function personLabel(key: string, names?: Record<string, string>): string
   return names?.[key] ?? `0${key.slice(0, 2)}-${key.slice(2, 5)} ${key.slice(5, 7)} ${key.slice(7)}`;
 }
 
+/**
+ * Who sent money in, as something stable to name them by: the phone number on a Swish, or the sender's
+ * name the bank writes on a transfer (SEB gives no account, only the name, cut at 12 characters).
+ */
+export function personKey(tx: Pick<BankTx, 'counterparty' | 'description' | 'kind'>): string | undefined {
+  return mobileKey(tx.counterparty ?? tx.description) ?? (tx.kind === 'credit_transfer' ? normalizeParty(tx.counterparty ?? tx.description) || undefined : undefined);
+}
+
 /** The payee for showing: a Swish line carries a phone number, shown as the person. */
 export function partyLabel(tx: Pick<BankTx, 'counterparty' | 'description'>, names?: Record<string, string>): string {
   const raw = (tx.counterparty ?? tx.description ?? '').trim();
@@ -326,8 +334,7 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     } else if (rule && 'expenseId' in rule && rule.amount !== undefined && closeTo(tx.amount, rule.amount)) applyRule(tx, rule);
   }
   // A bill shared with others: money in of about one share is a share. From the people named, one each a
-  // month; with only a count, from anyone, up to that many a month. A bank transfer carries no sender, only
-  // what they wrote, so one of about a share fills a slot the named people have left open.
+  // month; with only a count, from anyone, up to that many a month.
   const shared = expenses.filter((e) => sharerCount(e) > 0 && e.amount > 0);
   if (shared.length) {
     const shares = new Map<string, number>();
@@ -335,17 +342,17 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     const count = (tx: ClassifiedTx, id: string) => {
       const m = `${id}:${tx.date.slice(0, 7)}`;
       bump(m);
-      const person = mobileKey(tx.counterparty);
+      const person = personKey(tx);
       if (person) bump(`${m}:${person}`);
     };
     for (const tx of booked) if (tx.amount > 0 && tx.class === 'expense' && tx.expenseId) count(tx, tx.expenseId);
     for (const tx of booked) {
       if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
-      const person = mobileKey(tx.counterparty);
+      const person = personKey(tx);
       const e = shared.find((s) => {
         if (!closeTo(tx.amount, s.amount)) return false;
         const m = `${s.id}:${tx.date.slice(0, 7)}`;
-        if (s.sharedBy?.length && tx.kind !== 'credit_transfer') return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
+        if (s.sharedBy?.length) return !!person && s.sharedBy.includes(person) && !shares.get(`${m}:${person}`);
         return (shares.get(m) ?? 0) < sharerCount(s);
       });
       if (!e) continue;

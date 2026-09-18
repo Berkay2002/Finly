@@ -209,18 +209,18 @@ describe('money out', () => {
     const byName = classifyTransactions(more, { income: [], expenses: [named] }, OWN);
     expect(byName.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'expense', 'unsorted', 'unsorted']);
 
-    // A bank transfer names nobody, only what the sender wrote: one of about a share takes a slot still open, and no more.
+    // A bank transfer carries the sender's name, so a person can be named by it too, one share each a month.
     const byTransfer = classifyTransactions(
       [
         lines[0],
-        tx({ id: 't1', amount: 37, date: '2026-09-04', kind: 'credit_transfer', counterparty: 'SPOTIFY SEPT' }),
-        tx({ id: 't2', amount: 36, date: '2026-09-05', kind: 'credit_transfer', counterparty: 'HYRA' }),
-        tx({ id: 't3', amount: 36.5, date: '2026-09-06', kind: 'credit_transfer', counterparty: 'SPOTIFY' }),
+        tx({ id: 't1', amount: 36.5, date: '2026-09-04', kind: 'credit_transfer', counterparty: 'JONATAN FRED' }),
+        tx({ id: 't2', amount: 36.5, date: '2026-09-05', kind: 'credit_transfer', counterparty: 'EMILIN ISSA' }),
+        tx({ id: 't3', amount: 36.5, date: '2026-09-20', kind: 'credit_transfer', counterparty: 'JONATAN FRED' }),
       ],
-      { income: [], expenses: [named] },
+      { income: [], expenses: [{ ...named, sharedBy: ['702330253', 'JONATANFRED'] }] },
       OWN,
     );
-    expect(byTransfer.map((t) => t.class)).toEqual(['expense', 'expense', 'expense', 'unsorted']);
+    expect(byTransfer.map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted', 'unsorted']);
   });
 
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {

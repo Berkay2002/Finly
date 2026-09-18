@@ -58,7 +58,7 @@ import { HouseholdFoodEstimator } from './HouseholdFood';
 import { BrandPicker } from './BrandPicker';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
-import { normalizeParty, personLabel } from '@/engine/bankActuals';
+import { normalizeParty, personKey, personLabel } from '@/engine/bankActuals';
 import { mobileKey } from '@/engine/vcard';
 import { useBankStore } from '@/bank/bankStore';
 import { PASS_THROUGH_LABEL, passThroughBrand } from '@/engine/merchants';
@@ -195,15 +195,19 @@ function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'sharedWith' | 's
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
   const chosen = draft.sharedBy ?? [];
-  const people = useMemo(() => {
+  const { people, labels } = useMemo(() => {
     const seen = new Map<string, string>();
+    const labels = new Map<string, string>();
     for (const tx of Object.values(txs).flat()) {
-      const key = tx.amount > 0 && !tx.pending ? mobileKey(tx.counterparty) : undefined;
-      if (key && (!seen.has(key) || seen.get(key)! < tx.date)) seen.set(key, tx.date);
+      const key = tx.amount > 0 && !tx.pending ? personKey(tx) : undefined;
+      if (!key) continue;
+      if (!seen.has(key) || seen.get(key)! < tx.date) seen.set(key, tx.date);
+      // A transfer names its sender in capitals; a Swish only has the number, which the contacts may name.
+      labels.set(key, mobileKey(key) ? personLabel(key, contacts) : (tx.counterparty ?? key).toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase()));
     }
     const keys = [...seen.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([k]) => k);
-    return [...new Set([...chosen, ...keys])];
-  }, [txs, chosen]);
+    return { people: [...new Set([...chosen, ...keys])], labels };
+  }, [txs, contacts, chosen]);
   if (!people.length) {
     return <CountField label={tf.sharedWith} hint={tf.sharedWithHint} min={0} value={draft.sharedWith ?? 0} onValueChange={(n) => set({ sharedWith: n > 0 ? Math.floor(n) : undefined })} />;
   }
@@ -225,7 +229,7 @@ function SharedWith({ draft, set }: { draft: Pick<ExpenseItem, 'sharedWith' | 's
               onClick={() => toggle(key)}
               className={clsx('rounded-full border px-3 py-1 text-[12.5px] transition', on ? 'border-brand-solid bg-brand-50 text-brand-700' : 'border-line text-muted hover:bg-page')}
             >
-              {personLabel(key, contacts)}
+              {labels.get(key) ?? (mobileKey(key) ? personLabel(key, contacts) : key)}
             </button>
           );
         })}
