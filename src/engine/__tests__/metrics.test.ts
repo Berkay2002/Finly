@@ -364,3 +364,20 @@ describe("money lent out", () => {
     expect(p.netWorth).toBe(base.netWorth + 500);
   });
 });
+
+describe("a one-off, such as a gift", () => {
+  it("counts whole in its month, once, and is history after", () => {
+    const base = computeMetrics(prdExamplePlan(), NOW);
+    const gift = expense({ id: "gift", name: "Gift to Anna", category: "planned", subcategory: "gifts", amount: 1000, fixed: true, frequency: "once", nextDate: "2026-09-12", actuals: { "2026-09": 1000 } });
+    const plan = prdExamplePlan();
+    plan.expenses.push(gift);
+    const m = computeMetrics(plan, NOW);
+    expect(m.oneOffsThisMonth).toBe(base.oneOffsThisMonth + 1000);
+    expect(m.safeToSpend).toBeCloseTo(base.safeToSpend - 1000 - 1000 / 12, 5);
+    expect(m.actuals.byCategory.planned).toBeCloseTo(base.actuals.byCategory.planned + 1000, 5);
+    const later = computeMetrics(plan, new Date(2026, 9, 16));
+    const baseLater = computeMetrics(prdExamplePlan(), new Date(2026, 9, 16));
+    expect(later.lifestyleCost).toBe(baseLater.lifestyleCost);
+    expect(later.oneOffsThisMonth).toBe(baseLater.oneOffsThisMonth);
+  });
+});

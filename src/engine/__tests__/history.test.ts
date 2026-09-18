@@ -39,7 +39,8 @@ describe('buildSnapshot', () => {
     const aug = buildSnapshot(plan, '2026-08', NOW);
     const sep = buildSnapshot(plan, '2026-09', NOW);
     expect(aug.savedAt).toBe(NOW.toISOString());
-    expect(aug.safeToSpend).toBe(sep.safeToSpend - 1500);
+    // August carries the whole one-off; by September it is history, not a twelfth to keep paying.
+    expect(aug.safeToSpend).toBeCloseTo(sep.safeToSpend - 1500 - 1500 / 12, 5);
   });
 
   it('records balances per account and goal plus the emergency total', () => {

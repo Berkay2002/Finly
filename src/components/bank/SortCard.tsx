@@ -122,7 +122,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   );
 }
 
-type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' | 'transfer' | 'ignore';
+type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' | 'gift' | 'transfer' | 'ignore';
 
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
@@ -130,7 +130,7 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
   const plan = usePlan();
   const currency = useCurrency();
   const t = useT().bank.sort;
-  const { setMerchantRule, setLineChoice, updateExpense } = usePlanStore();
+  const { setMerchantRule, setLineChoice, updateExpense, addExpense } = usePlanStore();
   const hint = merchant.hint;
   // A bill learns the payee as the bank writes it, not the label shown: a Swish number may carry a name now.
   const party = merchant.lines[0]?.counterparty ?? merchant.label;
@@ -145,6 +145,7 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
     ...savingsPots(plan).map((p) => ({ value: `pot:${p.id}` as const, label: t.saving(p.name) })),
     ...(remember ? [{ value: 'transfer' as const, label: t.transfer }] : []),
     { value: 'lent', label: t.lent },
+    { value: 'gift', label: t.gift },
     { value: 'ignore', label: t.ignore },
   ];
 
@@ -165,6 +166,10 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
       setMerchantRule(merchant.key, { action: 'transfer' });
     } else if (choice === 'lent') {
       for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { action: 'lent' });
+    } else if (choice === 'gift') {
+      // A present is spent once, in its month: a one-off item in the plan, dated when it went out.
+      const id = addExpense({ ...customDraft('planned', t.giftName(merchant.label.replace(/^Swish · /, '')), []), subcategory: 'gifts', amount: merchant.total, frequency: 'once', nextDate: merchant.lastDate });
+      for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { expenseId: id });
     } else {
       const rule = choice === 'ignore' ? ({ action: 'ignore' } as const) : { group: choice as SpendGroup };
       if (remember) setMerchantRule(merchant.key, rule);

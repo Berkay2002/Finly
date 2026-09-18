@@ -124,6 +124,8 @@ export default {
     lines: (count: number, last: string) => (count === 1 ? `1 payment, ${last}` : `${count} payments, last ${last}`),
     remember: 'Remember this payee',
     lent: 'Lent or bought for someone else',
+    gift: 'A gift or present, one-off',
+    giftName: (who: string) => `Gift to ${who}`,
     lentTitle: 'Waiting to be paid back',
     lentDetail: (names: string[]) => `Waiting to be paid back: ${names.join(', ')}`,
     paidBackBy: 'Paid back by…',

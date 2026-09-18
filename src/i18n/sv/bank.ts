@@ -126,6 +126,8 @@ export default {
     lines: (count, last) => (count === 1 ? `1 betalning, ${last}` : `${count} betalningar, senast ${last}`),
     remember: 'Kom ihåg mottagaren',
     lent: 'Utlånat eller köpt åt någon annan',
+    gift: 'En gåva eller present, engångs',
+    giftName: (who) => `Present till ${who}`,
     lentTitle: 'Väntar på att få tillbaka',
     lentDetail: (names) => `Väntar på att få tillbaka: ${names.join(', ')}`,
     paidBackBy: 'Betalades tillbaka av…',

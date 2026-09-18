@@ -80,7 +80,7 @@ describe('snapshots', () => {
     usePlanStore.getState().saveSnapshot('2026-08', NOW);
     usePlanStore.getState().saveSnapshot('2026-09', NOW);
     const { snapshots } = usePlanStore.getState();
-    expect(snapshots['2026-08'].safeToSpend).toBe(snapshots['2026-09'].safeToSpend - 1500);
+    expect(snapshots['2026-08'].safeToSpend).toBeCloseTo(snapshots['2026-09'].safeToSpend - 1500 - 1500 / 12, 5);
   });
 
   it('closes due months once', () => {

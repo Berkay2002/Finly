@@ -377,7 +377,8 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const totalIncome = reliable + variable;
 
   /* Expenses */
-  const active = activeExpenses(plan);
+  // A one-off already paid in an earlier month is history, not a cost to keep spreading.
+  const active = activeExpenses(plan).filter((e) => e.frequency !== 'once' || !e.nextDate || e.nextDate >= `${monthKeyOf(now)}-01`);
   const lines: CostLine[] = active.map((e) => {
     const line = toCostLine(e);
     const step = monthsPerPeriod(e.frequency);
@@ -468,7 +469,8 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   for (const e of active) {
     const line = byId.get(e.id);
     if (!line) continue;
-    if (loggedIds.has(e.id)) continue;
+    // A one-off counts whole in its month (see oneOffsThisMonth); its bank line must not count again as a variance.
+    if (loggedIds.has(e.id) || e.frequency === 'once') continue;
     const actual = actualFor(e, month);
     const bill: PendingBill = { ...line, periodMonth: billPeriodFor(e, month), billingLag: billingLagOf(e) };
     if (actual !== undefined) {
@@ -481,6 +483,9 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance;
   const actualByCategory = { ...byCategory };
   for (const l of confirmed) actualByCategory[l.category] += l.variance;
+  for (const e of active) {
+    if (e.frequency === 'once' && isDatedInMonth(e.nextDate, now)) actualByCategory[e.category] += typicalAmount(e) - (byId.get(e.id)?.monthly ?? 0);
+  }
   for (const g of SPEND_GROUPS) {
     if (everyday[g].month.complete) actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.variance ?? 0;
   }
