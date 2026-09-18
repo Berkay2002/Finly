@@ -139,9 +139,6 @@ export default {
     ignore: 'Inte utgift, hoppa över',
     done: 'Klar',
     empty: 'Allt från banken är sorterat.',
-    importContacts: 'Namnge Swish-nummer',
-    contactsHint: 'Exportera dina kontakter till en fil (iPhone: Kontakter → Listor → håll på Alla kontakter → Exportera) och välj den här. Den stannar på den här enheten.',
-    contactsCount: (count) => `${count} kontakter på den här enheten`,
   },
   legal: {
     privacyTitle: 'Integritet',

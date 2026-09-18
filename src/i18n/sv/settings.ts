@@ -38,6 +38,16 @@ export default {
     row: (income, costs) => `inkomst ${income} · kostnader ${costs}`,
     real: (amount) => ` · faktiskt ${amount}`,
   },
+  contacts: {
+    title: 'Kontakter',
+    subtitle: 'Swish-betalningar har bara ett telefonnummer. Importera dina kontakter så visar Finly namnet i stället.',
+    count: (count) => `${count} mobilnummer namngivna. Sparas bara på den här enheten, synkas aldrig.`,
+    how: 'Exportera en kontaktfil (.vcf) från telefonen. iPhone: Kontakter → Listor → håll på Alla kontakter → Exportera → Spara i Filer. Välj sedan den filen här.',
+    import: 'Importera kontaktfil',
+    forget: 'Glöm kontakter',
+    imported: (count) => `${count} mobilnummer namngivna.`,
+    none: 'Inga svenska mobilnummer i den filen.',
+  },
   data: {
     title: 'Dina data',
     subtitle: 'Sparas i den här webbläsaren. Exportera en fil för en backup som du själv har koll på.',

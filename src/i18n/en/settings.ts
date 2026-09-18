@@ -37,6 +37,16 @@ export default {
     row: (income: string, costs: string) => `income ${income} · costs ${costs}`,
     real: (amount: string) => ` · real ${amount}`,
   },
+  contacts: {
+    title: 'Contacts',
+    subtitle: 'Swish payments only carry a phone number. Import your contacts and Finly shows the name instead.',
+    count: (count: number) => `${count} mobile numbers named. Stored on this device only, never synced.`,
+    how: 'Export a contacts file (.vcf) from your phone. iPhone: Contacts → Lists → touch and hold All Contacts → Export → Save to Files. Then pick that file here.',
+    import: 'Import contacts file',
+    forget: 'Forget contacts',
+    imported: (count: number) => `${count} mobile numbers named.`,
+    none: 'No Swedish mobile numbers in that file.',
+  },
   data: {
     title: 'Your data',
     subtitle: 'Stored in this browser. Export a file for a backup you control.',

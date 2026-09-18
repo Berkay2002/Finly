@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
@@ -8,7 +8,6 @@ import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
-import { mobileKey, parseContacts } from '@/engine/vcard';
 import { expenseName } from '@/engine/taxonomy';
 import type { SpendGroup } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -29,24 +28,8 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   const plan = usePlan();
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
-  const setContacts = useBankStore((s) => s.setContacts);
   const t = useT().bank.sort;
   const [open, setOpen] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const contactCount = Object.keys(contacts).length;
-  const addContacts = (found: Record<string, string>) => setContacts({ ...contacts, ...found });
-  // Android has a native picker; iPhone has no such thing, so there it is the file Contacts exports.
-  const pickContacts = async () => {
-    const picker = (navigator as Navigator & { contacts?: { select: (props: string[], opts: { multiple: boolean }) => Promise<{ name?: string[]; tel?: string[] }[]> } }).contacts;
-    if (!picker) return fileRef.current?.click();
-    const found: Record<string, string> = {};
-    for (const c of await picker.select(['name', 'tel'], { multiple: true }).catch(() => []))
-      for (const tel of c.tel ?? []) {
-        const key = mobileKey(tel);
-        if (key && c.name?.[0]) found[key] = c.name[0];
-      }
-    addContacts(found);
-  };
 
   // A new rule, or a bill added from here, places lines at once instead of at the next read from the bank.
   useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
@@ -96,31 +79,13 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
         title={t.title}
         subtitle={t.subtitle}
         footer={
-          <div className="flex items-center justify-between gap-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".vcf,text/vcard,text/x-vcard"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = '';
-                if (file) void file.text().then((text) => addContacts(parseContacts(text)));
-              }}
-            />
-            <div className="min-w-0">
-              <Button variant="ghost" size="sm" onClick={() => void pickContacts()}>
-                {t.importContacts}
-              </Button>
-              {contactCount > 0 && <div className="px-3 text-[11.5px] text-faint">{t.contactsCount(contactCount)}</div>}
-            </div>
+          <div className="flex justify-end">
             <Button variant="secondary" onClick={() => setOpen(false)}>
               {t.done}
             </Button>
           </div>
         }
       >
-        {contactCount === 0 && <p className="mb-3 text-[12px] text-muted">{t.contactsHint}</p>}
         {lent.length > 0 && (
           <div className="mb-4">
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.lentTitle}</div>

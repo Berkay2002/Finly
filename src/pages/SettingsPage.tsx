@@ -1,10 +1,12 @@
-import { Camera, Download, RotateCcw, Sparkles, Trash2, Upload } from 'lucide-react';
+import { Camera, Download, RotateCcw, Sparkles, Trash2, Upload, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatMoney, formatMonthKey, formatMonthYear } from '@/engine/format';
 import { isFrozen } from '@/engine/history';
+import { parseContacts } from '@/engine/vcard';
 import { logoDevEnabled } from '@/lib/brandLogo';
 import { downloadText, readFileText } from '@/lib/download';
+import { useBankStore } from '@/bank/bankStore';
 import { usePlanStore } from '@/store/planStore';
 import { parsePlanFile, serializePlanFile } from '@/store/planFile';
 import { monthKey, usePlan } from '@/store/selectors';
@@ -35,6 +37,10 @@ export function SettingsPage() {
   const setThemeMode = useThemeStore((s) => s.setMode);
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
+  const contactsRef = useRef<HTMLInputElement>(null);
+  const contacts = useBankStore((s) => s.contacts);
+  const setContacts = useBankStore((s) => s.setContacts);
+  const contactCount = Object.keys(contacts).length;
   const [message, setMessage] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const sync = useSyncActions();
@@ -62,6 +68,22 @@ export function SettingsPage() {
       setMessage({ tone: 'warning', text: e instanceof Error ? e.message : t.settings.importFailed });
     } finally {
       if (fileRef.current) fileRef.current.value = '';
+    }
+  };
+
+  // Names by mobile number from the phone's contacts file, for Swish lines. Device-local, never synced.
+  const onImportContacts = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const found = parseContacts(await readFileText(file));
+      const n = Object.keys(found).length;
+      if (!n) throw new Error(t.settings.contacts.none);
+      setContacts({ ...contacts, ...found });
+      setMessage({ tone: 'success', text: t.settings.contacts.imported(n) });
+    } catch (e) {
+      setMessage({ tone: 'warning', text: e instanceof Error ? e.message : t.settings.contacts.none });
+    } finally {
+      if (contactsRef.current) contactsRef.current.value = '';
     }
   };
 
@@ -152,6 +174,21 @@ export function SettingsPage() {
 
           <Divider className="my-5" />
           <BankCard onMessage={(tone, text) => setMessage({ tone, text })} />
+
+          <Divider className="my-5" />
+          <CardHeader title={t.settings.contacts.title} subtitle={contactCount ? t.settings.contacts.count(contactCount) : t.settings.contacts.subtitle} />
+          <p className="mb-3 text-[12px] text-muted">{t.settings.contacts.how}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" icon={Users} onClick={() => contactsRef.current?.click()}>
+              {t.settings.contacts.import}
+            </Button>
+            <input ref={contactsRef} type="file" accept=".vcf,text/vcard,text/x-vcard" className="hidden" onChange={(e) => onImportContacts(e.target.files?.[0])} />
+            {contactCount > 0 && (
+              <Button variant="ghost" onClick={() => setContacts({})}>
+                {t.settings.contacts.forget}
+              </Button>
+            )}
+          </div>
 
           <Divider className="my-5" />
           <CardHeader title={t.settings.data.title} subtitle={t.settings.data.subtitle} />
