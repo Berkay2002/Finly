@@ -9,13 +9,15 @@ export interface SyncPayload extends PlanData {
    * Beside the plan and not in it: a plan is exported to files and copied into every closed month.
    */
   bankKey?: string;
+  /** Names by mobile number, only when the person chose to have them on every device. Same reasoning. */
+  contacts?: Record<string, string>;
 }
 
-/** What another device sent: its data, and the bank key if that device shares one. */
-export type RemoteData = PlanData & { bankKey?: string };
+/** What another device sent: its data, and the bank key and contacts if that device shares them. */
+export type RemoteData = PlanData & { bankKey?: string; contacts?: Record<string, string> };
 
-export function toPayload(data: PlanData, bankKey?: string): SyncPayload {
-  return { payloadVersion: 1, plan: data.plan, snapshots: data.snapshots, ...(bankKey ? { bankKey } : {}) };
+export function toPayload(data: PlanData, bankKey?: string, contacts?: Record<string, string>): SyncPayload {
+  return { payloadVersion: 1, plan: data.plan, snapshots: data.snapshots, ...(bankKey ? { bankKey } : {}), ...(contacts ? { contacts } : {}) };
 }
 
 /** Accepts a decrypted blob; throws when it is not one of ours. */
@@ -28,6 +30,7 @@ export function fromPayload(raw: unknown): RemoteData {
     plan: p.plan,
     snapshots: p.snapshots && typeof p.snapshots === 'object' ? p.snapshots : {},
     ...(typeof p.bankKey === 'string' ? { bankKey: p.bankKey } : {}),
+    ...(p.contacts && typeof p.contacts === 'object' ? { contacts: p.contacts } : {}),
   };
 }
 

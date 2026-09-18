@@ -41,7 +41,8 @@ export default {
   contacts: {
     title: 'Kontakter',
     subtitle: 'Swish-betalningar har bara ett telefonnummer. Importera dina kontakter så visar Finly namnet i stället.',
-    count: (count) => `${count} mobilnummer namngivna. Sparas bara på den här enheten, synkas aldrig.`,
+    count: (count, shared) => `${count} mobilnummer namngivna. ${shared ? 'I din krypterade synk, på alla enheter.' : 'Sparas bara på den här enheten.'}`,
+    share: 'Synka kontakter till mina andra enheter (krypterat, som planen)',
     how: 'Exportera en kontaktfil (.vcf) från telefonen. iPhone: Kontakter → Listor → håll på Alla kontakter → Exportera → Spara i Filer. Välj sedan den filen här.',
     import: 'Importera kontaktfil',
     forget: 'Glöm kontakter',

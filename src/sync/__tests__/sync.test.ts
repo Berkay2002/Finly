@@ -77,6 +77,8 @@ describe('crypto', () => {
     const data = { plan: prdExamplePlan(), snapshots: {} };
     expect('bankKey' in toPayload(data)).toBe(false);
     expect('bankKey' in fromPayload(toPayload(data))).toBe(false);
+    expect('contacts' in fromPayload(toPayload(data))).toBe(false);
+    expect(fromPayload(toPayload(data, undefined, { '702330253': 'Anna' })).contacts).toEqual({ '702330253': 'Anna' });
     const shared = toPayload(data, '-----BEGIN PRIVATE KEY-----');
     expect(fromPayload(shared).bankKey).toBe('-----BEGIN PRIVATE KEY-----');
     expect(JSON.stringify(shared.plan)).not.toContain('PRIVATE KEY');

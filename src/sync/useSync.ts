@@ -42,10 +42,14 @@ function localData(): PlanData {
 }
 
 /** Apply another device's copy without the plan store treating it as an edit. */
-function applyRemote({ bankKey, ...data }: RemoteData, takeBankKey = true) {
+function applyRemote({ bankKey, contacts, ...data }: RemoteData, takeBankKey = true) {
   applyingRemote = true;
   try {
     usePlanStore.getState().replaceAll(data);
+    // Contacts in the blob means sharing is on everywhere; none means it was turned off, and what this device has stays here.
+    const bank = useBankStore.getState();
+    if (contacts) bank.setContacts(contacts);
+    bank.setShareContacts(!!contacts);
     if (takeBankKey) {
       const previous = useBankStore.getState().sharedPem;
       useBankStore.getState().setSharedPem(bankKey);
@@ -81,7 +85,8 @@ async function push(): Promise<void> {
     sync.setStatus('syncing');
     try {
       const key = await keyFor(sync.syncId, sync.secret);
-      const sealed = await encryptJson(key, toPayload(localData(), useBankStore.getState().sharedPem));
+      const bank = useBankStore.getState();
+      const sealed = await encryptJson(key, toPayload(localData(), bank.sharedPem, bank.shareContacts ? bank.contacts : undefined));
       dirty = false;
       const result = await client().mutation(api.blobs.put, { syncId: sync.syncId, ...sealed, version: sync.version });
       if (result.ok) {
@@ -140,9 +145,10 @@ export function SyncController() {
       dirty = true;
       schedulePush();
     });
-    // Sharing the bank key switched on or off here is an edit like any other.
+    // Sharing the bank key or the contacts switched on or off here is an edit like any other, as are shared contacts.
     const unsubscribeBank = useBankStore.subscribe((s, prev) => {
-      if (applyingRemote || s.sharedPem === prev.sharedPem || useSyncStore.getState().status === 'off') return;
+      if (applyingRemote || useSyncStore.getState().status === 'off') return;
+      if (s.sharedPem === prev.sharedPem && s.shareContacts === prev.shareContacts && (!s.shareContacts || s.contacts === prev.contacts)) return;
       dirty = true;
       schedulePush();
     });

@@ -22,7 +22,7 @@ import { AvatarPicker } from '@/components/forms/AvatarPicker';
 import { BirthYearField } from '@/components/forms/BirthYearField';
 import { HomeFields } from '@/components/forms/HomeFields';
 import { useSyncActions } from '@/sync/useSync';
-import { Label, SegmentedControl, SelectField, TextField } from '@/components/ui/fields';
+import { Label, SegmentedControl, SelectField, Switch, TextField } from '@/components/ui/fields';
 import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
 import { useT } from '@/i18n';
 
@@ -40,6 +40,8 @@ export function SettingsPage() {
   const contactsRef = useRef<HTMLInputElement>(null);
   const contacts = useBankStore((s) => s.contacts);
   const setContacts = useBankStore((s) => s.setContacts);
+  const shareContacts = useBankStore((s) => s.shareContacts);
+  const setShareContacts = useBankStore((s) => s.setShareContacts);
   const contactCount = Object.keys(contacts).length;
   const [message, setMessage] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -71,7 +73,7 @@ export function SettingsPage() {
     }
   };
 
-  // Names by mobile number from the phone's contacts file, for Swish lines. Device-local, never synced.
+  // Names by mobile number from the phone's contacts file, for Swish lines. On this device unless the person shares them.
   const onImportContacts = async (file: File | undefined) => {
     if (!file) return;
     try {
@@ -176,7 +178,7 @@ export function SettingsPage() {
           <BankCard onMessage={(tone, text) => setMessage({ tone, text })} />
 
           <Divider className="my-5" />
-          <CardHeader title={t.settings.contacts.title} subtitle={contactCount ? t.settings.contacts.count(contactCount) : t.settings.contacts.subtitle} />
+          <CardHeader title={t.settings.contacts.title} subtitle={contactCount ? t.settings.contacts.count(contactCount, shareContacts) : t.settings.contacts.subtitle} />
           <p className="mb-3 text-[12px] text-muted">{t.settings.contacts.how}</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" icon={Users} onClick={() => contactsRef.current?.click()}>
@@ -189,6 +191,7 @@ export function SettingsPage() {
               </Button>
             )}
           </div>
+          {synced && <Switch className="mt-3" checked={shareContacts} onChange={setShareContacts} description={t.settings.contacts.share} />}
 
           <Divider className="my-5" />
           <CardHeader title={t.settings.data.title} subtitle={t.settings.data.subtitle} />

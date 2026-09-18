@@ -40,7 +40,8 @@ export default {
   contacts: {
     title: 'Contacts',
     subtitle: 'Swish payments only carry a phone number. Import your contacts and Finly shows the name instead.',
-    count: (count: number) => `${count} mobile numbers named. Stored on this device only, never synced.`,
+    count: (count: number, shared: boolean) => `${count} mobile numbers named. ${shared ? 'In your encrypted sync, on every device.' : 'Stored on this device only.'}`,
+    share: 'Sync contacts to my other devices (encrypted, like the plan)',
     how: 'Export a contacts file (.vcf) from your phone. iPhone: Contacts → Lists → touch and hold All Contacts → Export → Save to Files. Then pick that file here.',
     import: 'Import contacts file',
     forget: 'Forget contacts',

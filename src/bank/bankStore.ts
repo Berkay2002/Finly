@@ -48,6 +48,8 @@ interface BankState {
   txs: Record<string, BankTx[]>;
   /** Names by mobile number, from a contacts file the person imported; only to put a name on a Swish line. */
   contacts: Record<string, string>;
+  /** Whether the contacts ride along in the encrypted sync blob. Off by default: they stay on this device. */
+  shareContacts: boolean;
   /** In memory only. */
   syncing: boolean;
 
@@ -58,6 +60,7 @@ interface BankState {
   setAccounts: (accounts: Record<string, BankAccountState>, lastSyncedAt?: string) => void;
   setTxs: (txs: Record<string, BankTx[]>) => void;
   setContacts: (contacts: Record<string, string>) => void;
+  setShareContacts: (shareContacts: boolean) => void;
   setSyncing: (syncing: boolean) => void;
   forget: () => void;
 }
@@ -72,6 +75,7 @@ export const useBankStore = create<BankState>()(
       accounts: {},
       txs: {},
       contacts: {},
+      shareContacts: false,
       syncing: false,
 
       setHasKey: (hasKey) => set({ hasKey }),
@@ -81,13 +85,14 @@ export const useBankStore = create<BankState>()(
       setAccounts: (accounts, lastSyncedAt) => set((s) => ({ accounts, lastSyncedAt: lastSyncedAt ?? s.lastSyncedAt })),
       setTxs: (txs) => set({ txs }),
       setContacts: (contacts) => set({ contacts }),
+      setShareContacts: (shareContacts) => set({ shareContacts }),
       setSyncing: (syncing) => set({ syncing }),
       forget: () => set({ hasKey: false, sharedPem: undefined, pendingAuth: undefined, pendingMapping: undefined, accounts: {}, txs: {}, lastSyncedAt: undefined }),
     }),
     {
       // Not sessionStorage: the bank's app often hands the person back in a new tab.
       name: 'finly.bank.v1',
-      partialize: ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts }) => ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts }),
+      partialize: ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts, shareContacts }) => ({ hasKey, sharedPem, pendingAuth, pendingMapping, accounts, txs, lastSyncedAt, contacts, shareContacts }),
     },
   ),
 );
