@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { lentOut, partyLabel, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { lentOut, normalizeParty, partyLabel, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
@@ -154,10 +154,17 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
       const draft = customDraft(hint.bill ? 'living' : 'leisure', titleCase(merchant.label), hint.bill ? [] : ['subscription']);
       onAddBill({ ...draft, amount: hint.amount, fixed: hint.fixed, bankMatch: { counterparty: party } });
     } else if (choice.startsWith('bill:')) {
-      // A fixed bill the bank shows at another amount than planned (a family plan shared with friends) is learnt at what the bank shows.
-      const e = plan.expenses.find((x) => x.id === choice.slice(5));
-      const paid = Math.round((merchant.total / merchant.count) * 100) / 100;
-      updateExpense(choice.slice(5), { bankMatch: { counterparty: party, ...(e?.fixed && Math.abs(paid - e.amount) > 0.5 ? { amount: paid } : {}) } });
+      const id = choice.slice(5);
+      const e = plan.expenses.find((x) => x.id === id);
+      // A bill has one payee. One it already knows (or a Klarna mark) is kept; another store, or a person, is these lines only.
+      const taken = e?.bankMatch && normalizeParty(e.bankMatch.counterparty) !== normalizeParty(party);
+      if (!remember || taken) {
+        for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { expenseId: id });
+      } else {
+        // A fixed bill the bank shows at another amount than planned (a family plan shared with friends) is learnt at what the bank shows.
+        const paid = Math.round((merchant.total / merchant.count) * 100) / 100;
+        updateExpense(id, { bankMatch: { counterparty: party, ...(e?.fixed && Math.abs(paid - e.amount) > 0.5 ? { amount: paid } : {}) } });
+      }
     } else if (choice.startsWith('pot:')) {
       // These lines go to that pot; later ones to the same place are transfers, told apart by their monthly amounts.
       for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { potId: choice.slice(4) });
