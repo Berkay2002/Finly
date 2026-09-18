@@ -11,6 +11,7 @@ export default {
     connectBank: 'Koppla en bank',
     reconnect: 'Logga in hos banken igen',
     syncNow: 'Hämta nu',
+    downloadRaw: 'Ladda ner rådata från banken',
     forget: 'Glöm bankkopplingen',
     confirmForget: 'Ja, glöm den',
     cancel: 'Avbryt',

@@ -9,6 +9,7 @@ export default {
     connectBank: 'Connect a bank',
     reconnect: 'Log in at the bank again',
     syncNow: 'Sync now',
+    downloadRaw: 'Download raw bank data',
     forget: 'Forget bank connection',
     confirmForget: 'Yes, forget it',
     cancel: 'Cancel',

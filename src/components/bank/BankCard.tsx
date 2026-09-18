@@ -1,8 +1,8 @@
 import { formatDistanceToNow } from 'date-fns';
-import { Check, Copy, KeyRound, Landmark, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, Copy, Download, KeyRound, Landmark, RefreshCw, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { addKeyFile, beginAuth, fetchBanks, forgetBank, redirectUrl, saveMapping, shareKey, stopSharingKey, suggestedKind, type MappingChoice } from '@/bank/bankActions';
+import { addKeyFile, beginAuth, downloadRawBank, fetchBanks, forgetBank, redirectUrl, saveMapping, shareKey, stopSharingKey, suggestedKind, type MappingChoice } from '@/bank/bankActions';
 import { useBankStore } from '@/bank/bankStore';
 import { appIdFromFileName, type BankInstitution } from '@/bank/enableBanking';
 import { syncBank } from '@/bank/useBankSync';
@@ -95,6 +95,11 @@ export function BankCard({ onMessage }: { onMessage: OnMessage }) {
                 {linked.length > 0 && (
                   <Button variant="secondary" icon={RefreshCw} disabled={bank.syncing} onClick={() => void syncBank({ force: true })}>
                     {t.card.syncNow}
+                  </Button>
+                )}
+                {linked.length > 0 && (
+                  <Button variant="secondary" icon={Download} disabled={busy} onClick={() => run(() => downloadRawBank())}>
+                    {t.card.downloadRaw}
                   </Button>
                 )}
               </>

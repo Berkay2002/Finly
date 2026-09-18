@@ -228,23 +228,30 @@ export function normalizeTx(raw: RawTx, account: string): BankTx | null {
 // ponytail: 20 pages is thousands of lines for one account; raise it if a bank pages very finely.
 const MAX_PAGES = 20;
 
-/** Everything on the account from `from` (YYYY-MM-DD) on, following the bank's pages. */
-export async function getTransactions(jwt: string, uid: string, account: string, from: string): Promise<BankTx[]> {
-  const out: BankTx[] = [];
+/** The bank's lines as sent, from `from` (YYYY-MM-DD) on, following the bank's pages. */
+export async function getRawTransactions(jwt: string, uid: string, from: string): Promise<RawTx[]> {
+  const out: RawTx[] = [];
   let key: string | undefined;
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const res = await call<{ transactions?: RawTx[]; continuation_key?: string }>(jwt, 'GET', `/accounts/${uid}/transactions`, {
       date_from: from,
       ...(key ? { continuation_key: key } : {}),
     });
-    for (const raw of res.transactions ?? []) {
-      const tx = normalizeTx(raw, account);
-      if (tx) out.push(tx);
-    }
+    out.push(...(res.transactions ?? []));
     key = res.continuation_key;
     if (!key) break;
   }
   return out;
+}
+
+/** Everything on the account from `from` (YYYY-MM-DD) on, in Finly's shape. */
+export async function getTransactions(jwt: string, uid: string, account: string, from: string): Promise<BankTx[]> {
+  return (await getRawTransactions(jwt, uid, from)).flatMap((raw) => normalizeTx(raw, account) ?? []);
+}
+
+/** The bank's balance list as sent. */
+export async function getRawBalances(jwt: string, uid: string): Promise<unknown> {
+  return call<unknown>(jwt, 'GET', `/accounts/${uid}/balances`);
 }
 
 /** Ends the session, which also closes the consent at the bank where the bank allows it. */

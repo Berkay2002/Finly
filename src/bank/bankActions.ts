@@ -7,6 +7,8 @@ import {
   appIdFromFileName,
   createSession,
   deleteSession,
+  getRawBalances,
+  getRawTransactions,
   importPem,
   listBanks,
   signJwt,
@@ -16,6 +18,7 @@ import {
   type FoundAccount,
 } from './enableBanking';
 import { clearKey, loadKey, saveKey } from './keyStore';
+import { downloadText } from '@/lib/download';
 import { syncBank } from './useBankSync';
 
 /** Where the bank sends the person back to; it has to be registered with the provider to the letter. */
@@ -169,6 +172,32 @@ export function saveMapping(choices: Record<string, MappingChoice>): number {
   useBankStore.getState().setPendingMapping(undefined);
   void syncBank({ force: true });
   return taken.length;
+}
+
+/**
+ * Saves what the bank sends for every connected account, untouched, as a file: the last 90 days of
+ * lines and the balance list. For looking at which fields a bank fills in before building on them.
+ */
+export async function downloadRawBank(now: Date = new Date()): Promise<void> {
+  const { plan } = usePlanStore.getState();
+  const sessions = plan.bank?.sessions ?? [];
+  const jwt = await token();
+  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90).toISOString().slice(0, 10);
+  const accounts = [];
+  for (const a of plan.accounts) {
+    const id = a.bank?.externalId;
+    const session = id && [...sessions].reverse().find((s) => s.accounts[id]);
+    if (!id || !session) continue;
+    const uid = session.accounts[id];
+    accounts.push({
+      name: a.name,
+      kind: a.kind,
+      bank: session.aspsp,
+      balances: await getRawBalances(jwt, uid).catch((e: unknown) => ({ error: String(e) })),
+      transactions: await getRawTransactions(jwt, uid, from).catch((e: unknown) => ({ error: String(e) })),
+    });
+  }
+  downloadText(`finly-bank-raw-${now.toISOString().slice(0, 10)}.json`, JSON.stringify({ exportedAt: now.toISOString(), from, accounts }, null, 2));
 }
 
 /** Ends the consent at the bank where possible, drops the key, and hands every account back to manual. */
