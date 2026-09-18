@@ -5,7 +5,7 @@
  * outside this file depends on the provider.
  */
 
-import type { BankTx } from '@/engine/bankActuals';
+import type { BankTx, BankTxKind } from '@/engine/bankActuals';
 
 export const PROVIDER = 'enable-banking';
 const PROXY = '/api/bank';
@@ -192,9 +192,11 @@ export async function getBalance(jwt: string, uid: string): Promise<BankBalance 
 }
 
 interface RawTx {
+  entry_reference?: string;
   transaction_amount?: { amount?: string; currency?: string };
   credit_debit_indicator?: string;
   status?: string;
+  bank_transaction_code?: { description?: string | null };
   booking_date?: string;
   value_date?: string;
   transaction_date?: string;
@@ -205,20 +207,39 @@ interface RawTx {
   remittance_information?: string[];
 }
 
+/** The bank's own word for what a line is, folded to Finly's few kinds. SEB: "Card purchase", "Instant payment" (Swish), "Payment", "Transfer", "Credit transfer", "Direct debit", "Salary/Pension/Social Benefit". */
+export function txKind(description: string | null | undefined): BankTxKind | undefined {
+  const d = (description ?? '').toLowerCase();
+  if (!d) return undefined;
+  if (d.includes('card')) return 'card';
+  if (d.includes('instant')) return 'swish';
+  if (d.includes('direct debit')) return 'direct_debit';
+  if (d.includes('credit transfer')) return 'credit_transfer';
+  if (d.includes('transfer')) return 'transfer';
+  if (d.includes('salary') || d.includes('pension')) return 'salary';
+  if (d.includes('payment')) return 'payment';
+  return 'other';
+}
+
 /** One line from the bank in Finly's shape, or null when it has no usable amount or date. */
 export function normalizeTx(raw: RawTx, account: string): BankTx | null {
   const amount = Number(raw.transaction_amount?.amount);
   const date = raw.booking_date ?? raw.value_date ?? raw.transaction_date;
   if (!Number.isFinite(amount) || !date) return null;
   const incoming = raw.credit_debit_indicator === 'CRDT';
-  const description = raw.remittance_information?.filter(Boolean).join(' ').trim() || undefined;
+  const lines = raw.remittance_information?.map((l) => l?.trim()).filter(Boolean) ?? [];
+  const description = lines.join(' ') || undefined;
+  const kind = txKind(raw.bank_transaction_code?.description);
   return {
     account,
+    ...(raw.entry_reference ? { id: raw.entry_reference } : {}),
+    ...(kind ? { kind } : {}),
     date: date.slice(0, 10),
     amount: incoming ? Math.abs(amount) : -Math.abs(amount),
     currency: raw.transaction_amount?.currency ?? '',
-    // The other side: whoever paid when money came in, whoever was paid when it went out.
-    counterparty: (incoming ? raw.debtor?.name : raw.creditor?.name) || undefined,
+    // The other side: whoever paid when money came in, whoever was paid when it went out. Some banks
+    // (SEB) never fill the name fields and write the payee on the first reference line instead.
+    counterparty: (incoming ? raw.debtor?.name : raw.creditor?.name) || lines[0] || undefined,
     counterpartyIban: (incoming ? raw.debtor_account?.iban : raw.creditor_account?.iban) || undefined,
     description,
     ...(raw.status === 'PDNG' ? { pending: true } : {}),

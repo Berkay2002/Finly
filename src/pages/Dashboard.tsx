@@ -20,6 +20,7 @@ import {
   useViewDate,
 } from '@/store/selectors';
 import { useUiStore } from '@/store/uiStore';
+import { SortCard } from '@/components/bank/SortCard';
 import { BillsToConfirm } from '@/components/forms/BillsToConfirm';
 import { useExpenseSheet } from '@/components/forms/ExpenseEditor';
 import { useGoalSheet } from '@/components/forms/GoalEditor';
@@ -202,6 +203,7 @@ export function Dashboard() {
       </div>
 
       <BillsToConfirm className="mb-5" onEdit={expenses.openEdit} />
+      <SortCard className="mb-5" onAddBill={expenses.openNew} />
 
       {/* Spending · Position · Goals */}
       <div className="mb-5 grid gap-4 lg:grid-cols-3">

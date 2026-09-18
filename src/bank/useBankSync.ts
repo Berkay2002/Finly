@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { classifyTransactions, mergeWindow, receivedByMonth, type BankTx, type ClassifiedTx, type OwnAccount } from '@/engine/bankActuals';
+import { billsByMonth, classifyTransactions, mergeWindow, receivedByMonth, spendByMonth, type BankTx, type ClassifiedTx, type OwnAccount } from '@/engine/bankActuals';
+import { SPEND_GROUPS } from '@/engine/everyday';
 import { monthKeyOf } from '@/engine/metrics';
 import { usePlanStore } from '@/store/planStore';
 import { useSyncStore } from '@/sync/syncStore';
@@ -43,6 +44,36 @@ export function reconcileIncome(now: Date = new Date()): void {
     for (const month of months) {
       const amount = received[source.id]?.[month];
       if (amount !== source.actuals?.[month]) usePlanStore.getState().setIncomeActual(source.id, month, amount ?? null);
+    }
+  }
+}
+
+/**
+ * Writes what the bank paid for each matched bill, and each everyday group's total, into the plan for
+ * this month and the last. A total typed by hand is left alone: it may count cash the bank never saw.
+ */
+export function reconcileSpending(now: Date = new Date()): void {
+  if (!Object.values(useBankStore.getState().txs).some((list) => list.length)) return;
+  const classified = classifiedTxs();
+  const months = [monthKeyOf(now), monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1))];
+  const bills = billsByMonth(classified);
+  for (const item of usePlanStore.getState().plan.expenses) {
+    for (const month of months) {
+      const paid = bills[item.id]?.[month];
+      if (paid !== undefined && paid !== item.actuals?.[month]) usePlanStore.getState().setExpenseActual(item.id, month, paid);
+    }
+  }
+  const spend = spendByMonth(classified, now);
+  for (const group of SPEND_GROUPS) {
+    for (const month of months) {
+      const entry = spend[group][month];
+      const current = usePlanStore.getState().plan.everydaySpend?.[group]?.[month];
+      if (current && current.source !== 'bank') continue;
+      if (!entry) {
+        if (current) usePlanStore.getState().setEverydaySpend(group, month, null);
+      } else if (current?.amount !== entry.amount || current.asOf !== entry.asOf) {
+        usePlanStore.getState().setEverydaySpend(group, month, entry);
+      }
     }
   }
 }
@@ -107,7 +138,10 @@ async function run(force: boolean): Promise<void> {
         txs[id] = bank.txs[id] ?? [];
         // After the balance, and on its own: a bank that refuses the list still gave the figure that matters.
         try {
-          const from = isoDay(daysBefore(previous?.lastSyncedAt && txs[id].length ? new Date(previous.lastSyncedAt) : now, txs[id].length ? REFETCH_DAYS : FIRST_FETCH_DAYS));
+          // Back from the last read or the newest booked line, whichever is older, so a gap is never skipped.
+          const newest = txs[id].find((tx) => !tx.pending)?.date;
+          const since = previous?.lastSyncedAt && newest ? new Date(Math.min(Date.parse(previous.lastSyncedAt), Date.parse(`${newest}T12:00:00`))) : undefined;
+          const from = isoDay(daysBefore(since ?? now, since ? REFETCH_DAYS : FIRST_FETCH_DAYS));
           const keepFrom = isoDay(new Date(now.getFullYear(), now.getMonth() - KEEP_MONTHS, 1));
           txs[id] = mergeWindow(txs[id], await getTransactions(jwt, session.accounts[id], id, from), from, keepFrom);
         } catch {
@@ -125,6 +159,7 @@ async function run(force: boolean): Promise<void> {
       // Only accounts read this round: one that failed keeps what it had, one no longer connected is dropped.
       useBankStore.getState().setTxs({ ...Object.fromEntries(linked.map((a) => [a.bank!.externalId, bank.txs[a.bank!.externalId] ?? []])), ...txs });
       reconcileIncome(now);
+      reconcileSpending(now);
     } catch {
       /* storage full: balances are in, the transactions wait */
     }

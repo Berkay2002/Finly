@@ -17,7 +17,7 @@ vi.mock('../keyStore', () => ({ loadKey: async () => keys.key }));
 
 import { usePlanStore } from '@/store/planStore';
 import { useBankStore } from '../bankStore';
-import { syncBank } from '../useBankSync';
+import { reconcileSpending, syncBank } from '../useBankSync';
 
 const answer = (status: number, body: unknown) => vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => Response.json(body, { status }));
 const balances = (amount: string) => ({ balances: [{ balance_type: 'ITAV', balance_amount: { amount, currency: 'SEK' } }] });
@@ -105,6 +105,53 @@ describe('syncBank', () => {
     await syncBank({ force: true });
     expect(usePlanStore.getState().plan).toBe(before);
     expect(useBankStore.getState().txs.hash).toHaveLength(3);
+  });
+
+  it('writes bills and everyday totals from the bank, and leaves a hand-typed total alone', async () => {
+    const today = new Date();
+    const day = (d: number) => `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const month = day(1).slice(0, 7);
+    const store = usePlanStore.getState();
+    const el = store.addExpense({ name: 'Fortum el', category: 'living', subcategory: 'custom', amount: 900, frequency: 'monthly', fixed: false, essential: true, committed: true, tags: [] });
+    store.setEverydaySpend('transport', month, { amount: 300 });
+    const line = (ref: string, amount: string, text: string, description: string, d: number) => ({
+      entry_reference: ref, transaction_amount: { amount, currency: 'SEK' }, credit_debit_indicator: 'DBIT', status: 'BOOK', booking_date: day(d),
+      remittance_information: [text], bank_transaction_code: { description },
+    });
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, _init?: RequestInit) =>
+      Response.json(String(url).includes('transactions')
+        ? { transactions: [line('1', '850.00', 'ICA NARA STR', 'Card purchase', 2), line('2', '46.00', 'SL APP', 'Card purchase', 3), line('3', '1043.00', 'FORTUM MARKETS AB', 'Payment', 4), line('4', '499.00', 'STADIUM OUTL', 'Card purchase', 5)] }
+        : balances('58000.00')),
+    ));
+    await syncBank({ force: true });
+    const plan = () => usePlanStore.getState().plan;
+    expect(plan().expenses.find((e) => e.id === el)!.actuals).toEqual({ [month]: 1043 });
+    expect(plan().everydaySpend?.food?.[month]).toEqual({ amount: 850, asOf: day(today.getDate()), source: 'bank' });
+    expect(plan().everydaySpend?.leisure?.[month]).toEqual({ amount: 499, asOf: day(today.getDate()), source: 'bank' });
+    expect(plan().everydaySpend?.transport?.[month]).toEqual({ amount: 300 });
+
+    // Sorting the shop moves its money without another read from the bank.
+    usePlanStore.getState().setMerchantRule('STADIUMOUTL', { group: 'transport' });
+    reconcileSpending();
+    expect(plan().everydaySpend?.leisure?.[month]).toBeUndefined();
+    expect(plan().everydaySpend?.transport?.[month]).toEqual({ amount: 300 });
+  });
+
+  it('reads again from before the newest booked line, so days missed while away are not skipped', async () => {
+    const today = new Date();
+    const newest = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 40);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const urls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
+      urls.push(decodeURIComponent(String(url)));
+      return Response.json(String(url).includes('transactions')
+        ? { transactions: [{ entry_reference: 'x', transaction_amount: { amount: '10.00', currency: 'SEK' }, credit_debit_indicator: 'DBIT', status: 'BOOK', booking_date: iso(newest), remittance_information: ['ICA'] }] }
+        : balances('1.00'));
+    }));
+    await syncBank({ force: true });
+    await syncBank({ force: true });
+    const from = urls.filter((u) => u.includes('transactions')).map((u) => u.match(/date_from=(\d{4}-\d{2}-\d{2})/)![1]);
+    expect(from[1]).toBe(iso(new Date(newest.getFullYear(), newest.getMonth(), newest.getDate() - 10)));
   });
 
   it('keeps the balance when the bank refuses the transactions', async () => {

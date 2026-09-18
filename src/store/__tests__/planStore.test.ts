@@ -141,6 +141,17 @@ describe('snapshots', () => {
     expect(usePlanStore.getState().snapshots['2026-08'].everydaySpent).toEqual({});
   });
 
+  it('keeps where a total came from, and forgets a payee rule on null', () => {
+    usePlanStore.setState({ plan: { ...prdExamplePlan(), bank: { provider: 'p', appId: 'x', sessions: [] } } });
+    usePlanStore.getState().setEverydaySpend('food', '2026-09', { amount: 1800, asOf: '2026-09-16', source: 'bank' });
+    expect(usePlanStore.getState().plan.everydaySpend?.food?.['2026-09']).toEqual({ amount: 1800, asOf: '2026-09-16', source: 'bank' });
+    usePlanStore.getState().setMerchantRule('ICA', { group: 'food' });
+    usePlanStore.getState().setLineChoice('l1', { action: 'ignore' });
+    expect(usePlanStore.getState().plan.bank).toMatchObject({ merchants: { ICA: { group: 'food' } }, lines: { l1: { action: 'ignore' } } });
+    usePlanStore.getState().setMerchantRule('ICA', null);
+    expect(usePlanStore.getState().plan.bank?.merchants).toBeUndefined();
+  });
+
   it('keeps the date on a running total', () => {
     usePlanStore.setState({ plan: prdExamplePlan() });
     usePlanStore.getState().setEverydaySpend('transport', '2026-09', { amount: 1800, asOf: '2026-09-16' });

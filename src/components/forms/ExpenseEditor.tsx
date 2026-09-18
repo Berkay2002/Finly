@@ -181,6 +181,12 @@ export function fromSuggestion(s: ExpenseSuggestion): Draft {
   };
 }
 
+/** "Klarna" or "PayPal" when the bank sees this item paid through one of them. */
+function paidVia(e: Pick<ExpenseItem, 'bankMatch'>): string | undefined {
+  const hit = e.bankMatch?.counterparty.match(/klarna|paypal/i)?.[0].toLowerCase();
+  return hit === 'klarna' ? 'Klarna' : hit === 'paypal' ? 'PayPal' : undefined;
+}
+
 export function customDraft(category: ExpenseCategory, name = '', tags: ExpenseTag[] = []): Draft {
   return {
     name,
@@ -270,6 +276,7 @@ export function ExpenseEditor({
         meta={
           <>
             {e.note && <span>{e.note}</span>}
+            {paidVia(e) && <span>{t.expenses.row.paidVia(paidVia(e)!)}</span>}
             {e.tariff && !e.includedElsewhere && <span className="tabular">{t.expenses.row.kwhPerMonth(formatAmount(e.tariff.kwh))}</span>}
             {(notMonthly || itemCurrency !== currency) && rate !== undefined && monthly > 0 && !e.includedElsewhere && (
               <span className="tabular">{t.expenses.row.approxPerMonth(formatMoney(monthly * rate, currency))}</span>
@@ -511,6 +518,14 @@ function ExpenseDetailForm({
       <TextField label={tf.name} value={draft.name} onChange={(e) => set({ name: e.target.value })} autoFocus={!draft.id} />
       {draft.tags.includes('subscription') && (
         <BrandPicker name={draft.name} domain={draft.brandDomain} onPick={(brandDomain) => set({ brandDomain })} />
+      )}
+      {draft.bankMatch && (
+        <div className="flex items-center justify-between gap-3 text-[12.5px] text-muted">
+          <span>{t.bank.income.recognised(draft.bankMatch.counterparty)}</span>
+          <Button variant="secondary" size="sm" onClick={() => set({ bankMatch: undefined })}>
+            {t.bank.income.forgetMatch}
+          </Button>
+        </div>
       )}
       <TextField
         label={tf.note}

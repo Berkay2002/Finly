@@ -1,7 +1,7 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { isIrregular, monthsPerPeriod, toMonthly } from './frequency';
-import { everydaySummaries, SPEND_GROUPS, type SpendSummary } from './everyday';
+import { everydaySummaries, SPEND_GROUP_META, SPEND_GROUPS, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paymentsPerYear, paysInMonth } from './debts';
 import { lumpPayment, type LumpPayment } from './periods';
@@ -72,6 +72,8 @@ export interface MonthActuals {
   lifestyleCost: number;
   /** Same, but with pending items at their low / high bound. */
   lifestyleRange: Range;
+  /** Planned cost per category with confirmed bills and fully logged everyday groups in place of their estimates. */
+  byCategory: Record<ExpenseCategory, number>;
 }
 
 /** One loan, as the month sees it. */
@@ -475,6 +477,11 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   }
   const confirmedIds = new Set([...confirmed.map((l) => l.id), ...loggedIds]);
   const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance;
+  const actualByCategory = { ...byCategory };
+  for (const l of confirmed) actualByCategory[l.category] += l.variance;
+  for (const g of SPEND_GROUPS) {
+    if (everyday[g].month.complete) actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.variance ?? 0;
+  }
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
   const monthLifestyleRange: Range = withDebt({
     low: sum(lines.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
@@ -575,6 +582,7 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
       variance: actualVariance,
       lifestyleCost: monthLifestyle,
       lifestyleRange: monthLifestyleRange,
+      byCategory: actualByCategory,
     },
     savings: {
       futureSpending,

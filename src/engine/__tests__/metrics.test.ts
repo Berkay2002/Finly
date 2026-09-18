@@ -252,6 +252,7 @@ describe('computeMetrics — confirming bills for the month', () => {
     expect(m.actuals.confirmed).toEqual([]);
     expect(m.actuals.variance).toBe(0);
     expect(m.actuals.lifestyleCost).toBe(25200);
+    expect(Object.values(m.actuals.byCategory).reduce((a, b) => a + b, 0)).toBeCloseTo(m.actuals.lifestyleCost - m.debt.monthly, 6);
   });
 
   it('runs the month on the real figure once a bill is confirmed', () => {

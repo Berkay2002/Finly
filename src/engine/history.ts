@@ -38,6 +38,10 @@ export interface MetricsSnapshot {
   debtPayments?: number;
   savingsRate: number;
   byCategory: Record<string, number>;
+  /** Category cost with that month's confirmed bills and logged everyday spending in place of the estimates. */
+  byCategoryActual?: Record<string, number>;
+  /** Income that reached the bank that month; absent when nothing was recorded. */
+  incomeReceived?: number;
   /** Account id → balance at close. */
   byAccount?: Record<string, number>;
   /** Loan id → balance at close. */
@@ -86,6 +90,10 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
   copy.isSample = undefined;
   delete copy.avatar; // every closed month would otherwise carry its own copy of the picture
   delete copy.scenarios; // what-ifs, not the month's figures
+  if (copy.bank) {
+    delete copy.bank.merchants; // how lines get sorted, not the month's figures
+    delete copy.bank.lines;
+  }
   copy.expenses = copy.expenses.map((e) => {
     const bill = e.actuals?.[month];
     const { actuals: _drop, ...rest } = e;
@@ -123,8 +131,26 @@ export function freezePlan(plan: FinancialPlan, month: string): FinancialPlan {
   return copy;
 }
 
-export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = new Date()): MetricsSnapshot {
+/** That month's entry, else the latest before it, else the figure as it stands now. */
+function asOfMonth(balances: Record<string, number> | undefined, month: string, current: number): number {
+  const key = Object.keys(balances ?? {}).filter((k) => k <= month).sort().pop();
+  return key ? balances![key] : current;
+}
+
+/** The plan with every balance set to what it was at the end of `month`, so a late close does not freeze today's figures. */
+export function planAsOf(plan: FinancialPlan, month: string): FinancialPlan {
+  return {
+    ...plan,
+    accounts: plan.accounts.map((a) => ({ ...a, balance: asOfMonth(a.balances, month, a.balance) })),
+    goals: plan.goals.map((g) => ({ ...g, currentAmount: asOfMonth(g.balances, month, g.currentAmount) })),
+    debts: plan.debts?.map((d) => ({ ...d, balance: asOfMonth(d.balances, month, d.balance) })),
+  };
+}
+
+export function buildSnapshot(livePlan: FinancialPlan, month: string, today: Date = new Date()): MetricsSnapshot {
+  const plan = month < monthKeyOf(today) ? planAsOf(livePlan, month) : livePlan;
   const m = computeMetrics(plan, snapshotDateFor(month, today));
+  const received = plan.income.map((i) => i.actuals?.[month]).filter((v): v is number => typeof v === 'number');
   return {
     month,
     savedAt: today.toISOString(),
@@ -149,6 +175,8 @@ export function buildSnapshot(plan: FinancialPlan, month: string, today: Date = 
     debtPayments: m.debt.monthly,
     savingsRate: m.savings.rate,
     byCategory: { ...m.expenses.byCategory },
+    byCategoryActual: { ...m.actuals.byCategory },
+    incomeReceived: received.length ? received.reduce((a, b) => a + b, 0) : undefined,
     byAccount: Object.fromEntries(plan.accounts.map((a) => [a.id, a.balance])),
     byDebt: Object.fromEntries((plan.debts ?? []).map((d) => [d.id, d.balance])),
     byGoal: Object.fromEntries(savingsPots(plan).map((g) => [g.id, g.currentAmount])),

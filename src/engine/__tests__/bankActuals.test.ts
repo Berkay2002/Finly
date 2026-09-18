@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { classifyTransactions, incomeMonthOf, incomeStatus, mergeWindow, receivedByMonth, type BankTx, type OwnAccount } from '../bankActuals';
+import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, mergeWindow, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
-import { income, NOW, prdExamplePlan } from './fixtures';
+import { expense, income, NOW, prdExamplePlan } from './fixtures';
 
 const OWN: OwnAccount[] = [
   { externalId: 'h-everyday', accountId: 'a1', iban: 'SE11 0000 0000 0000 0000 0001' },
@@ -26,7 +26,7 @@ describe('internal transfers', () => {
       { income: [{ ...matched, amount: 10000, bankMatch: { day: 11 } }] },
       OWN,
     );
-    expect(out.map((t) => t.class)).toEqual(['internal_transfer', 'internal_transfer', 'other']);
+    expect(out.map((t) => t.class)).toEqual(['internal_transfer', 'internal_transfer', 'spend']);
     expect(receivedByMonth(out)).toEqual({});
   });
 
@@ -48,7 +48,115 @@ describe('internal transfers', () => {
       { income: [] },
       OWN,
     );
-    expect(out.every((t) => t.class === 'other')).toBe(true);
+    expect(out.every((t) => t.class === 'unsorted')).toBe(true);
+  });
+
+  it('a transfer to a place the plan has an account at is between own accounts, even with no IBAN', () => {
+    const plan = { income: [], accounts: [{ id: 'isk', name: 'ISK', institution: 'Avanza', kind: 'isk' as const, balance: 0 }] };
+    const [avanza, klarna] = classifyTransactions(
+      [tx({ amount: -3000, date: '2026-08-27', kind: 'transfer', counterparty: 'AVANZA BANK' }), tx({ amount: -1200, date: '2026-08-26', kind: 'transfer', counterparty: 'K*KLARNA' })],
+      plan,
+      OWN,
+    );
+    expect(avanza.class).toBe('internal_transfer');
+    expect(klarna.class).toBe('unsorted');
+  });
+});
+
+describe('money out', () => {
+  const fortum = expense({ id: 'el', name: 'Fortum el', amount: 900, fixed: false });
+  const spotify = expense({ id: 'spotify', name: 'Spotify', amount: 129, fixed: true, bankMatch: { counterparty: 'K*KLARNA', amount: 129 } });
+  const plan = (extra: Partial<ReturnType<typeof prdExamplePlan>> = {}) => ({ income: [], expenses: [fortum, spotify], ...extra });
+
+  it('sorts chains it knows and leaves the rest unsorted, still counted as spent', () => {
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' }),
+        tx({ id: 'b', amount: -46, date: '2026-09-11', kind: 'card', counterparty: 'SL APP' }),
+        tx({ id: 'c', amount: -129, date: '2026-09-11', kind: 'card', counterparty: 'MAX BURGERS' }),
+        tx({ id: 'd', amount: -499, date: '2026-09-12', kind: 'card', counterparty: 'STADIUM OUTL' }),
+      ],
+      plan(),
+      OWN,
+    );
+    expect(out.map((t) => [t.class, t.group])).toEqual([['spend', 'food'], ['spend', 'transport'], ['spend', 'food'], ['unsorted', undefined]]);
+    const spend = spendByMonth(out, new Date(2026, 8, 16));
+    expect(spend.food['2026-09']).toEqual({ amount: 979, source: 'bank', asOf: '2026-09-16' });
+    expect(spend.transport['2026-09']).toEqual({ amount: 46, source: 'bank', asOf: '2026-09-16' });
+    expect(spend.leisure['2026-09']).toEqual({ amount: 499, source: 'bank', asOf: '2026-09-16' });
+    expect(spendByMonth(out, new Date(2026, 9, 3)).food['2026-09']).toEqual({ amount: 979, source: 'bank' });
+  });
+
+  it('a bill payment matches the item by name before anything is learnt, and by what was learnt after', () => {
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -1043, date: '2026-09-01', kind: 'payment', counterparty: 'FORTUM MARKETS AB' }),
+        tx({ id: 'b', amount: -129, date: '2026-09-02', kind: 'transfer', counterparty: 'K*KLARNA' }),
+        tx({ id: 'c', amount: -1200, date: '2026-09-03', kind: 'transfer', counterparty: 'K* KLARNA' }),
+        tx({ id: 'd', amount: -1043, date: '2026-09-04', kind: 'card', counterparty: 'FORTUM MARKETS AB' }),
+      ],
+      plan(),
+      OWN,
+    );
+    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['expense', 'el'], ['expense', 'spotify'], ['unsorted', undefined], ['unsorted', undefined]]);
+    expect(billsByMonth(out)).toEqual({ el: { '2026-09': 1043 }, spotify: { '2026-09': 129 } });
+  });
+
+  it('a choice for the line beats the payee rule, which beats the bundled list', () => {
+    const ica = tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' });
+    const bank = { provider: 'p', appId: 'x', sessions: [] };
+    expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { group: 'leisure' } } } }), OWN)[0].group).toBe('leisure');
+    expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { group: 'leisure' } }, lines: { a: { group: 'transport' } } } }), OWN)[0].group).toBe('transport');
+    expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { action: 'ignore' } } } }), OWN)[0].class).toBe('ignored');
+    expect(classifyTransactions([ica], plan({ bank: { ...bank, lines: { a: { expenseId: 'el' } } } }), OWN)[0]).toMatchObject({ class: 'expense', expenseId: 'el', month: '2026-09' });
+  });
+
+  it('money in from a person is neither income nor spending, and can be dismissed', () => {
+    const friend = tx({ id: 'f', amount: 500, date: '2026-09-04', kind: 'credit_transfer', counterparty: 'JONATAN FRED' });
+    expect(classifyTransactions([friend], { income: [matched] }, OWN)[0].class).toBe('unsorted');
+    expect(classifyTransactions([friend], { income: [matched], bank: { provider: 'p', appId: 'x', sessions: [], lines: { f: { action: 'ignore' } } } }, OWN)[0].class).toBe('ignored');
+    expect(toSort(classifyTransactions([friend], { income: [] }, OWN))).toEqual([]);
+  });
+
+  it('spots a payee paid month after month as a bill Finly does not know yet', () => {
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -1043, date: '2026-07-01', kind: 'payment', counterparty: 'EON KUNDSUPPORT' }),
+        tx({ id: 'b', amount: -1590, date: '2026-08-02', kind: 'payment', counterparty: 'EON KUNDSUPPORT' }),
+        tx({ id: 'c', amount: -129, date: '2026-07-25', kind: 'card', counterparty: 'NETFLIX.COM' }),
+        tx({ id: 'd', amount: -129, date: '2026-08-25', kind: 'card', counterparty: 'NETFLIX.COM' }),
+        tx({ id: 'e', amount: -129, date: '2026-08-05', kind: 'transfer', counterparty: 'K*KLARNA' }),
+        tx({ id: 'f', amount: -129, date: '2026-09-05', kind: 'transfer', counterparty: 'K*KLARNA' }),
+        tx({ id: 'g', amount: -1200, date: '2026-09-03', kind: 'transfer', counterparty: 'K*KLARNA' }),
+        tx({ id: 'h', amount: -499, date: '2026-09-12', kind: 'card', counterparty: 'STADIUM OUTL' }),
+      ],
+      { income: [], expenses: [fortum] },
+      OWN,
+    );
+    const by = Object.fromEntries(toSort(out).map((m) => [m.key, m.lines]));
+    expect(recurringHint(by.EONKUNDSUPPORT)).toEqual({ amount: 1043, day: 1, fixed: false, bill: true });
+    expect(recurringHint(by.NETFLIXCOM)).toEqual({ amount: 129, day: 25, fixed: true, bill: false });
+    expect(recurringHint(by.KKLARNA, 129)).toMatchObject({ amount: 129, fixed: true, bill: false });
+    expect(recurringHint(by.KKLARNA, 1200)).toBeUndefined();
+    expect(recurringHint(by.STADIUMOUTL)).toBeUndefined();
+  });
+
+  it('lists what is left to sort by payee, biggest first, and knows a pass-through', () => {
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -200, date: '2026-09-10', kind: 'card', counterparty: 'STADIUM OUTL' }),
+        tx({ id: 'b', amount: -300, date: '2026-09-12', kind: 'card', counterparty: 'STADIUM OUTL' }),
+        tx({ id: 'c', amount: -1200, date: '2026-09-03', kind: 'transfer', counterparty: 'K* KLARNA' }),
+        tx({ id: 'd', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' }),
+        tx({ amount: -99, date: '2026-09-17', kind: 'card', counterparty: 'HEMKOP NORRKOPING', pending: true }),
+      ],
+      plan(),
+      OWN,
+    );
+    expect(toSort(out).map((m) => [m.key, m.count, m.total, m.passThrough])).toEqual([
+      ['KKLARNA', 1, 1200, true],
+      ['STADIUMOUTL', 2, 500, false],
+    ]);
   });
 });
 
@@ -56,17 +164,17 @@ describe('income matching', () => {
   it('needs two of sender, amount and day: one alone is not enough', () => {
     const classify = (t: BankTx, source = matched) => classifyTransactions([t], { income: [source] }, OWN)[0];
     expect(classify(tx({ amount: 30742, date: '2026-09-25', counterparty: 'ERICSSON AB (PUBL)' }))).toMatchObject({ class: 'income', incomeSourceId: 'salary', month: '2026-09' });
-    expect(classify(tx({ amount: 30742, date: '2026-09-12', counterparty: 'Unknown' })).class).toBe('other');
-    expect(classify(tx({ amount: 900, date: '2026-09-12', counterparty: 'Ericsson AB' })).class).toBe('other');
+    expect(classify(tx({ amount: 30742, date: '2026-09-12', counterparty: 'Unknown' })).class).toBe('unsorted');
+    expect(classify(tx({ amount: 900, date: '2026-09-12', counterparty: 'Ericsson AB' })).class).toBe('unsorted');
     // Sender and day agree, the amount is far off: a bonus month is still the salary.
     expect(classify(tx({ amount: 52000, date: '2026-09-24', counterparty: 'Ericsson AB' })).class).toBe('income');
     // Nothing learnt yet: the amount alone never matches.
-    expect(classify(tx({ amount: 30500, date: '2026-09-25', counterparty: 'Ericsson AB' }), salary).class).toBe('other');
+    expect(classify(tx({ amount: 30500, date: '2026-09-25', counterparty: 'Ericsson AB' }), salary).class).toBe('unsorted');
   });
 
   it('keeps to the account the income is paid into, unless that account is gone', () => {
     const onSavings = tx({ account: 'h-savings', amount: 30500, date: '2026-09-25', counterparty: 'Ericsson AB' });
-    expect(classifyTransactions([onSavings], { income: [{ ...matched, destinationAccountId: 'a1' }] }, OWN)[0].class).toBe('other');
+    expect(classifyTransactions([onSavings], { income: [{ ...matched, destinationAccountId: 'a1' }] }, OWN)[0].class).toBe('unsorted');
     expect(classifyTransactions([onSavings], { income: [{ ...matched, destinationAccountId: 'deleted' }] }, OWN)[0].class).toBe('income');
   });
 
@@ -76,7 +184,7 @@ describe('income matching', () => {
       { income: [matched] },
       OWN,
     );
-    expect(out.map((t) => t.class)).toEqual(['other', 'other']);
+    expect(out.map((t) => t.class)).toEqual(['unsorted', 'unsorted']);
   });
 
   it('counts a salary around the turn of the month for the month it belongs to', () => {
@@ -136,6 +244,12 @@ describe('mergeWindow', () => {
     const stored = mergeWindow([], [tx({ amount: -300, date: '2026-09-15', pending: true })], '2026-09-01', '2025-08-01');
     const next = mergeWindow(stored, [tx({ amount: -300, date: '2026-09-16' })], '2026-09-06', '2025-08-01');
     expect(next).toEqual([tx({ amount: -300, date: '2026-09-16' })]);
+  });
+
+  it('a line the bank sends again under the same id is one line, wherever it was stored', () => {
+    const stored = mergeWindow([], [tx({ id: 'x', amount: -300, date: '2026-08-20' }), tx({ id: 'y', amount: -300, date: '2026-08-20' })], '2026-08-01', '2025-08-01');
+    const next = mergeWindow(stored, [tx({ id: 'x', amount: -300, date: '2026-09-02' })], '2026-09-01', '2025-08-01');
+    expect(next.map((t) => [t.id, t.date])).toEqual([['x', '2026-09-02'], ['y', '2026-08-20']]);
   });
 
   it('keeps what is older than the window and drops what is past keeping', () => {

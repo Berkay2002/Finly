@@ -68,6 +68,7 @@ export default {
     estimateOutdated: 'Inaktuell uppskattning',
     optional: 'Valfri',
     flexible: 'Flexibel',
+    paidVia: (via) => `via ${via}`,
     calculatedTitle: 'Beräknat från förbrukning och priser',
     priceEachTime: 'Pris per gång',
     typicalAmount: 'Typiskt belopp',

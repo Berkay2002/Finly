@@ -45,6 +45,7 @@ export default {
     spentSoFar: 'Spenderat hittills',
     spentInTotal: 'Spenderat totalt',
     updated: (date) => `(uppdaterat ${date})`,
+    fromBank: '(från din bank)',
     dayOf: (day, days) => `Dag ${day} av ${days}, väntat hittills`,
     planned: 'Planerat',
     plannedForMonth: 'Planerat för månaden',

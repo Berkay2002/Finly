@@ -222,6 +222,7 @@ function PendingRow({
 function ConfirmedRow({ bill, currency, onClear }: { bill: ActualLine; currency: string; onClear: () => void }) {
   const t = useT();
   const name = useBillName()(bill);
+  const fromBank = usePlan().expenses.some((e) => e.id === bill.id && e.bankMatch);
   const meta = CATEGORY_META[bill.category];
   const tone = bill.variance > 0 ? 'orange' : bill.variance < 0 ? 'brand' : 'neutral';
   return (
@@ -232,6 +233,7 @@ function ConfirmedRow({ bill, currency, onClear }: { bill: ActualLine; currency:
         <div className="text-[12px] text-muted">
           {bill.billingLag > 0 ? t.bills.row.billFor(formatMonthKey(bill.periodMonth)) : ''}
           {t.bills.row.planned(formatMoney(bill.monthly, currency))}
+          {fromBank && ` · ${t.bills.row.fromBank}`}
         </div>
       </div>
       <div className="text-right">

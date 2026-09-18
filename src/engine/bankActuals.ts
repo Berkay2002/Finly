@@ -1,5 +1,6 @@
+import { bundledGroup, isPassThrough } from './merchants';
 import { monthKeyOf } from './metrics';
-import type { FinancialPlan, IncomeSource } from './types';
+import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
 /**
  * What actually happened at the bank, set beside what the plan expects. Accounts say where the money
@@ -7,8 +8,14 @@ import type { FinancialPlan, IncomeSource } from './types';
  * A transaction never moves a balance (the bank reports that itself) and never rewrites the plan.
  */
 
+/** The bank's own word for a line, folded to what matters for sorting it. */
+export type BankTxKind = 'card' | 'swish' | 'payment' | 'transfer' | 'credit_transfer' | 'direct_debit' | 'salary' | 'other';
+
 /** One line from the bank, in Finly's own shape so the engine does not know the provider. */
 export interface BankTx {
+  /** The bank's stable reference for the line, when it gives one. Pending lines have none. */
+  id?: string;
+  kind?: BankTxKind;
   /** `AccountBankLink.externalId` of the account it is on. */
   account: string;
   /** Booking date, YYYY-MM-DD. */
@@ -23,15 +30,26 @@ export interface BankTx {
   pending?: boolean;
 }
 
-/** Money in is not income and money out is not an expense until it is known what it was. */
-export type TxClass = 'income' | 'internal_transfer' | 'other';
+/**
+ * Money in is not income and money out is not an expense until it is known what it was. `expense` is a
+ * bill or subscription in the plan, `spend` everyday spending in a group, `unsorted` money out (or in)
+ * nobody has placed yet: still counted as spent, under leisure, so safe to spend stays honest.
+ */
+export type TxClass = 'income' | 'internal_transfer' | 'expense' | 'spend' | 'unsorted' | 'ignored';
 
 export interface ClassifiedTx extends BankTx {
   class: TxClass;
   incomeSourceId?: string;
-  /** The month an income counts for, which near a month's end is not always the month it arrived. */
+  expenseId?: string;
+  group?: SpendGroup;
+  /** The payee, normalised: what rules are keyed by. */
+  merchantKey?: string;
+  /** The month an income counts for, which near a month's end is not always the month it arrived; for a bill, the month it was paid. */
   month?: string;
 }
+
+/** The part of the plan classification reads. Only income is needed to recognise salaries. */
+export type ClassifyPlan = Pick<FinancialPlan, 'income'> & Partial<Pick<FinancialPlan, 'expenses' | 'accounts' | 'bank'>>;
 
 /** One of the user's own connected accounts. */
 export interface OwnAccount {
@@ -89,19 +107,67 @@ function incomeScore(tx: BankTx, source: IncomeSource): number {
   return score;
 }
 
-export function classifyTransactions(txs: BankTx[], plan: Pick<FinancialPlan, 'income'>, own: OwnAccount[]): ClassifiedTx[] {
+/** The payee as rules see it: 'ICA NARA STR' and 'ICA NÄRA STR.' are one merchant. */
+export function merchantKey(tx: Pick<BankTx, 'counterparty' | 'description'>): string {
+  return normalizeParty(tx.counterparty ?? tx.description);
+}
+
+/** Stems a bill can be recognised by on a payment line with nothing learnt yet: 'Fortum el' and fortum.se both give FORTUM. */
+function nameStems(item: Pick<ExpenseItem, 'name' | 'brandDomain'>): string[] {
+  const word = normalizeParty(item.name.split(/[\s,/-]+/)[0]);
+  const domain = item.brandDomain ? normalizeParty(item.brandDomain.replace(/^www\./, '').split('.')[0]) : '';
+  return [word, domain].filter((s) => s.length >= 4);
+}
+
+function closeTo(amount: number, target: number): boolean {
+  return target > 0 && Math.abs(amount - target) <= target * AMOUNT_TOLERANCE;
+}
+
+function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
+  if ('group' in rule) {
+    tx.class = 'spend';
+    tx.group = rule.group;
+  } else if ('expenseId' in rule) {
+    tx.class = 'expense';
+    tx.expenseId = rule.expenseId;
+    tx.month = tx.date.slice(0, 7);
+  } else tx.class = rule.action === 'transfer' ? 'internal_transfer' : 'ignored';
+}
+
+/** The bill a payment is for, by what was learnt about the payee, or by name on a plain bill payment. */
+function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undefined {
+  const key = tx.merchantKey ?? '';
+  const paid = -tx.amount;
+  const learnt = expenses.find((e) => {
+    if (!e.bankMatch || !sameParty(key, e.bankMatch.counterparty)) return false;
+    if (e.bankMatch.amount !== undefined) return closeTo(paid, e.bankMatch.amount);
+    return e.fixed ? closeTo(paid, e.amount) : true;
+  });
+  if (learnt) return learnt;
+  if (tx.kind !== 'payment' && tx.kind !== 'direct_debit') return undefined;
+  return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)));
+}
+
+export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: OwnAccount[]): ClassifiedTx[] {
   const ownIbans = new Set(own.map((o) => o.iban?.replace(/\s/g, '')).filter(Boolean));
   const accountOf = new Map(own.map((o) => [o.externalId, o.accountId]));
-  const out: ClassifiedTx[] = txs.map((tx) => ({ ...tx, class: 'other' }));
+  const out: ClassifiedTx[] = txs.map((tx) => ({ ...tx, class: 'unsorted', merchantKey: merchantKey(tx) }));
   const booked = out.filter((tx) => !tx.pending);
+  const institutions = (plan.accounts ?? []).map((a) => normalizeParty(a.institution)).filter((s) => s.length >= 3);
+  const expenses = (plan.expenses ?? []).filter((e) => !e.includedElsewhere);
 
-  // Between the user's own accounts: named by the bank, or the same sum leaving one and reaching another.
+  // Between the user's own accounts: named by the bank, the same sum leaving one and reaching another,
+  // or a transfer to a place the plan has an account at (AVANZA BANK).
   for (const tx of booked) if (tx.counterpartyIban && ownIbans.has(tx.counterpartyIban.replace(/\s/g, ''))) tx.class = 'internal_transfer';
+  for (const tx of booked) {
+    if (tx.class !== 'unsorted' || (tx.kind !== 'transfer' && tx.kind !== 'direct_debit')) continue;
+    if (institutions.some((inst) => tx.merchantKey!.includes(inst) || inst.includes(tx.merchantKey!))) tx.class = 'internal_transfer';
+  }
   for (const debit of booked) {
-    if (debit.amount >= 0 || debit.class !== 'other') continue;
+    if (debit.amount >= 0 || debit.class !== 'unsorted') continue;
     const credit = booked.find(
       (c) =>
-        c.class === 'other' &&
+        c.class === 'unsorted' &&
         c.amount === -debit.amount &&
         c.account !== debit.account &&
         c.currency === debit.currency &&
@@ -111,7 +177,7 @@ export function classifyTransactions(txs: BankTx[], plan: Pick<FinancialPlan, 'i
   }
 
   for (const tx of booked) {
-    if (tx.amount <= 0 || tx.class !== 'other') continue;
+    if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
     let best: { source: IncomeSource; score: number; off: number } | undefined;
     for (const source of plan.income) {
       // A destination that no longer exists, or is not connected, restricts nothing.
@@ -127,7 +193,122 @@ export function classifyTransactions(txs: BankTx[], plan: Pick<FinancialPlan, 'i
       tx.month = incomeMonthOf(tx.date, best.source.bankMatch?.day);
     }
   }
+
+  // Money out: a choice made for the line itself, a bill it pays, the payee's rule, a chain Finly knows.
+  for (const tx of booked) {
+    if (tx.amount >= 0 || tx.class !== 'unsorted') continue;
+    const line = tx.id ? plan.bank?.lines?.[tx.id] : undefined;
+    if (line) {
+      applyRule(tx, line);
+      continue;
+    }
+    const bill = billFor(tx, expenses);
+    if (bill) {
+      applyRule(tx, { expenseId: bill.id });
+      continue;
+    }
+    const rule = plan.bank?.merchants?.[tx.merchantKey!];
+    if (rule) {
+      applyRule(tx, rule);
+      continue;
+    }
+    const group = bundledGroup(tx.merchantKey!);
+    if (group) applyRule(tx, { group });
+  }
+  // A line choice can also dismiss money in that is not income (a friend paying back).
+  for (const tx of booked) {
+    const line = tx.id && tx.amount > 0 && tx.class === 'unsorted' ? plan.bank?.lines?.[tx.id] : undefined;
+    if (line && 'action' in line) tx.class = 'ignored';
+  }
   return out;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Everyday spending per group and month, summed from the bank. Unsorted money out counts under
+ * leisure until it is placed. The running month carries `asOf` today so the pace is read right.
+ */
+export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<SpendGroup, Record<string, SpendEntry>> {
+  const out: Record<SpendGroup, Record<string, SpendEntry>> = { food: {}, transport: {}, leisure: {} };
+  const thisMonth = monthKeyOf(today);
+  const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
+  for (const tx of classified) {
+    if (tx.pending || tx.amount >= 0) continue;
+    const group = tx.class === 'spend' ? tx.group : tx.class === 'unsorted' ? 'leisure' : undefined;
+    if (!group) continue;
+    const month = tx.date.slice(0, 7);
+    const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });
+    entry.amount = round2(entry.amount - tx.amount);
+  }
+  return out;
+}
+
+/** Expense id → month paid → what the bank says was paid. Two lines in a month add up. */
+export function billsByMonth(classified: ClassifiedTx[]): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const tx of classified) {
+    if (tx.class !== 'expense' || !tx.expenseId || !tx.month || tx.pending) continue;
+    const months = (out[tx.expenseId] ??= {});
+    months[tx.month] = round2((months[tx.month] ?? 0) - tx.amount);
+  }
+  return out;
+}
+
+export interface MerchantToSort {
+  key: string;
+  /** As the bank wrote it, for showing. */
+  label: string;
+  count: number;
+  total: number;
+  lastDate: string;
+  /** Klarna and the like: each line is placed on its own, nothing is remembered for the payee. */
+  passThrough: boolean;
+  lines: ClassifiedTx[];
+}
+
+/** Money out nobody has placed, by payee, biggest first. */
+export function toSort(classified: ClassifiedTx[]): MerchantToSort[] {
+  const by = new Map<string, MerchantToSort>();
+  for (const tx of classified) {
+    if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted') continue;
+    const key = tx.merchantKey ?? '';
+    const m = by.get(key) ?? { key, label: tx.counterparty ?? tx.description ?? '', count: 0, total: 0, lastDate: tx.date, passThrough: isPassThrough(key), lines: [] };
+    m.count += 1;
+    m.total = round2(m.total - tx.amount);
+    if (tx.date > m.lastDate) m.lastDate = tx.date;
+    m.lines.push(tx);
+    by.set(key, m);
+  }
+  return [...by.values()].sort((a, b) => b.total - a.total);
+}
+
+export interface RecurringHint {
+  amount: number;
+  /** Day of the month it usually goes out. */
+  day: number;
+  /** The same amount every time. */
+  fixed: boolean;
+  /** Paid as a bill (payment or direct debit) rather than by card. */
+  bill: boolean;
+}
+
+const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) / 2)];
+
+/**
+ * A payee paid in two or more months at about the same amount looks like a bill Finly does not know
+ * yet. `around` narrows a pass-through such as Klarna to one of the things it carries.
+ */
+export function recurringHint(lines: ClassifiedTx[], around?: number): RecurringHint | undefined {
+  const booked = lines.filter((l) => !l.pending && l.amount < 0);
+  if (!booked.length) return undefined;
+  const bill = booked.some((l) => l.kind === 'payment' || l.kind === 'direct_debit');
+  const ref = around ?? median(booked.map((l) => -l.amount));
+  // A bill's amount swings with the season; the kind already says what it is.
+  const alike = bill && around === undefined ? booked : booked.filter((l) => closeTo(-l.amount, ref));
+  if (new Set(alike.map((l) => l.date.slice(0, 7))).size < 2) return undefined;
+  const amounts = alike.map((l) => -l.amount);
+  return { amount: median(amounts), day: median(alike.map((l) => Number(l.date.slice(8)))), fixed: new Set(amounts).size === 1, bill };
 }
 
 /** Income source id → month → what arrived. */
@@ -161,12 +342,13 @@ export function incomeStatus(plan: Pick<FinancialPlan, 'income'>, month: string)
 
 /**
  * Lays a fresh fetch over what is stored for one account: everything from `from` on is replaced by
- * what the bank says now. No transaction ids are compared, because banks do not reliably give them,
- * and two identical purchases on one day are two purchases. A pending line that has since been booked
- * or dropped goes the same way.
+ * what the bank says now, and an older stored line the bank sent again (same id) goes too, so nothing
+ * is counted twice. Lines without an id are not compared: two identical purchases on one day are two
+ * purchases. A pending line that has since been booked or dropped is replaced the same way.
  */
 export function mergeWindow(stored: BankTx[], fetched: BankTx[], from: string, keepFrom: string): BankTx[] {
-  return [...stored.filter((tx) => tx.date < from && !tx.pending), ...fetched.filter((tx) => tx.date >= from)]
+  const ids = new Set(fetched.flatMap((tx) => (tx.id ? [tx.id] : [])));
+  return [...stored.filter((tx) => tx.date < from && !tx.pending && !(tx.id && ids.has(tx.id))), ...fetched.filter((tx) => tx.date >= from)]
     .filter((tx) => tx.date >= keepFrom)
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }

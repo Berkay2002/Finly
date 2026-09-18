@@ -25,7 +25,7 @@ export function DepositsCard() {
 
   const deposits = useMemo(() => {
     const since = new Date(Date.now() - RECENT_DAYS * 86_400_000).toISOString().slice(0, 10);
-    return classifiedTxs().filter((tx) => tx.class === 'other' && tx.amount > 0 && !tx.pending && tx.date >= since).slice(0, SHOWN);
+    return classifiedTxs().filter((tx) => tx.class === 'unsorted' && tx.amount > 0 && !tx.pending && tx.date >= since).slice(0, SHOWN);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifiedTxs reads both stores
   }, [txs, plan]);
 

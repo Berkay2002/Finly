@@ -42,6 +42,7 @@ export default {
     confirm: 'Bekräfta',
     onPlan: 'Enligt plan',
     clear: 'Ta bort inmatat belopp',
+    fromBank: 'från din bank',
   },
   section: {
     monthlyCost: 'Månadskostnad',

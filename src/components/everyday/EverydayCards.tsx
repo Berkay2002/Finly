@@ -159,7 +159,13 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
 
       <MoneyField
         label={running ? t.spentSoFar : t.spentInTotal}
-        hint={running && sm.spent !== undefined && sm.day < today.getDate() ? t.updated(formatDate(`${key}-${String(sm.day).padStart(2, '0')}`)) : undefined}
+        hint={
+          spendEntryFor(spend, key)?.source === 'bank'
+            ? t.fromBank
+            : running && sm.spent !== undefined && sm.day < today.getDate()
+              ? t.updated(formatDate(`${key}-${String(sm.day).padStart(2, '0')}`))
+              : undefined
+        }
         currency={currency}
         value={sm.spent ?? 0}
         onValueChange={(amount) =>

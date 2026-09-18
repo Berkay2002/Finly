@@ -45,6 +45,7 @@ export default {
     estimateOutdated: 'Estimate outdated',
     optional: 'Optional',
     flexible: 'Flexible',
+    paidVia: (via: string) => `via ${via}`,
     calculatedTitle: 'Calculated from usage and prices',
     priceEachTime: 'Price each time',
     typicalAmount: 'Typical amount',

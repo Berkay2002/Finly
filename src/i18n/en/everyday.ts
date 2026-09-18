@@ -44,6 +44,7 @@ export default {
     spentSoFar: 'Spent so far',
     spentInTotal: 'Spent in total',
     updated: (date: string) => `(updated ${date})`,
+    fromBank: '(from your bank)',
     dayOf: (day: number, days: number) => `Day ${day} of ${days}, expected by now`,
     planned: 'Planned',
     plannedForMonth: 'Planned for the month',

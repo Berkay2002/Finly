@@ -51,6 +51,31 @@ describe('buildSnapshot', () => {
     expect(snap.emergency).toBe(40000);
     expect(snap.plan).toBeDefined();
   });
+
+  it('closes a past month with the balances of that month, not today\'s', () => {
+    const plan = closable();
+    const [a0] = plan.accounts;
+    a0.balances = { '2026-07': 1000, '2026-08': 2000 };
+    a0.balance = 9999;
+    const aug = buildSnapshot(plan, '2026-08', NOW);
+    const jul = buildSnapshot(plan, '2026-07', NOW);
+    const sep = buildSnapshot(plan, '2026-09', NOW);
+    expect(aug.byAccount?.[a0.id]).toBe(2000);
+    expect(jul.byAccount?.[a0.id]).toBe(1000);
+    expect(sep.byAccount?.[a0.id]).toBe(9999);
+    expect(aug.totalAssets - jul.totalAssets).toBe(1000);
+    expect(aug.plan?.accounts[0].balance).toBe(2000);
+  });
+
+  it('records what each category really cost and what income arrived', () => {
+    const plan = closable();
+    plan.expenses[0].actuals = { '2026-08': plan.expenses[0].amount + 300 };
+    plan.income[0].actuals = { '2026-08': 30000 };
+    const snap = buildSnapshot(plan, '2026-08', NOW);
+    expect(snap.byCategoryActual![plan.expenses[0].category]).toBe(snap.byCategory[plan.expenses[0].category] + 300);
+    expect(snap.incomeReceived).toBe(30000);
+    expect(buildSnapshot(closable(), '2026-08', NOW).incomeReceived).toBeUndefined();
+  });
 });
 
 describe('freezePlan', () => {
@@ -68,6 +93,12 @@ describe('freezePlan', () => {
     expect(frozen.isSample).toBeUndefined();
     // the live plan is untouched
     expect(plan.expenses[0].actuals).toEqual({ '2026-07': 400, '2026-08': 500, '2026-09': 600 });
+  });
+
+  it('drops how bank lines get sorted, which is not a figure of the month', () => {
+    const plan = { ...prdExamplePlan(), bank: { provider: 'p', appId: 'x', sessions: [], merchants: { ICA: { group: 'food' as const } }, lines: { a: { action: 'ignore' as const } } } };
+    expect(freezePlan(plan, '2026-08').bank).toEqual({ provider: 'p', appId: 'x', sessions: [] });
+    expect(plan.bank.merchants).toBeDefined();
   });
 
   it('drops the profile picture so history does not carry copies of it', () => {

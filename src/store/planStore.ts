@@ -23,6 +23,8 @@ import type {
   HomeLocation,
   Household,
   IncomeSource,
+  LineChoice,
+  MerchantRule,
   SavedScenario,
   OnboardingStep,
   SavingsGoal,
@@ -120,6 +122,10 @@ interface PlanState {
   refreshBankBalances: (balances: Record<string, number>, today?: Date) => void;
   /** Connect, reconnect or forget the bank; undefined removes the setup and every account's link with it. */
   setBankSetup: (bank: BankSetup | undefined) => void;
+  /** How money out to this payee is sorted from now on; null forgets it. */
+  setMerchantRule: (merchantKey: string, rule: MerchantRule | null) => void;
+  /** How one bank line is sorted, for payees like Klarna that carry something different every time. */
+  setLineChoice: (lineId: string, choice: LineChoice | null) => void;
 
   /** Freeze `month`'s numbers from the live plan. Pass `today` to pin the timestamp (tests). */
   saveSnapshot: (month: string, today?: Date) => void;
@@ -148,6 +154,13 @@ function touch(plan: FinancialPlan): FinancialPlan {
  * Applies a change about one month's real figures to the live plan and, when that month is already
  * closed, to its frozen copy too, rebuilding the snapshot so the closed month shows the figure.
  */
+function withKey<T>(map: Record<string, T> | undefined, key: string, value: T | null): Record<string, T> | undefined {
+  const { [key]: _old, ...rest } = map ?? {};
+  void _old;
+  const next = value ? { ...rest, [key]: value } : rest;
+  return Object.keys(next).length ? next : undefined;
+}
+
 function withMonthApplied(
   s: { plan: FinancialPlan; snapshots: SnapshotMap },
   month: string,
@@ -253,6 +266,10 @@ export const usePlanStore = create<PlanState>()(
             void _b;
             return { ...rest, accounts: p.accounts.map(({ bank: _l, ...a }) => (void _l, a)) };
           }),
+        setMerchantRule: (key, rule) =>
+          mutate((p) => (p.bank ? { ...p, bank: { ...p.bank, merchants: withKey(p.bank.merchants, key, rule) } } : p)),
+        setLineChoice: (id, choice) =>
+          mutate((p) => (p.bank ? { ...p, bank: { ...p.bank, lines: withKey(p.bank.lines, id, choice) } } : p)),
         refreshFx: (fx) => {
           const merged = mergeFx(get().plan.fx, fx);
           if (merged) mutate((p) => ({ ...p, fx: merged }));
@@ -276,7 +293,7 @@ export const usePlanStore = create<PlanState>()(
             withMonthApplied(s, month, (plan) => {
               const byMonth = { ...(plan.everydaySpend?.[group] ?? {}) };
               if (!entry || !Number.isFinite(entry.amount)) delete byMonth[month];
-              else byMonth[month] = { amount: Math.max(0, entry.amount), ...(entry.asOf ? { asOf: entry.asOf } : {}) };
+              else byMonth[month] = { amount: Math.max(0, entry.amount), ...(entry.asOf ? { asOf: entry.asOf } : {}), ...(entry.source ? { source: entry.source } : {}) };
               const everydaySpend = { ...(plan.everydaySpend ?? {}) };
               if (Object.keys(byMonth).length > 0) everydaySpend[group] = byMonth;
               else delete everydaySpend[group];

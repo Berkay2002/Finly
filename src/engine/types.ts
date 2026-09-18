@@ -82,6 +82,14 @@ export interface IncomeBankMatch {
   day?: number;
 }
 
+/** How a bill or subscription shows up at the bank, learnt when the user points a payment out. */
+export interface ExpenseBankMatch {
+  /** The payee as the bank writes it, e.g. 'FORTUM MARKETS AB' or 'K*KLARNA'. */
+  counterparty: string;
+  /** The usual amount, for a payee that carries several things (Klarna, PayPal). */
+  amount?: number;
+}
+
 export type ExpenseCategory = 'home' | 'living' | 'transport' | 'finance' | 'leisure' | 'planned';
 
 export type ExpenseTag = 'car' | 'subscription' | 'debt' | 'insurance' | 'utility' | 'public_transport';
@@ -214,6 +222,8 @@ export interface ExpenseItem {
   includedElsewhere?: boolean;
   /** Company logo for subscriptions: the brand domain picked from search, rendered by Logo.dev. */
   brandDomain?: string;
+  /** How the payment shows up at the bank. Set from the sort sheet; the bank then fills `actuals`. */
+  bankMatch?: ExpenseBankMatch;
 }
 
 /**
@@ -321,11 +331,21 @@ export interface BankSession {
   accounts: Record<string, string>;
 }
 
+/** What a payee's lines are, once the user has said: everyday spending in a group, a bill, money between own accounts, or nothing to count. */
+export type MerchantRule = { group: SpendGroup } | { expenseId: string } | { action: 'ignore' | 'transfer' };
+
+/** One line sorted on its own, for payees that carry different things each time (Klarna, PayPal). */
+export type LineChoice = { group: SpendGroup } | { expenseId: string } | { action: 'ignore' };
+
 export interface BankSetup {
   provider: string;
   /** The user's own application id at the provider. */
   appId: string;
   sessions: BankSession[];
+  /** By normalised payee (see `merchantKey`). Synced with the plan so every device sorts alike. */
+  merchants?: Record<string, MerchantRule>;
+  /** By transaction id. Pruned to the months the device keeps. */
+  lines?: Record<string, LineChoice>;
 }
 
 export interface Account {
@@ -487,6 +507,8 @@ export interface SpendEntry {
    * month, which is also what a figure entered after the month ended means.
    */
   asOf?: string;
+  /** Summed from bank transactions; a total typed by hand has no source and is never overwritten by the bank. */
+  source?: 'bank';
 }
 
 /** Everyday spending logged as one total per month. See engine/everyday.ts. */

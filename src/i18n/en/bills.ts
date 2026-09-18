@@ -38,6 +38,7 @@ export default {
     confirm: 'Confirm',
     onPlan: 'On plan',
     clear: 'Clear this bill',
+    fromBank: 'from your bank',
   },
   section: {
     monthlyCost: 'Monthly cost',
