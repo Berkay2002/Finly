@@ -487,7 +487,8 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
       everydayVariance += g_.month.variance ?? 0;
     } else if (g_.month.spent !== undefined && spendEntryFor(plan.everydaySpend?.[g], month)?.source === 'bank') {
       const maybe = sum(g_.itemIds.map((id) => byId.get(id)).map((l) => (l?.varies && l.monthlyLow === 0 ? l.monthly : 0)));
-      if (maybe > 0) everydayVariance += everydayNow[g] = Math.max(0, g_.month.spent - (g_.month.planned - maybe)) - maybe;
+      // A group planned at nothing (other) is over plan from its first line.
+      if (maybe > 0 || g_.month.planned === 0) everydayVariance += everydayNow[g] = Math.max(0, g_.month.spent - (g_.month.planned - maybe)) - maybe;
     }
   }
   const confirmed: ActualLine[] = [];

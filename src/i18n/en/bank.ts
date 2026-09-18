@@ -120,7 +120,7 @@ export default {
     stripDetail: (names: string[], more: number) => (more > 0 ? `${names.join(', ')} and ${more} more` : names.join(', ')),
     open: 'Sort',
     title: 'Sort bank payments',
-    subtitle: 'All of this already counts as spent, under fun & leisure until you say otherwise. Sort a payee once and every payment to it follows.',
+    subtitle: 'All of this already counts as spent, under Other until you say otherwise. Sort a payee once and every payment to it follows.',
     lines: (count: number, last: string) => (count === 1 ? `1 payment, ${last}` : `${count} payments, last ${last}`),
     remember: 'Remember this payee',
     thisTimeOnly: 'This time only',

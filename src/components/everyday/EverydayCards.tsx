@@ -22,6 +22,7 @@ const GROUP_LOOK: Record<SpendGroup, { icon: PictureName; accent: Accent }> = {
   food: { icon: 'nav-living', accent: 'green' },
   transport: { icon: 'nav-transport', accent: 'orange' },
   leisure: { icon: 'nav-leisure', accent: 'purple' },
+  other: { icon: 'nav-planned', accent: 'lavender' },
 };
 
 function nudgeName(n: SpendNudge, expenses: ExpenseItem[]): string {

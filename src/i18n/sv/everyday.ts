@@ -21,6 +21,11 @@ export default {
       noun: 'nöjen och fritid',
       bankHint: 'Utekvällar, bio, evenemang och hobbyer. Ligger ofta under nöjen eller fritid i bankappen.',
     },
+    other: {
+      label: 'Övrigt',
+      noun: 'övrigt',
+      bankHint: 'Engångsutgifter som inte är värda en kategori: en parkeringsbot, en avgift, en borttappad nyckel. Kommer aldrig ihåg mottagaren.',
+    },
   },
   budget: {
     set: (items) => `Din siffra för hela gruppen · posterna blir ${items}`,

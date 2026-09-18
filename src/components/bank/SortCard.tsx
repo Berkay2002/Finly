@@ -229,7 +229,8 @@ export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBi
       for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { expenseId: id });
     } else {
       const rule = choice === 'ignore' ? ({ action: 'ignore' } as const) : { group: choice as SpendGroup };
-      if (remember) setMerchantRule(merchant.key, rule);
+      // Other is for these lines only: a parking fine does not make the payee always other.
+      if (remember && choice !== 'other') setMerchantRule(merchant.key, rule);
       else for (const l of merchant.lines) if (l.id) setLineChoice(l.id, rule);
     }
   };

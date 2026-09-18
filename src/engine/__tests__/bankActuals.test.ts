@@ -109,7 +109,7 @@ describe('money out', () => {
     const spend = spendByMonth(out, new Date(2026, 8, 16));
     expect(spend.food['2026-09']).toEqual({ amount: 979, source: 'bank', asOf: '2026-09-16' });
     expect(spend.transport['2026-09']).toEqual({ amount: 46, source: 'bank', asOf: '2026-09-16' });
-    expect(spend.leisure['2026-09']).toEqual({ amount: 499, source: 'bank', asOf: '2026-09-16' });
+    expect(spend.other['2026-09']).toEqual({ amount: 499, source: 'bank', asOf: '2026-09-16' });
     expect(spendByMonth(out, new Date(2026, 9, 3)).food['2026-09']).toEqual({ amount: 979, source: 'bank' });
   });
 
@@ -147,7 +147,7 @@ describe('money out', () => {
       ['statement', [], 13],
     ]);
     expect(billsByMonth(out)).toEqual({ spotify: { '2026-08': 129, '2026-09': 129 }, netflix: { '2026-08': 199, '2026-09': 71 } });
-    expect(spendByMonth(out, new Date(2026, 9, 3)).leisure).toEqual({ '2026-08': { amount: 1207, source: 'bank' }, '2026-09': { amount: 13, source: 'bank' } });
+    expect(spendByMonth(out, new Date(2026, 9, 3)).other).toEqual({ '2026-08': { amount: 1207, source: 'bank' }, '2026-09': { amount: 13, source: 'bank' } });
     expect(toSort(out)).toEqual([]);
   });
 
@@ -159,14 +159,14 @@ describe('money out', () => {
     const bank = { provider: 'p', appId: 'x', sessions: [] };
     const lent = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { buy: { action: 'lent' } } } }, OWN);
     expect(lent.map((t) => t.class)).toEqual(['lent', 'unsorted']);
-    expect(spendByMonth(lent, new Date(2026, 8, 16)).leisure).toEqual({});
+    expect(spendByMonth(lent, new Date(2026, 8, 16)).other).toEqual({});
     expect(lentOut(lent).map((t) => t.id)).toEqual(['buy']);
     expect(lentTotal(lent)).toBe(5889);
     expect(toSort(lent)).toEqual([]);
 
     const repaid = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { buy: { action: 'lent' }, back: { repays: 'buy' } } } }, OWN);
     expect(repaid.map((t) => t.class)).toEqual(['lent', 'ignored']);
-    expect(spendByMonth(repaid, new Date(2026, 8, 16)).leisure).toEqual({});
+    expect(spendByMonth(repaid, new Date(2026, 8, 16)).other).toEqual({});
     expect(lentOut(repaid)).toEqual([]);
     expect(lentTotal(repaid)).toBe(0);
   });
@@ -194,7 +194,7 @@ describe('money out', () => {
     expect(toSort(classifyTransactions(lines, { income: [] }, OWN)).map((m) => [m.key, m.count])).toEqual([['46702330253#b', 1], ['46702330253#a', 1]]);
     const settled = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { a: { action: 'lent' }, b: { action: 'settled' } } } }, OWN);
     expect(lentOut(settled).map((t) => t.id)).toEqual(['a']);
-    expect(spendByMonth(settled, new Date(2026, 8, 16)).leisure['2026-09']).toMatchObject({ amount: 400 });
+    expect(spendByMonth(settled, new Date(2026, 8, 16)).other['2026-09']).toMatchObject({ amount: 400 });
   });
 
   it("a friend's share of a bill lowers what the bill cost, by the line or by their monthly amount", () => {

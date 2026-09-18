@@ -122,7 +122,7 @@ export default {
     stripDetail: (names, more) => (more > 0 ? `${names.join(', ')} och ${more} till` : names.join(', ')),
     open: 'Sortera',
     title: 'Sortera bankbetalningar',
-    subtitle: 'Allt här räknas redan som spenderat, under nöje och fritid tills du säger något annat. Sortera en mottagare en gång så följer varje betalning till den med.',
+    subtitle: 'Allt här räknas redan som spenderat, under övrigt tills du säger något annat. Sortera en mottagare en gång så följer varje betalning till den med.',
     lines: (count, last) => (count === 1 ? `1 betalning, ${last}` : `${count} betalningar, senast ${last}`),
     remember: 'Kom ihåg mottagaren',
     thisTimeOnly: 'Bara den här gången',

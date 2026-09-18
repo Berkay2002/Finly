@@ -20,6 +20,11 @@ export default {
       noun: 'fun and leisure',
       bankHint: 'Nights out, cinema, events and hobbies. Often under entertainment or leisure in the bank app.',
     },
+    other: {
+      label: 'Other',
+      noun: 'other things',
+      bankHint: 'One-offs not worth a category: a parking fine, a fee, a lost key. Never remembered for a payee.',
+    },
   },
   budget: {
     set: (items: string) => `Your figure for the whole group · the items add up to ${items}`,

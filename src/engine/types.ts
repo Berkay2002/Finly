@@ -529,7 +529,8 @@ export interface SpendEntry {
 }
 
 /** Everyday spending logged as one total per month. See engine/everyday.ts. */
-export type SpendGroup = 'food' | 'transport' | 'leisure';
+/** `other`: money out not worth a category (a parking fine, a fee); never planned, never remembered for a payee. */
+export type SpendGroup = 'food' | 'transport' | 'leisure' | 'other';
 
 export type CommuteMode = 'public' | 'car' | 'active';
 

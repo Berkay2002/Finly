@@ -22,7 +22,7 @@ function placeOf(tx: ClassifiedTx): Place {
   if (tx.amount > 0) return 'in';
   switch (tx.class) {
     case 'spend':
-      return tx.group ?? 'leisure';
+      return tx.group ?? 'other';
     case 'unsorted':
       return 'unsorted';
     case 'expense':

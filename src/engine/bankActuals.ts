@@ -36,7 +36,7 @@ export interface BankTx {
 /**
  * Money in is not income and money out is not an expense until it is known what it was. `expense` is a
  * bill or subscription in the plan, `spend` everyday spending in a group, `unsorted` money out (or in)
- * nobody has placed yet: still counted as spent, under leisure, so safe to spend stays honest.
+ * nobody has placed yet: still counted as spent, under other, so safe to spend stays honest.
  */
 export type TxClass = 'income' | 'internal_transfer' | 'expense' | 'spend' | 'unsorted' | 'ignored' | 'statement' | 'lent';
 
@@ -404,9 +404,9 @@ export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
   return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && owedOn(tx) > 0).sort((a, b) => a.amount - b.amount);
 }
 
-/** The everyday group a line counts under, if any: its own, or leisure while nobody has placed it. */
+/** The everyday group a line counts under, if any: its own, or other while nobody has placed it. */
 export function spendGroupOfTx(tx: ClassifiedTx): SpendGroup | undefined {
-  return tx.class === 'spend' || tx.class === 'expense' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
+  return tx.class === 'spend' || tx.class === 'expense' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'other') : tx.class === 'unsorted' || tx.class === 'statement' ? 'other' : undefined;
 }
 
 /**
@@ -420,10 +420,10 @@ export function spentOf(tx: ClassifiedTx): number {
 
 /**
  * Everyday spending per group and month, summed from the bank. Unsorted money out counts under
- * leisure until it is placed. The running month carries `asOf` today so the pace is read right.
+ * other until it is placed. The running month carries `asOf` today so the pace is read right.
  */
 export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<SpendGroup, Record<string, SpendEntry>> {
-  const out: Record<SpendGroup, Record<string, SpendEntry>> = { food: {}, transport: {}, leisure: {} };
+  const out: Record<SpendGroup, Record<string, SpendEntry>> = { food: {}, transport: {}, leisure: {}, other: {} };
   const thisMonth = monthKeyOf(today);
   const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
   for (const tx of classified) {

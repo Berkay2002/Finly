@@ -9,7 +9,7 @@ import type { ExpenseCategory, ExpenseItem, Occurrences, SpendEntry, SpendGroup 
 /* Groups                                                              */
 /* ------------------------------------------------------------------ */
 
-export const SPEND_GROUPS: SpendGroup[] = ['food', 'transport', 'leisure'];
+export const SPEND_GROUPS: SpendGroup[] = ['food', 'transport', 'leisure', 'other'];
 
 const group = (id: SpendGroup, category: ExpenseCategory) => ({
   category,
@@ -31,6 +31,7 @@ export const SPEND_GROUP_META: Record<
   food: group('food', 'living'),
   transport: group('transport', 'transport'),
   leisure: group('leisure', 'leisure'),
+  other: group('other', 'planned'),
 };
 
 export function isFoodItem(e: Pick<ExpenseItem, 'subcategory'>): boolean {

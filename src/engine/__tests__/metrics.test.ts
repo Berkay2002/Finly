@@ -438,3 +438,16 @@ describe('group budget', () => {
     expect(m.expenses.lines.map((l) => l.id)).toEqual(['groceries', 'restaurants']);
   });
 });
+
+describe('other spending', () => {
+  it('money out with no category counts against safe to spend from its first line', () => {
+    const plan = emptyPlan();
+    plan.income = [income({ amount: 30000 })];
+    plan.bank = { provider: 'p', appId: 'x', sessions: [{ id: 's', accounts: [], validUntil: '2026-12-31' }] };
+    const before = computeMetrics(plan, NOW);
+    plan.everydaySpend = { other: { '2026-09': { amount: 300, asOf: '2026-09-16', source: 'bank' } } };
+    const m = computeMetrics(plan, NOW);
+    expect(m.actuals.byCategory.planned).toBe(300);
+    expect(m.safeToSpend).toBe(before.safeToSpend - 300);
+  });
+});

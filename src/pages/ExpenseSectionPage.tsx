@@ -197,9 +197,12 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           )}
 
           {category === 'planned' && (
-            <Callout tone="tip" title={s.spreadTitle}>
-              {s.spreadBody}
-            </Callout>
+            <>
+              <SpendMonthCard group="other" />
+              <Callout tone="tip" title={s.spreadTitle}>
+                {s.spreadBody}
+              </Callout>
+            </>
           )}
         </div>
       </div>
