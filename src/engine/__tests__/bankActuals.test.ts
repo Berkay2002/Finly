@@ -163,6 +163,20 @@ describe('money out', () => {
     expect(lentTotal(repaid)).toBe(0);
   });
 
+  it('a shared meal: the own half is spent in the payee\'s group at once, the other half waits, and the friend\'s money closes it', () => {
+    const bank = { provider: 'p', appId: 'x', sessions: [] };
+    const lines = [
+      tx({ id: 'meal', amount: -300, date: '2026-09-12', kind: 'card', counterparty: 'MAX BURGERS' }),
+      tx({ id: 'back', amount: 150, date: '2026-09-13', kind: 'swish', counterparty: '46702330253' }),
+    ];
+    const half = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { meal: { action: 'lent', mine: 150 } } } }, OWN);
+    expect(spendByMonth(half, new Date(2026, 8, 16)).food['2026-09']).toMatchObject({ amount: 150 });
+    expect(lentTotal(half)).toBe(150);
+    const closed = classifyTransactions(lines, { income: [], bank: { ...bank, lines: { meal: { action: 'lent', mine: 150 }, back: { repays: 'meal' } } } }, OWN);
+    expect(spendByMonth(closed, new Date(2026, 8, 16)).food['2026-09']).toMatchObject({ amount: 150 });
+    expect(lentOut(closed)).toEqual([]);
+  });
+
   it('a person is sorted one line at a time, and what is settled stops waiting but stays spent', () => {
     const bank = { provider: 'p', appId: 'x', sessions: [] };
     const lines = [

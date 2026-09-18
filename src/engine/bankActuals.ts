@@ -50,6 +50,8 @@ export interface ClassifiedTx extends BankTx {
   /** Paid for someone else: what has come back so far, and whether nothing more is expected. */
   repaid?: number;
   settled?: boolean;
+  /** Of a lent line: the part that was the person's own (half of a shared meal), spent right away. */
+  mine?: number;
   /** A transfer the user said goes into this savings pot. */
   potId?: string;
   /** The payee, normalised: what rules are keyed by. */
@@ -147,6 +149,7 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
   } else if ('action' in rule) {
     tx.class = rule.action === 'transfer' ? 'internal_transfer' : rule.action === 'ignore' ? 'ignored' : 'lent';
     if (rule.action === 'settled') tx.settled = true;
+    if (rule.action === 'lent' && 'mine' in rule && rule.mine) tx.mine = rule.mine;
   }
 }
 
@@ -183,7 +186,7 @@ function splitStatements(statements: ClassifiedTx[], expenses: ExpenseItem[]): v
 }
 
 /** How many others pay a share of a bill: the people named, else the number given. */
-function sharerCount(e: Pick<ExpenseItem, 'sharedWith' | 'sharedBy'>): number {
+export function sharerCount(e: Pick<ExpenseItem, 'sharedWith' | 'sharedBy'>): number {
   return e.sharedBy?.length || e.sharedWith || 0;
 }
 
@@ -285,6 +288,11 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     const line = tx.id ? plan.bank?.lines?.[tx.id] : undefined;
     if (line && !('repays' in line)) {
       applyRule(tx, line);
+      // Lent money keeps the payee's group, for the part that is the person's own.
+      if ('action' in line && line.action === 'lent') {
+        const rule = plan.bank?.merchants?.[tx.merchantKey!];
+        tx.group = (rule && 'group' in rule ? rule.group : undefined) ?? bundledGroup(tx.merchantKey!);
+      }
       continue;
     }
     if (passThroughBrand(tx.merchantKey!)) {
@@ -369,14 +377,19 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** What a lent line still waits for: what went out, less the person's own part and what has come back. */
+export function owedOn(tx: Pick<ClassifiedTx, 'amount' | 'mine' | 'repaid'>): number {
+  return round2(-tx.amount - (tx.mine ?? 0) - (tx.repaid ?? 0));
+}
+
 /** What is still owed back on everything lent out. */
 export function lentTotal(classified: ClassifiedTx[]): number {
-  return round2(lentOut(classified).reduce((sum, tx) => sum - tx.amount - (tx.repaid ?? 0), 0));
+  return round2(lentOut(classified).reduce((sum, tx) => sum + owedOn(tx), 0));
 }
 
 /** Money out for someone else that has not come back in full: booked, biggest first. */
 export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
-  return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && -tx.amount - (tx.repaid ?? 0) > 0).sort((a, b) => a.amount - b.amount);
+  return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && owedOn(tx) > 0).sort((a, b) => a.amount - b.amount);
 }
 
 /**
@@ -389,10 +402,10 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
   const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0) continue;
-    const group = tx.class === 'spend' ? tx.group : tx.class === 'unsorted' || tx.class === 'statement' || tx.class === 'lent' ? 'leisure' : undefined;
+    const group = tx.class === 'spend' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
     if (!group) continue;
-    // Lent money is owed back, not spent, until the person says the rest was theirs; a statement counts for what no subscription explains.
-    const spent = tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : 0) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
+    // Lent money is spent only for the person's own part, or all that never came back once they give up on it; a statement counts for what no subscription explains.
+    const spent = tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : (tx.mine ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
     if (spent <= 0) continue;
     const month = tx.date.slice(0, 7);
     const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { lentOut, normalizeParty, partyLabel, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
@@ -35,13 +35,14 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   // A new rule, or a bill added from here, places lines at once instead of at the next read from the bank.
   useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
 
-  const { merchants, lent, incoming } = useMemo(
+  const { merchants, lent, incoming, classified } = useMemo(
     () => {
       // Only this month and the last: what is older changes nothing the bank still writes.
       const now = new Date();
       const since = `${monthKeyOf(new Date(now.getFullYear(), now.getMonth() - 1, 1))}-01`;
       const classified = classifiedTxs();
       return {
+        classified,
         merchants: toSort(classified, since, contacts),
         lent: lentOut(classified),
         incoming: classified.filter((tx) => tx.class === 'unsorted' && tx.amount > 0 && !tx.pending && tx.id && tx.date >= since),
@@ -93,9 +94,10 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.lentTitle}</div>
             <ul className="divide-y divide-line">
               {lent.map((tx) => (
-                <LentRow key={tx.id} tx={tx} incoming={incoming} />
+                <LentRow key={tx.id} tx={tx} />
               ))}
             </ul>
+            <p className="mt-1.5 text-[12px] text-muted">{t.lentHint}</p>
           </div>
         )}
         {incoming.length > 0 && (
@@ -103,7 +105,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.inTitle}</div>
             <ul className="divide-y divide-line">
               {incoming.map((tx) => (
-                <InRow key={tx.id} tx={tx} lent={lent} />
+                <InRow key={tx.id} tx={tx} lent={lent} classified={classified} />
               ))}
             </ul>
           </div>
@@ -122,7 +124,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   );
 }
 
-type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' | 'gift' | 'transfer' | 'ignore';
+type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' | 'half' | 'gift' | 'transfer' | 'ignore';
 
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
@@ -144,6 +146,7 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
     ...plan.expenses.map((e) => ({ value: `bill:${e.id}` as const, label: t.bill(expenseName(e)) })),
     ...savingsPots(plan).map((p) => ({ value: `pot:${p.id}` as const, label: t.saving(p.name) })),
     ...(remember ? [{ value: 'transfer' as const, label: t.transfer }] : []),
+    { value: 'half', label: t.half },
     { value: 'lent', label: t.lent },
     { value: 'gift', label: t.gift },
     { value: 'ignore', label: t.ignore },
@@ -171,8 +174,8 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
       if (remember) setMerchantRule(merchant.key, { action: 'transfer' });
     } else if (choice === 'transfer') {
       setMerchantRule(merchant.key, { action: 'transfer' });
-    } else if (choice === 'lent') {
-      for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { action: 'lent' });
+    } else if (choice === 'lent' || choice === 'half') {
+      for (const l of merchant.lines) if (l.id) setLineChoice(l.id, choice === 'half' ? { action: 'lent', mine: Math.round(-l.amount * 50) / 100 } : { action: 'lent' });
     } else if (choice === 'gift') {
       // A present is spent once, in its month: a one-off item in the plan, dated when it went out.
       const id = addExpense({ ...customDraft('planned', t.giftName(merchant.label.replace(/^Swish · /, '')), []), subcategory: 'gifts', amount: merchant.total, frequency: 'once', nextDate: merchant.lastDate });
@@ -201,18 +204,35 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
   );
 }
 
-/** Money in from a person: paying back what was bought for them, their share of a bill, or nothing to count. */
-function InRow({ tx, lent }: { tx: ClassifiedTx; lent: ClassifiedTx[] }) {
+/** How far back a friend's money can pay for a purchase already sorted. */
+const PAYBACK_DAYS = 21;
+
+/**
+ * Money in from a person: paying back a purchase (one waiting, or any recent one, which then counts as
+ * theirs for this much and yours for the rest), their share of a bill, or nothing to count.
+ */
+function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: ClassifiedTx[]; classified: ClassifiedTx[] }) {
   const plan = usePlan();
   const currency = useCurrency();
   const contacts = useBankStore((s) => s.contacts);
   const t = useT().bank.sort;
   const { setMerchantRule, setLineChoice } = usePlanStore();
   const [monthly, setMonthly] = useState(false);
+  const floor = new Date(Date.parse(`${tx.date}T12:00:00`) - PAYBACK_DAYS * 86400000).toISOString().slice(0, 10);
+  // Recent purchases at least this big, the ones about twice or exactly this first (a split, or the whole thing).
+  const recent = classified
+    .filter((p) => p.id && !p.pending && p.amount <= -tx.amount && p.date >= floor && p.date <= tx.date && (p.class === 'spend' || p.class === 'unsorted'))
+    .sort((a, b) => Number(closeTo(-b.amount, tx.amount * 2) || closeTo(-b.amount, tx.amount)) - Number(closeTo(-a.amount, tx.amount * 2) || closeTo(-a.amount, tx.amount)) || b.date.localeCompare(a.date))
+    .slice(0, 12);
+  const shared = plan.expenses.filter((e) => sharerCount(e) > 0);
   const choose = (v: string) => {
     if (v === 'ignore') setLineChoice(tx.id!, { action: 'ignore' });
     else if (v.startsWith('repays:')) setLineChoice(tx.id!, { repays: v.slice(7) });
-    else if (monthly) setMerchantRule(tx.merchantKey!, { expenseId: v.slice(6), amount: tx.amount });
+    else if (v.startsWith('paysfor:')) {
+      const p = classified.find((c) => c.id === v.slice(8))!;
+      setLineChoice(p.id!, { action: 'lent', mine: Math.round((-p.amount - tx.amount) * 100) / 100 });
+      setLineChoice(tx.id!, { repays: p.id! });
+    } else if (monthly) setMerchantRule(tx.merchantKey!, { expenseId: v.slice(6), amount: tx.amount });
     else setLineChoice(tx.id!, { expenseId: v.slice(6) });
   };
   return (
@@ -230,8 +250,9 @@ function InRow({ tx, lent }: { tx: ClassifiedTx; lent: ClassifiedTx[] }) {
           placeholder={t.thisIs}
           onValueChange={choose}
           options={[
-            ...lent.map((l) => ({ value: `repays:${l.id}`, label: t.paysBack(`${partyLabel(l, contacts)} · ${formatMoney(-l.amount - (l.repaid ?? 0), currency)}`) })),
-            ...plan.expenses.map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
+            ...lent.map((l) => ({ value: `repays:${l.id}`, label: t.paysBack(`${partyLabel(l, contacts)} · ${formatMoney(owedOn(l), currency)}`) })),
+            ...recent.map((p) => ({ value: `paysfor:${p.id}`, label: t.paysBack(`${partyLabel(p, contacts)} · ${formatDate(p.date)} · ${formatMoney(-p.amount, currency)}`) })),
+            ...[...shared, ...plan.expenses.filter((e) => !shared.includes(e))].map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
             { value: 'ignore', label: t.inIgnore },
           ]}
           className="w-44 shrink-0 sm:w-64"
@@ -242,29 +263,27 @@ function InRow({ tx, lent }: { tx: ClassifiedTx; lent: ClassifiedTx[] }) {
   );
 }
 
-/** Something bought for someone else: pick the payment that brought the money back, or close it. */
-function LentRow({ tx, incoming }: { tx: ClassifiedTx; incoming: ClassifiedTx[] }) {
+/** Something bought for someone else, still waiting: it came back outside the bank, or it never will and was the person's own. */
+function LentRow({ tx }: { tx: ClassifiedTx }) {
   const currency = useCurrency();
   const contacts = useBankStore((s) => s.contacts);
   const t = useT().bank.sort;
   const setLineChoice = usePlanStore((s) => s.setLineChoice);
-  const outstanding = -tx.amount - (tx.repaid ?? 0);
   return (
     <li className="flex items-center gap-3 py-2.5">
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx, contacts)}</div>
         <div className="tabular text-[12px] text-muted">
-          {formatDate(tx.date)} · {formatMoney(outstanding, currency)}
+          {formatDate(tx.date)} · {t.stillOut(formatMoney(owedOn(tx), currency))}
         </div>
       </div>
       <SelectField
         size="sm"
         value=""
         placeholder={t.paidBackBy}
-        onValueChange={(id) => setLineChoice(id === 'settled' || id === 'mine' ? tx.id! : id, id === 'settled' ? { action: 'ignore' } : id === 'mine' ? { action: 'settled' } : { repays: tx.id! })}
+        onValueChange={(v) => setLineChoice(tx.id!, v === 'cash' ? { action: 'ignore' } : { action: 'settled' })}
         options={[
-          ...incoming.map((i) => ({ value: i.id!, label: `${partyLabel(i, contacts)} · ${formatDate(i.date)} · ${formatMoney(i.amount, currency)}` })),
-          { value: 'settled', label: t.settled },
+          { value: 'cash', label: t.settled },
           { value: 'mine', label: t.mine },
         ]}
         className="w-44 shrink-0 sm:w-64"

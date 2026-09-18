@@ -348,7 +348,7 @@ export type MerchantRule = { group: SpendGroup } | { expenseId: string; amount?:
  * someone else, counted as spent until it comes back. `settled`: lent, nothing more coming; the rest was own spending.
  * `repays`: money in that pays a lent line back. `expenseId` on money in: someone's share of that bill.
  */
-export type LineChoice = { group: SpendGroup } | { expenseId: string } | { potId: string } | { action: 'ignore' | 'lent' | 'settled' } | { repays: string };
+export type LineChoice = { group: SpendGroup } | { expenseId: string } | { potId: string } | { action: 'ignore' | 'settled' } | { action: 'lent'; mine?: number } | { repays: string };
 
 export interface BankSetup {
   provider: string;
