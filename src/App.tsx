@@ -7,6 +7,7 @@ import { AccountsPage } from '@/pages/AccountsPage';
 import { LegalPage } from '@/pages/LegalPage';
 import { LoansPage } from '@/pages/LoansPage';
 import { BankCallback } from '@/pages/BankCallback';
+import { BankPaymentsPage } from '@/pages/BankPaymentsPage';
 import { Dashboard } from '@/pages/Dashboard';
 import { ExpenseSectionPage } from '@/pages/ExpenseSectionPage';
 import { IncomePage } from '@/pages/IncomePage';
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="planning" element={<PlanningPage />} />
           <Route path="insights" element={<InsightsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="bank" element={<BankPaymentsPage />} />
           <Route path="bank/callback" element={<BankCallback />} />
           <Route path="privacy" element={<LegalPage kind="privacy" />} />
           <Route path="terms" element={<LegalPage kind="terms" />} />

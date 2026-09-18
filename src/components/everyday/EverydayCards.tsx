@@ -174,7 +174,7 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
         }
       />
       {spendEntryFor(spend, key)?.source === 'bank' && (
-        <Link to={`/?sort=${group}&month=${key}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
+        <Link to={`/bank?group=${group}&month=${key}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
           {t.seeBank}
         </Link>
       )}
@@ -250,7 +250,7 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
               return (
                 <li key={x.month} className="tabular rounded-md bg-page text-[11.5px] text-ink-soft">
                   {spendEntryFor(spend, x.month)?.source === 'bank' ? (
-                    <Link to={`/?sort=${group}&month=${x.month}`} className="block px-2 py-1 underline decoration-line underline-offset-2 hover:text-brand-700">
+                    <Link to={`/bank?group=${group}&month=${x.month}`} className="block px-2 py-1 underline decoration-line underline-offset-2 hover:text-brand-700">
                       {chip}
                     </Link>
                   ) : (

@@ -1,12 +1,12 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, spendGroupOfTx, spentOf, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
-import { formatDate, formatMoney, formatMonthKey } from '@/engine/format';
+import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
 import { mobileKey } from '@/engine/vcard';
@@ -30,23 +30,13 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   const plan = usePlan();
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
-  const currency = useCurrency();
   const t = useT().bank.sort;
-  // Opened from a spending card with `?sort=food`: everything in that group, for looking over.
-  const [params, setParams] = useSearchParams();
-  const filter = params.get('sort') as SpendGroup | null;
-  const filterMonth = params.get('month');
-  const [open, setOpen] = useState(!!filter);
-  const [showAll, setShowAll] = useState(!!filter);
-  const close = () => {
-    setOpen(false);
-    if (filter) setParams({}, { replace: true });
-  };
+  const [open, setOpen] = useState(false);
 
   // A new rule, or a bill added from here, places lines at once instead of at the next read from the bank.
   useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
 
-  const { merchants, all, lent, incoming, classified } = useMemo(
+  const { merchants, lent, incoming, classified } = useMemo(
     () => {
       // Only this month and the last: what is older changes nothing the bank still writes.
       const now = new Date();
@@ -55,7 +45,6 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
       return {
         classified,
         merchants: toSort(classified, since, contacts),
-        all: toSort(classified, since, contacts, true),
         lent: lentOut(classified),
         incoming: classified.filter((tx) => tx.class === 'unsorted' && tx.amount > 0 && !tx.pending && tx.id && tx.date >= since),
       };
@@ -63,19 +52,10 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifiedTxs reads both stores
     [txs, plan, contacts],
   );
-  if (!all.length && !lent.length && !incoming.length) return null;
+  if (!Object.values(txs).some((list) => list.length)) return null;
 
   const count = merchants.length + incoming.length;
   const names = [...merchants.map((m) => m.label), ...incoming.map((i) => partyLabel(i, contacts))];
-  // Behind a spending card's figure: that group, that month, each line at what it counts for, so the sum is the card's.
-  const behind =
-    filter && filterMonth
-      ? toSort(classified.filter((tx) => !tx.pending && tx.date.startsWith(filterMonth) && spendGroupOfTx(tx) === filter && spentOf(tx) > 0), '', contacts, true).map((m) => ({
-          ...m,
-          total: Math.round(m.lines.reduce((sum, l) => sum + spentOf(l), 0) * 100) / 100,
-        }))
-      : undefined;
-  const rows = behind ?? (showAll ? (filter ? all.filter((m) => (placed(m.lines[0]) ?? 'leisure') === filter) : all) : merchants);
 
   return (
     <>
@@ -99,18 +79,20 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
 
       <Sheet
         open={open}
-        onClose={close}
+        onClose={() => setOpen(false)}
         title={t.title}
         subtitle={t.subtitle}
         footer={
-          <div className="flex justify-end">
-            <Button variant="secondary" onClick={close}>
+          <div className="flex items-center justify-between gap-3">
+            <Link to="/bank" className="text-[12.5px] font-medium text-brand-700" onClick={() => setOpen(false)}>
+              {t.allLink}
+            </Link>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
               {t.done}
             </Button>
           </div>
         }
       >
-        <Switch className="mb-3" checked={showAll} onChange={setShowAll} description={t.showAll} />
         {lent.length > 0 && (
           <div className="mb-4">
             <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.lentTitle}</div>
@@ -132,15 +114,10 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
             </ul>
           </div>
         )}
-        {behind && filter && (
-          <p className="mb-2 text-[12.5px] text-muted">
-            {t.behind(SPEND_GROUP_META[filter].label, formatMonthKey(filterMonth!), formatMoney(behind.reduce((s, m) => s + m.total, 0), currency))}
-          </p>
-        )}
-        {rows.length > 0 ? (
+        {merchants.length > 0 ? (
           <ul className="divide-y divide-line">
-            {rows.map((m) => (
-              <Row key={m.key} merchant={m} onAddBill={onAddBill} detail={!!behind} />
+            {merchants.map((m) => (
+              <Row key={m.key} merchant={m} onAddBill={onAddBill} />
             ))}
           </ul>
         ) : (
@@ -156,7 +133,7 @@ type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' |
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
 /** Where a payee's lines sit now, as the select shows it; nothing while unsorted. */
-function placed(tx: ClassifiedTx | undefined): Choice | undefined {
+export function placed(tx: ClassifiedTx | undefined): Choice | undefined {
   switch (tx?.class) {
     case 'spend':
       return tx.group;
@@ -173,7 +150,7 @@ function placed(tx: ClassifiedTx | undefined): Choice | undefined {
   }
 }
 
-function Row({ merchant, onAddBill, detail }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void; detail?: boolean }) {
+export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void }) {
   const plan = usePlan();
   const currency = useCurrency();
   const t = useT().bank.sort;
@@ -256,16 +233,6 @@ function Row({ merchant, onAddBill, detail }: { merchant: MerchantToSort; onAddB
         </div>
         <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0 sm:w-64" />
       </div>
-      {detail && merchant.lines.length > 1 && (
-        <ul className="tabular mt-1 space-y-0.5 text-[12px] text-muted">
-          {merchant.lines.map((l) => (
-            <li key={l.id} className="flex justify-between">
-              <span>{formatDate(l.date)}</span>
-              <span>{formatMoney(spentOf(l), currency)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
       {guessed && <p className="mt-1 text-[12px] text-muted">{t.guessed}</p>}
       {!person && (
@@ -282,7 +249,7 @@ const PAYBACK_DAYS = 21;
  * Money in from a person: paying back a purchase (one waiting, or any recent one, which then counts as
  * theirs for this much and yours for the rest), their share of a bill, or nothing to count.
  */
-function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: ClassifiedTx[]; classified: ClassifiedTx[] }) {
+export function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: ClassifiedTx[]; classified: ClassifiedTx[] }) {
   const plan = usePlan();
   const currency = useCurrency();
   const contacts = useBankStore((s) => s.contacts);
