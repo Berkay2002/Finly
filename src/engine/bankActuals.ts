@@ -1,3 +1,4 @@
+import { spendGroupOf } from './everyday';
 import { bundledGroup, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
 import { mobileKey } from './vcard';
@@ -314,6 +315,12 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     const group = bundledGroup(tx.merchantKey!);
     if (group) applyRule(tx, { group });
   }
+  // A line placed on an everyday item (groceries, restaurants) is that group's spending too: the group total is what the month runs on.
+  const groupOfItem = new Map(expenses.map((e) => [e.id, spendGroupOf(e)]));
+  for (const tx of booked) {
+    const g = tx.class === 'expense' && tx.expenseId ? groupOfItem.get(tx.expenseId) : undefined;
+    if (g) tx.group = g;
+  }
   splitStatements(statements, expenses);
   // A transfer into savings is the pot whose monthly amount it is, when that is one pot; the account's place breaks a tie.
   const pots = savingsPots({ accounts: plan.accounts ?? [], goals: plan.goals ?? [] });
@@ -395,7 +402,7 @@ export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
 
 /** The everyday group a line counts under, if any: its own, or leisure while nobody has placed it. */
 export function spendGroupOfTx(tx: ClassifiedTx): SpendGroup | undefined {
-  return tx.class === 'spend' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
+  return tx.class === 'spend' || tx.class === 'expense' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
 }
 
 /**

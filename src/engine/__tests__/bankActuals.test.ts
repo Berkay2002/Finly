@@ -251,6 +251,19 @@ describe('money out', () => {
     expect(classifyTransactions(both, { income: [], expenses: [{ ...named, sharedBy: ['JONATANFRED', '731234567'] }], bank }, OWN).map((t) => t.class)).toEqual(['expense', 'expense', 'unsorted']);
   });
 
+  it('a line placed on an everyday item counts in its group too, so the group total holds everything', () => {
+    const groceries = expense({ id: 'groceries', name: 'Groceries', amount: 4000, category: 'living', subcategory: 'groceries', fixed: false });
+    const bank = { provider: 'p', appId: 'x', sessions: [], merchants: { ICANARASTR: { expenseId: 'groceries' } } };
+    const out = classifyTransactions(
+      [tx({ id: 'a', amount: -850, date: '2026-09-10', kind: 'card', counterparty: 'ICA NARA STR' }), tx({ id: 'b', amount: -30, date: '2026-09-11', kind: 'card', counterparty: 'HEMKOP NORRK' })],
+      { income: [], expenses: [groceries], bank },
+      OWN,
+    );
+    expect(out[0]).toMatchObject({ class: 'expense', expenseId: 'groceries', group: 'food' });
+    expect(spendByMonth(out, new Date(2026, 8, 16)).food['2026-09']).toMatchObject({ amount: 880 });
+    expect(billsByMonth(out)).toEqual({ groceries: { '2026-09': 850 } });
+  });
+
   it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {
     const rent = expense({ id: 'rent', name: 'Rent', amount: 4760, fixed: true });
     const groceries = expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4800, fixed: false });

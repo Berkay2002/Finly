@@ -26,6 +26,7 @@ function placeOf(tx: ClassifiedTx): Place {
     case 'unsorted':
       return 'unsorted';
     case 'expense':
+      return tx.group ?? 'bills';
     case 'statement':
       return 'bills';
     case 'internal_transfer':
