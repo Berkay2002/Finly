@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { classifiedTxs, reconcileIncome } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import type { ClassifiedTx } from '@/engine/bankActuals';
+import { partyLabel, type ClassifiedTx } from '@/engine/bankActuals';
 import { formatDate, formatMoney } from '@/engine/format';
 import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
@@ -46,7 +46,7 @@ export function DepositsCard() {
         {deposits.map((tx, i) => (
           <li key={`${tx.account}-${tx.date}-${tx.amount}-${i}`} className="flex items-center gap-3 py-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13.5px] font-medium text-ink">{tx.counterparty ?? tx.description ?? t.unknownSender}</div>
+              <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx) || t.unknownSender}</div>
               <div className="tabular text-[12px] text-muted">
                 {formatDate(tx.date)} · {formatMoney(tx.amount, tx.currency || currency)}
               </div>

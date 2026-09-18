@@ -1,6 +1,5 @@
 import { bundledGroup, isPassThrough } from './merchants';
 import { monthKeyOf } from './metrics';
-import { isEverydaySpend } from './taxonomy';
 import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
 /**
@@ -135,12 +134,9 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
   } else tx.class = rule.action === 'transfer' ? 'internal_transfer' : 'ignored';
 }
 
-const BILL_KINDS: ReadonlySet<BankTxKind | undefined> = new Set<BankTxKind>(['payment', 'direct_debit', 'transfer', 'credit_transfer']);
-
 /**
- * The bill a payment is for: by what was learnt about the payee, by the item's name on any line, or,
- * on a bill payment (not a card purchase), by being the one fixed item with exactly that amount, the
- * way rent goes to a landlord's name that the plan never mentions.
+ * The bill a payment is for: by what was learnt about the payee, or by the item's name on any line.
+ * Never by amount alone: a wrong guess writes a bill and gets remembered, a miss costs one tap.
  */
 function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undefined {
   const key = tx.merchantKey ?? '';
@@ -151,12 +147,14 @@ function billFor(tx: ClassifiedTx, expenses: ExpenseItem[]): ExpenseItem | undef
     return e.fixed ? closeTo(paid, e.amount) : true;
   });
   if (learnt) return learnt;
-  const byName = expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, e.amount)));
-  if (byName) return byName;
-  if (!BILL_KINDS.has(tx.kind) || bundledGroup(key)) return undefined;
-  // Fixed items only: a variable bill near another's amount would be taken for it and then remembered.
-  const byAmount = expenses.filter((e) => e.fixed && !isEverydaySpend(e) && paid === e.amount);
-  return byAmount.length === 1 ? byAmount[0] : undefined;
+  return expenses.find((e) => nameStems(e).some((stem) => key.includes(stem)) && (!e.fixed || closeTo(paid, e.amount)));
+}
+
+/** The payee for showing: a Swish line carries a phone number, shown the way Swedes write one. */
+export function partyLabel(tx: Pick<BankTx, 'counterparty' | 'description'>): string {
+  const raw = (tx.counterparty ?? tx.description ?? '').trim();
+  const m = raw.replace(/\s/g, '').match(/^(?:\+?46|0)(7\d{8})$/);
+  return m ? `Swish · 0${m[1].slice(0, 2)}-${m[1].slice(2, 5)} ${m[1].slice(5, 7)} ${m[1].slice(7)}` : raw;
 }
 
 export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: OwnAccount[]): ClassifiedTx[] {
@@ -291,7 +289,7 @@ export function toSort(classified: ClassifiedTx[], since = ''): MerchantToSort[]
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
     const key = tx.merchantKey ?? '';
-    const m = by.get(key) ?? { key, label: tx.counterparty ?? tx.description ?? '', count: 0, total: 0, lastDate: tx.date, passThrough: isPassThrough(key), lines: [] };
+    const m = by.get(key) ?? { key, label: partyLabel(tx), count: 0, total: 0, lastDate: tx.date, passThrough: isPassThrough(key), lines: [] };
     m.count += 1;
     m.total = round2(m.total - tx.amount);
     if (tx.date > m.lastDate) m.lastDate = tx.date;

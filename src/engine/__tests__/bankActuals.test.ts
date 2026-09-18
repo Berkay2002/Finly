@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, mergeWindow, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
+import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
@@ -102,7 +102,7 @@ describe('money out', () => {
     expect(billsByMonth(out)).toEqual({ el: { '2026-09': 2086 }, spotify: { '2026-09': 129 } });
   });
 
-  it('a bill payment of exactly the amount of one item is that item, whatever the payee is called', () => {
+  it('never takes a line for a bill on its amount alone, but knows an item by name on a card line too', () => {
     const rent = expense({ id: 'rent', name: 'Rent', amount: 4760, fixed: true });
     const groceries = expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4800, fixed: false });
     const out = classifyTransactions(
@@ -115,7 +115,14 @@ describe('money out', () => {
       { income: [], expenses: [rent, groceries, expense({ id: 'spotify', name: 'Spotify', amount: 219, fixed: true })] },
       OWN,
     );
-    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['expense', 'rent'], ['unsorted', undefined], ['unsorted', undefined], ['expense', 'spotify']]);
+    expect(out.map((t) => [t.class, t.expenseId])).toEqual([['unsorted', undefined], ['unsorted', undefined], ['unsorted', undefined], ['expense', 'spotify']]);
+  });
+
+  it('shows a Swish number the way it is written on a phone', () => {
+    expect(partyLabel({ counterparty: '46702330253' })).toBe('Swish · 070-233 02 53');
+    expect(partyLabel({ counterparty: '+46 70 233 02 53' })).toBe('Swish · 070-233 02 53');
+    expect(partyLabel({ counterparty: '1065578522 A' })).toBe('1065578522 A');
+    expect(partyLabel({ counterparty: 'ICA NARA STR' })).toBe('ICA NARA STR');
   });
 
   it('a choice for the line beats the payee rule, which beats the bundled list', () => {
