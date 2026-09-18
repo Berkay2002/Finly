@@ -381,3 +381,20 @@ describe("a one-off, such as a gift", () => {
     expect(later.oneOffsThisMonth).toBe(baseLater.oneOffsThisMonth);
   });
 });
+
+describe('computeMetrics — an item that may be nothing at all, while the bank feeds its group', () => {
+  it('counts fuel from 0 only once transport spending passes the travel card', () => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [
+      expense({ id: 'sl', name: 'SL card', amount: 490, category: 'transport', subcategory: 'travel_card' }),
+      expense({ id: 'fuel', name: 'Fuel', amount: 0, category: 'transport', subcategory: 'fuel', fixed: false, range: { low: 0, high: 600 } }),
+    ];
+    expect(computeMetrics(plan, NOW).expenses.byCategory.transport).toBe(790);
+    expect(computeMetrics(plan, NOW).actuals.byCategory.transport).toBe(790);
+    plan.everydaySpend = { transport: { '2026-09': { amount: 0, asOf: '2026-09-16', source: 'bank' } } };
+    expect(computeMetrics(plan, NOW).actuals.byCategory.transport).toBe(490);
+    plan.everydaySpend = { transport: { '2026-09': { amount: 700, asOf: '2026-09-16', source: 'bank' } } };
+    expect(computeMetrics(plan, NOW).actuals.byCategory.transport).toBe(700);
+  });
+});

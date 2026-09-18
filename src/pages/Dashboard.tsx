@@ -80,7 +80,7 @@ export function Dashboard() {
   const slices: DonutSlice[] = EXPENSE_CATEGORIES.map((c) => ({
     key: c,
     label: CATEGORY_META[c].shortLabel,
-    value: m.expenses.byCategory[c],
+    value: m.actuals.byCategory[c],
     accent: CATEGORY_META[c].accent,
     held: m.expenses.byCategoryHeld[c],
     notes: m.expenses.lines.filter((l) => l.category === c && l.lump).map((l) => lumpNote(l.name, l.lump!)),
@@ -227,7 +227,7 @@ export function Dashboard() {
               grow
               center={
                 <>
-                  <span className="tabular text-[16px] font-bold leading-tight text-ink">{formatMoney(m.lifestyleCost, '')}</span>
+                  <span className="tabular text-[16px] font-bold leading-tight text-ink">{formatMoney(m.actuals.lifestyleCost, '')}</span>
                   <span className="text-[11px] text-muted">{currency}</span>
                 </>
               }

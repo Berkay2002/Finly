@@ -37,15 +37,16 @@ export function amountSpread(item: Rangeable): AmountSpread {
   const range = item.fixed === false || item.fixed === undefined ? item.range : undefined;
   if (!range) return { low: amount, typical: amount, high: amount };
 
+  // A low of 0 is a real 0: the thing may not happen at all some months (fuel for a borrowed car). A high left at 0 is unset.
   const a = pos(range.low);
   const b = pos(range.high);
-  const lo = Math.min(a || b, b || a);
   const hi = Math.max(a, b);
+  const lo = b ? Math.min(a, b) : a;
   const typical = amount > 0 ? amount : (lo + hi) / 2;
   return {
-    low: Math.min(lo || typical, typical),
+    low: hi ? Math.min(lo, typical) : typical,
     typical,
-    high: Math.max(hi || typical, typical),
+    high: Math.max(hi, typical),
   };
 }
 

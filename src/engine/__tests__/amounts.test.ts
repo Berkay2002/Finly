@@ -22,9 +22,9 @@ describe('amountSpread', () => {
     expect(s).toEqual({ low: 300, typical: 600, high: 900 });
   });
 
-  it('treats a bound left at 0 as "same as typical"', () => {
+  it('takes a low of 0 as a real 0, and a high left at 0 as "same as typical"', () => {
     expect(amountSpread({ amount: 500, frequency: 'monthly', fixed: false, range: { low: 0, high: 900 } })).toEqual({
-      low: 500,
+      low: 0,
       typical: 500,
       high: 900,
     });

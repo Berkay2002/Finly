@@ -1,7 +1,7 @@
 import { getDaysInMonth } from 'date-fns';
 import { amountSpread, monthlySpread } from './amounts';
 import { isIrregular, monthsPerPeriod, toMonthly } from './frequency';
-import { everydaySummaries, SPEND_GROUP_META, SPEND_GROUPS, type SpendSummary } from './everyday';
+import { everydaySummaries, SPEND_GROUP_META, SPEND_GROUPS, spendEntryFor, type SpendSummary } from './everyday';
 import { foodSummary, type FoodSummary } from './food';
 import { debtFlow, debtPayoff, effectiveRate, interestTaxReduction, isDeductible, isSecured, loanAssets, paymentsPerYear, paysInMonth } from './debts';
 import { lumpPayment, type LumpPayment } from './periods';
@@ -455,15 +455,22 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const everyday = everydaySummaries(active, plan.everydaySpend, month);
   const food = foodSummary(everyday.food, active);
   // A group's total for the whole month replaces the estimates of every item in it at once.
+  const byId = new Map(lines.map((l) => [l.id, l]));
   const loggedIds = new Set<string>();
   let everydayVariance = 0;
+  // While the bank feeds a running month, an item that may be nothing at all (a range from 0) counts only once the
+  // group's spending passes what the rest of the group was planned for: fuel for a borrowed car is 0 until a fill-up shows.
+  const everydayNow: Partial<Record<SpendGroup, number>> = {};
   for (const g of SPEND_GROUPS) {
     const g_ = everyday[g];
-    if (!g_.month.complete) continue;
-    for (const id of g_.itemIds) loggedIds.add(id);
-    everydayVariance += g_.month.variance ?? 0;
+    if (g_.month.complete) {
+      for (const id of g_.itemIds) loggedIds.add(id);
+      everydayVariance += g_.month.variance ?? 0;
+    } else if (g_.month.spent !== undefined && spendEntryFor(plan.everydaySpend?.[g], month)?.source === 'bank') {
+      const maybe = sum(g_.itemIds.map((id) => byId.get(id)).map((l) => (l?.varies && l.monthlyLow === 0 ? l.monthly : 0)));
+      if (maybe > 0) everydayVariance += everydayNow[g] = Math.max(0, g_.month.spent - (g_.month.planned - maybe)) - maybe;
+    }
   }
-  const byId = new Map(lines.map((l) => [l.id, l]));
   const confirmed: ActualLine[] = [];
   const pending: PendingBill[] = [];
   for (const e of active) {
@@ -487,7 +494,7 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
     if (e.frequency === 'once' && isDatedInMonth(e.nextDate, now)) actualByCategory[e.category] += typicalAmount(e) - (byId.get(e.id)?.monthly ?? 0);
   }
   for (const g of SPEND_GROUPS) {
-    if (everyday[g].month.complete) actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.variance ?? 0;
+    actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.complete ? (everyday[g].month.variance ?? 0) : (everydayNow[g] ?? 0);
   }
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
   const monthLifestyleRange: Range = withDebt({
