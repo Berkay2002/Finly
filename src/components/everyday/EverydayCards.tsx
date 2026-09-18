@@ -174,7 +174,7 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
         }
       />
       {spendEntryFor(spend, key)?.source === 'bank' && (
-        <Link to={`/?sort=${group}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
+        <Link to={`/?sort=${group}&month=${key}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
           {t.seeBank}
         </Link>
       )}

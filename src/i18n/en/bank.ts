@@ -153,6 +153,7 @@ export default {
     ignore: 'Not spending, leave out',
     done: 'Done',
     empty: 'Everything from the bank is sorted.',
+    behind: (group: string, month: string, total: string) => `${group} in ${month}: ${total} from these payments. Half-shared and lent lines count only your part.`,
   },
   legal: {
     privacyTitle: 'Privacy',

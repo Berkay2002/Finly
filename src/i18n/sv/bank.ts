@@ -155,6 +155,7 @@ export default {
     ignore: 'Inte utgift, hoppa över',
     done: 'Klar',
     empty: 'Allt från banken är sorterat.',
+    behind: (group, month, total) => `${group} i ${month}: ${total} från de här betalningarna. Delade och utlånade rader räknas bara med din del.`,
   },
   legal: {
     privacyTitle: 'Integritet',

@@ -4,9 +4,9 @@ import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { closeTo, lentOut, normalizeParty, owedOn, partyLabel, sharerCount, spendGroupOfTx, spentOf, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
-import { formatDate, formatMoney } from '@/engine/format';
+import { formatDate, formatMoney, formatMonthKey } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
 import { mobileKey } from '@/engine/vcard';
@@ -30,10 +30,12 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   const plan = usePlan();
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
+  const currency = useCurrency();
   const t = useT().bank.sort;
   // Opened from a spending card with `?sort=food`: everything in that group, for looking over.
   const [params, setParams] = useSearchParams();
-  const filter = params.get('sort');
+  const filter = params.get('sort') as SpendGroup | null;
+  const filterMonth = params.get('month');
   const [open, setOpen] = useState(!!filter);
   const [showAll, setShowAll] = useState(!!filter);
   const close = () => {
@@ -65,7 +67,15 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
 
   const count = merchants.length + incoming.length;
   const names = [...merchants.map((m) => m.label), ...incoming.map((i) => partyLabel(i, contacts))];
-  const rows = showAll ? (filter ? all.filter((m) => (placed(m.lines[0]) ?? 'leisure') === filter) : all) : merchants;
+  // Behind a spending card's figure: that group, that month, each line at what it counts for, so the sum is the card's.
+  const behind =
+    filter && filterMonth
+      ? toSort(classified.filter((tx) => !tx.pending && tx.date.startsWith(filterMonth) && spendGroupOfTx(tx) === filter && spentOf(tx) > 0), '', contacts, true).map((m) => ({
+          ...m,
+          total: Math.round(m.lines.reduce((sum, l) => sum + spentOf(l), 0) * 100) / 100,
+        }))
+      : undefined;
+  const rows = behind ?? (showAll ? (filter ? all.filter((m) => (placed(m.lines[0]) ?? 'leisure') === filter) : all) : merchants);
 
   return (
     <>
@@ -122,10 +132,15 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
             </ul>
           </div>
         )}
+        {behind && filter && (
+          <p className="mb-2 text-[12.5px] text-muted">
+            {t.behind(SPEND_GROUP_META[filter].label, formatMonthKey(filterMonth!), formatMoney(behind.reduce((s, m) => s + m.total, 0), currency))}
+          </p>
+        )}
         {rows.length > 0 ? (
           <ul className="divide-y divide-line">
             {rows.map((m) => (
-              <Row key={m.key} merchant={m} onAddBill={onAddBill} />
+              <Row key={m.key} merchant={m} onAddBill={onAddBill} detail={!!behind} />
             ))}
           </ul>
         ) : (
@@ -158,7 +173,7 @@ function placed(tx: ClassifiedTx | undefined): Choice | undefined {
   }
 }
 
-function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void }) {
+function Row({ merchant, onAddBill, detail }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void; detail?: boolean }) {
   const plan = usePlan();
   const currency = useCurrency();
   const t = useT().bank.sort;
@@ -241,6 +256,16 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
         </div>
         <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0 sm:w-64" />
       </div>
+      {detail && merchant.lines.length > 1 && (
+        <ul className="tabular mt-1 space-y-0.5 text-[12px] text-muted">
+          {merchant.lines.map((l) => (
+            <li key={l.id} className="flex justify-between">
+              <span>{formatDate(l.date)}</span>
+              <span>{formatMoney(spentOf(l), currency)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
       {guessed && <p className="mt-1 text-[12px] text-muted">{t.guessed}</p>}
       {!person && (

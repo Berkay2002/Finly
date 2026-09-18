@@ -393,6 +393,20 @@ export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
   return classified.filter((tx) => tx.class === 'lent' && !tx.pending && !tx.settled && owedOn(tx) > 0).sort((a, b) => a.amount - b.amount);
 }
 
+/** The everyday group a line counts under, if any: its own, or leisure while nobody has placed it. */
+export function spendGroupOfTx(tx: ClassifiedTx): SpendGroup | undefined {
+  return tx.class === 'spend' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
+}
+
+/**
+ * What of a line counts as spent. Lent money only for the person's own part, or all that never came back once
+ * they give up on it; a statement for what no subscription explains; anything else in full.
+ */
+export function spentOf(tx: ClassifiedTx): number {
+  if (tx.amount >= 0) return 0;
+  return tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : (tx.mine ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
+}
+
 /**
  * Everyday spending per group and month, summed from the bank. Unsorted money out counts under
  * leisure until it is placed. The running month carries `asOf` today so the pace is read right.
@@ -403,10 +417,9 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
   const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0) continue;
-    const group = tx.class === 'spend' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'leisure') : tx.class === 'unsorted' || tx.class === 'statement' ? 'leisure' : undefined;
+    const group = spendGroupOfTx(tx);
     if (!group) continue;
-    // Lent money is spent only for the person's own part, or all that never came back once they give up on it; a statement counts for what no subscription explains.
-    const spent = tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : (tx.mine ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
+    const spent = spentOf(tx);
     if (spent <= 0) continue;
     const month = tx.date.slice(0, 7);
     const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });
