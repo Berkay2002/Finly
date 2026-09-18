@@ -1,4 +1,4 @@
-import { bundledGroup, isPassThrough } from './merchants';
+import { bundledGroup, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
 import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
@@ -35,13 +35,18 @@ export interface BankTx {
  * bill or subscription in the plan, `spend` everyday spending in a group, `unsorted` money out (or in)
  * nobody has placed yet: still counted as spent, under leisure, so safe to spend stays honest.
  */
-export type TxClass = 'income' | 'internal_transfer' | 'expense' | 'spend' | 'unsorted' | 'ignored';
+export type TxClass = 'income' | 'internal_transfer' | 'expense' | 'spend' | 'unsorted' | 'ignored' | 'statement' | 'lent';
 
 export interface ClassifiedTx extends BankTx {
   class: TxClass;
   incomeSourceId?: string;
   expenseId?: string;
   group?: SpendGroup;
+  /** A Klarna or PayPal statement: the subscriptions it is known to carry, and what is left, spent on who knows what. */
+  bills?: { expenseId: string; amount: number }[];
+  remainder?: number;
+  /** Paid for someone else: what has come back so far. */
+  repaid?: number;
   /** The payee, normalised: what rules are keyed by. */
   merchantKey?: string;
   /** The month an income counts for, which near a month's end is not always the month it arrived; for a bill, the month it was paid. */
@@ -131,7 +136,34 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
     tx.class = 'expense';
     tx.expenseId = rule.expenseId;
     tx.month = tx.date.slice(0, 7);
-  } else tx.class = rule.action === 'transfer' ? 'internal_transfer' : 'ignored';
+  } else if ('action' in rule) tx.class = rule.action === 'transfer' ? 'internal_transfer' : rule.action === 'lent' ? 'lent' : 'ignored';
+}
+
+/**
+ * A Klarna or PayPal line is a monthly statement the bank cannot see into. The subscriptions marked as
+ * paid through that brand take their amounts from the month's first statement; the rest of every
+ * statement is spent on who knows what. A statement smaller than the subscriptions is all theirs.
+ */
+function splitStatements(statements: ClassifiedTx[], expenses: ExpenseItem[]): void {
+  const seen = new Set<string>();
+  for (const tx of [...statements].sort((a, b) => a.date.localeCompare(b.date))) {
+    const brand = passThroughBrand(tx.merchantKey ?? '')!;
+    const key = `${brand}:${tx.date.slice(0, 7)}`;
+    let left = -tx.amount;
+    tx.bills = [];
+    if (!seen.has(key)) {
+      seen.add(key);
+      for (const e of expenses) {
+        if (passThroughBrand(normalizeParty(e.bankMatch?.counterparty)) !== brand) continue;
+        const take = Math.min(left, e.bankMatch?.amount ?? e.amount);
+        if (take <= 0) continue;
+        tx.bills.push({ expenseId: e.id, amount: round2(take) });
+        left = round2(left - take);
+      }
+    }
+    tx.remainder = left;
+    tx.month = tx.date.slice(0, 7);
+  }
 }
 
 /**
@@ -205,12 +237,18 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     }
   }
 
-  // Money out: a choice made for the line itself, a bill it pays, the payee's rule, a chain Finly knows.
+  // Money out: a choice made for the line itself, a statement, a bill it pays, the payee's rule, a chain Finly knows.
+  const statements: ClassifiedTx[] = [];
   for (const tx of booked) {
     if (tx.amount >= 0 || tx.class !== 'unsorted') continue;
     const line = tx.id ? plan.bank?.lines?.[tx.id] : undefined;
-    if (line) {
+    if (line && !('repays' in line)) {
       applyRule(tx, line);
+      continue;
+    }
+    if (passThroughBrand(tx.merchantKey!)) {
+      tx.class = 'statement';
+      statements.push(tx);
       continue;
     }
     const bill = billFor(tx, expenses);
@@ -226,15 +264,29 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     const group = bundledGroup(tx.merchantKey!);
     if (group) applyRule(tx, { group });
   }
-  // A line choice can also dismiss money in that is not income (a friend paying back).
+  splitStatements(statements, expenses);
+  // Money in that is not income: dismissed, or a friend paying back what was bought for them.
+  const lentById = new Map(booked.filter((tx) => tx.class === 'lent' && tx.id).map((tx) => [tx.id!, tx]));
   for (const tx of booked) {
     const line = tx.id && tx.amount > 0 && tx.class === 'unsorted' ? plan.bank?.lines?.[tx.id] : undefined;
-    if (line && 'action' in line) tx.class = 'ignored';
+    if (!line) continue;
+    if ('action' in line) tx.class = 'ignored';
+    else if ('repays' in line) {
+      const lent = lentById.get(line.repays);
+      if (!lent) continue;
+      lent.repaid = round2((lent.repaid ?? 0) + tx.amount);
+      tx.class = 'ignored';
+    }
   }
   return out;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Money out for someone else that has not come back in full: booked, biggest first. */
+export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
+  return classified.filter((tx) => tx.class === 'lent' && !tx.pending && -tx.amount - (tx.repaid ?? 0) > 0).sort((a, b) => a.amount - b.amount);
+}
 
 /**
  * Everyday spending per group and month, summed from the bank. Unsorted money out counts under
@@ -246,11 +298,14 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
   const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0) continue;
-    const group = tx.class === 'spend' ? tx.group : tx.class === 'unsorted' ? 'leisure' : undefined;
+    const group = tx.class === 'spend' ? tx.group : tx.class === 'unsorted' || tx.class === 'statement' || tx.class === 'lent' ? 'leisure' : undefined;
     if (!group) continue;
+    // Lent money is gone until it comes back; a statement counts for what no subscription explains.
+    const spent = tx.class === 'lent' ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
+    if (spent <= 0) continue;
     const month = tx.date.slice(0, 7);
     const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });
-    entry.amount = round2(entry.amount - tx.amount);
+    entry.amount = round2(entry.amount + spent);
   }
   return out;
 }
@@ -259,9 +314,12 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
 export function billsByMonth(classified: ClassifiedTx[]): Record<string, Record<string, number>> {
   const out: Record<string, Record<string, number>> = {};
   for (const tx of classified) {
-    if (tx.class !== 'expense' || !tx.expenseId || !tx.month || tx.pending) continue;
-    const months = (out[tx.expenseId] ??= {});
-    months[tx.month] = round2((months[tx.month] ?? 0) - tx.amount);
+    if (tx.pending || !tx.month) continue;
+    const paid = tx.class === 'expense' && tx.expenseId ? [{ expenseId: tx.expenseId, amount: -tx.amount }] : tx.class === 'statement' ? (tx.bills ?? []) : [];
+    for (const { expenseId, amount } of paid) {
+      const months = (out[expenseId] ??= {});
+      months[tx.month] = round2((months[tx.month] ?? 0) + amount);
+    }
   }
   return out;
 }
@@ -273,8 +331,6 @@ export interface MerchantToSort {
   count: number;
   total: number;
   lastDate: string;
-  /** Klarna and the like: each line is placed on its own, nothing is remembered for the payee. */
-  passThrough: boolean;
   lines: ClassifiedTx[];
   /** Set when the payee looks like a monthly bill the plan does not have. */
   hint?: RecurringHint;
@@ -289,14 +345,14 @@ export function toSort(classified: ClassifiedTx[], since = ''): MerchantToSort[]
   for (const tx of classified) {
     if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
     const key = tx.merchantKey ?? '';
-    const m = by.get(key) ?? { key, label: partyLabel(tx), count: 0, total: 0, lastDate: tx.date, passThrough: isPassThrough(key), lines: [] };
+    const m = by.get(key) ?? { key, label: partyLabel(tx), count: 0, total: 0, lastDate: tx.date, lines: [] };
     m.count += 1;
     m.total = round2(m.total - tx.amount);
     if (tx.date > m.lastDate) m.lastDate = tx.date;
     m.lines.push(tx);
     by.set(key, m);
   }
-  for (const m of by.values()) if (!m.passThrough) m.hint = recurringHint(m.lines);
+  for (const m of by.values()) m.hint = recurringHint(m.lines);
   return [...by.values()].sort((a, b) => Number(!!b.hint) - Number(!!a.hint) || b.total - a.total);
 }
 
@@ -312,17 +368,14 @@ export interface RecurringHint {
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor((xs.length - 1) / 2)];
 
-/**
- * A payee paid in two or more months at about the same amount looks like a bill Finly does not know
- * yet. `around` narrows a pass-through such as Klarna to one of the things it carries.
- */
-export function recurringHint(lines: ClassifiedTx[], around?: number): RecurringHint | undefined {
+/** A payee paid in two or more months at about the same amount looks like a bill Finly does not know yet. */
+export function recurringHint(lines: ClassifiedTx[]): RecurringHint | undefined {
   const booked = lines.filter((l) => !l.pending && l.amount < 0);
   if (!booked.length) return undefined;
   const bill = booked.some((l) => l.kind === 'payment' || l.kind === 'direct_debit');
-  const ref = around ?? median(booked.map((l) => -l.amount));
+  const ref = median(booked.map((l) => -l.amount));
   // A bill's amount swings with the season; the kind already says what it is.
-  const alike = bill && around === undefined ? booked : booked.filter((l) => closeTo(-l.amount, ref));
+  const alike = bill ? booked : booked.filter((l) => closeTo(-l.amount, ref));
   if (new Set(alike.map((l) => l.date.slice(0, 7))).size < 2) return undefined;
   const amounts = alike.map((l) => -l.amount);
   return { amount: median(amounts), day: median(alike.map((l) => Number(l.date.slice(8)))), fixed: new Set(amounts).size === 1, bill };

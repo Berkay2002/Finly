@@ -58,6 +58,8 @@ import { HouseholdFoodEstimator } from './HouseholdFood';
 import { BrandPicker } from './BrandPicker';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
+import { normalizeParty } from '@/engine/bankActuals';
+import { PASS_THROUGH_LABEL, passThroughBrand } from '@/engine/merchants';
 import { Button } from '@/components/ui/Button';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { Chip } from '@/components/ui/Chip';
@@ -181,10 +183,10 @@ export function fromSuggestion(s: ExpenseSuggestion): Draft {
   };
 }
 
-/** "Klarna" or "PayPal" when the bank sees this item paid through one of them. */
+/** "Klarna" or "PayPal" when this item is paid through one of them. */
 function paidVia(e: Pick<ExpenseItem, 'bankMatch'>): string | undefined {
-  const hit = e.bankMatch?.counterparty.match(/klarna|paypal/i)?.[0].toLowerCase();
-  return hit === 'klarna' ? 'Klarna' : hit === 'paypal' ? 'PayPal' : undefined;
+  const brand = passThroughBrand(normalizeParty(e.bankMatch?.counterparty));
+  return brand && PASS_THROUGH_LABEL[brand];
 }
 
 export function customDraft(category: ExpenseCategory, name = '', tags: ExpenseTag[] = []): Draft {
@@ -519,7 +521,14 @@ function ExpenseDetailForm({
       {draft.tags.includes('subscription') && (
         <BrandPicker name={draft.name} domain={draft.brandDomain} onPick={(brandDomain) => set({ brandDomain })} />
       )}
-      {draft.bankMatch && (
+      <SelectField
+        label={tf.paidVia}
+        hint={tf.paidViaHint}
+        value={passThroughBrand(normalizeParty(draft.bankMatch?.counterparty)) ?? ''}
+        onValueChange={(brand) => set({ bankMatch: brand ? { counterparty: brand } : undefined })}
+        options={[{ value: '', label: tf.paidViaBank }, ...(['KLARNA', 'PAYPAL'] as const).map((b) => ({ value: b, label: PASS_THROUGH_LABEL[b] }))]}
+      />
+      {draft.bankMatch && !paidVia(draft) && (
         <div className="flex items-center justify-between gap-3 text-[12.5px] text-muted">
           <span>{t.bank.income.recognised(draft.bankMatch.counterparty)}</span>
           <Button variant="secondary" size="sm" onClick={() => set({ bankMatch: undefined })}>

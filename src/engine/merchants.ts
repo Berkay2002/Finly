@@ -25,7 +25,14 @@ export function bundledGroup(merchantKey: string): SpendGroup | undefined {
   return RULES.find(([re]) => re.test(merchantKey))?.[1];
 }
 
-/** Klarna, PayPal and the like carry different things every time, so a rule for the payee makes no sense. */
+/** Klarna, PayPal and the like: one monthly statement the bank cannot see into. */
+export const PASS_THROUGH_LABEL = { KLARNA: 'Klarna', PAYPAL: 'PayPal', QLIRO: 'Qliro', WALLEY: 'Walley', TRUSTLY: 'Trustly' } as const;
+export type PassThroughBrand = keyof typeof PASS_THROUGH_LABEL;
+
+export function passThroughBrand(merchantKey: string): PassThroughBrand | undefined {
+  return (Object.keys(PASS_THROUGH_LABEL) as PassThroughBrand[]).find((brand) => merchantKey.includes(brand));
+}
+
 export function isPassThrough(merchantKey: string): boolean {
-  return /KLARNA|PAYPAL|QLIRO|WALLEY|TRUSTLY/.test(merchantKey);
+  return passThroughBrand(merchantKey) !== undefined;
 }
