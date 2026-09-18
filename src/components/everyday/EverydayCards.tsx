@@ -240,11 +240,25 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
             )}
           </div>
           <ul className="flex flex-wrap gap-1.5">
-            {history.months.slice(0, 6).map((x) => (
-              <li key={x.month} className="tabular rounded-md bg-page px-2 py-1 text-[11.5px] text-ink-soft">
-                {formatMonthKey(x.month)}: <span className="font-medium text-ink">{money(x.amount)}</span>
-              </li>
-            ))}
+            {history.months.slice(0, 6).map((x) => {
+              const chip = (
+                <>
+                  {formatMonthKey(x.month)}: <span className="font-medium text-ink">{money(x.amount)}</span>
+                </>
+              );
+              // A month the bank wrote opens its lines, to check what went where.
+              return (
+                <li key={x.month} className="tabular rounded-md bg-page text-[11.5px] text-ink-soft">
+                  {spendEntryFor(spend, x.month)?.source === 'bank' ? (
+                    <Link to={`/?sort=${group}&month=${x.month}`} className="block px-2 py-1 underline decoration-line underline-offset-2 hover:text-brand-700">
+                      {chip}
+                    </Link>
+                  ) : (
+                    <span className="block px-2 py-1">{chip}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {history.gap !== null && (
             <div className="mt-2.5 rounded-lg bg-orange-100/70 px-3 py-2 text-[12px] text-orange-800">
