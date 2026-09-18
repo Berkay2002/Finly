@@ -300,14 +300,15 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       statements.push(tx);
       continue;
     }
-    const bill = billFor(tx, expenses);
-    if (bill) {
-      applyRule(tx, { expenseId: bill.id });
-      continue;
-    }
+    // What the user said about the payee comes before what a bill claims by its name.
     const rule = plan.bank?.merchants?.[tx.merchantKey!];
     if (rule && ruleFits(rule, -tx.amount)) {
       applyRule(tx, rule);
+      continue;
+    }
+    const bill = billFor(tx, expenses);
+    if (bill) {
+      applyRule(tx, { expenseId: bill.id });
       continue;
     }
     const group = bundledGroup(tx.merchantKey!);
@@ -444,10 +445,12 @@ export interface MerchantToSort {
  * Money out nobody has placed, by payee: likely bills first, then biggest first. `since` leaves out
  * lines too old to change any month the bank still writes.
  */
-export function toSort(classified: ClassifiedTx[], since = '', names?: Record<string, string>): MerchantToSort[] {
+export function toSort(classified: ClassifiedTx[], since = '', names?: Record<string, string>, all = false): MerchantToSort[] {
   const by = new Map<string, MerchantToSort>();
   for (const tx of classified) {
-    if (tx.pending || tx.amount >= 0 || tx.class !== 'unsorted' || tx.date < since) continue;
+    if (tx.pending || tx.amount >= 0 || tx.date < since) continue;
+    // With `all`, every payee and where it sits, for looking over and changing; a statement is sorted line by line elsewhere.
+    if (all ? tx.class === 'statement' : tx.class !== 'unsorted') continue;
     // A person is sorted one line at a time: what they are sent means something different each time.
     const key = mobileKey(tx.counterparty) ? `${tx.merchantKey}#${tx.id}` : (tx.merchantKey ?? '');
     const m = by.get(key) ?? { key, label: partyLabel(tx, names), count: 0, total: 0, lastDate: tx.date, lines: [] };

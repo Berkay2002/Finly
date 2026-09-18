@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { monthlySpread } from '@/engine/amounts';
 import { amountForMonthly, gapTarget, SPEND_GROUP_META, spendEntryFor, spendHistory, type SpendNudge, type SpendSummary } from '@/engine/everyday';
@@ -172,6 +173,11 @@ export function SpendMonthCard({ group }: { group: SpendGroup }) {
           setEverydaySpend(group, key, amount > 0 ? (running ? { amount, asOf: isoToday } : { amount }) : null)
         }
       />
+      {spendEntryFor(spend, key)?.source === 'bank' && (
+        <Link to={`/?sort=${group}`} className="mt-1 inline-block text-[12.5px] font-medium text-brand-700">
+          {t.seeBank}
+        </Link>
+      )}
 
       {sm.spent !== undefined && g.monthly > 0 && (
         <div className="mt-3">

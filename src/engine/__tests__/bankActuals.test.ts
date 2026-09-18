@@ -86,6 +86,14 @@ describe('money out', () => {
   const spotify = expense({ id: 'spotify', name: 'Spotify', amount: 129, fixed: true, bankMatch: { counterparty: 'K*KLARNA', amount: 129 } });
   const plan = (extra: Partial<ReturnType<typeof prdExamplePlan>> = {}) => ({ income: [], expenses: [fortum, spotify], ...extra });
 
+  it('what the user said about a payee beats what a bill claims by name, and every payee can be looked over', () => {
+    const bank = { provider: 'p', appId: 'x', sessions: [], merchants: { FORTUMMARKETSAB: { group: 'leisure' as const } } };
+    const out = classifyTransactions([tx({ id: 'a', amount: -900, date: '2026-09-10', kind: 'payment', counterparty: 'FORTUM MARKETS AB' })], plan({ bank }), OWN);
+    expect(out[0]).toMatchObject({ class: 'spend', group: 'leisure' });
+    expect(toSort(out)).toEqual([]);
+    expect(toSort(out, '', undefined, true).map((m) => m.key)).toEqual(['FORTUMMARKETSAB']);
+  });
+
   it('sorts chains it knows and leaves the rest unsorted, still counted as spent', () => {
     const out = classifyTransactions(
       [
