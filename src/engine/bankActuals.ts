@@ -1,5 +1,6 @@
 import { bundledGroup, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
+import { savingsPots } from './savings';
 import type { ExpenseItem, FinancialPlan, IncomeSource, LineChoice, MerchantRule, SpendEntry, SpendGroup } from './types';
 
 /**
@@ -47,6 +48,8 @@ export interface ClassifiedTx extends BankTx {
   remainder?: number;
   /** Paid for someone else: what has come back so far. */
   repaid?: number;
+  /** A transfer the user said goes into this savings pot. */
+  potId?: string;
   /** The payee, normalised: what rules are keyed by. */
   merchantKey?: string;
   /** The month an income counts for, which near a month's end is not always the month it arrived; for a bill, the month it was paid. */
@@ -54,7 +57,7 @@ export interface ClassifiedTx extends BankTx {
 }
 
 /** The part of the plan classification reads. Only income is needed to recognise salaries. */
-export type ClassifyPlan = Pick<FinancialPlan, 'income'> & Partial<Pick<FinancialPlan, 'expenses' | 'accounts' | 'bank'>>;
+export type ClassifyPlan = Pick<FinancialPlan, 'income'> & Partial<Pick<FinancialPlan, 'expenses' | 'accounts' | 'goals' | 'bank'>>;
 
 /** One of the user's own connected accounts. */
 export interface OwnAccount {
@@ -136,6 +139,9 @@ function applyRule(tx: ClassifiedTx, rule: MerchantRule | LineChoice): void {
     tx.class = 'expense';
     tx.expenseId = rule.expenseId;
     tx.month = tx.date.slice(0, 7);
+  } else if ('potId' in rule) {
+    tx.class = 'internal_transfer';
+    tx.potId = rule.potId;
   } else if ('action' in rule) tx.class = rule.action === 'transfer' ? 'internal_transfer' : rule.action === 'lent' ? 'lent' : 'ignored';
 }
 
@@ -194,9 +200,9 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
   const accountOf = new Map(own.map((o) => [o.externalId, o.accountId]));
   const out: ClassifiedTx[] = txs.map((tx) => ({ ...tx, class: 'unsorted', merchantKey: merchantKey(tx) }));
   const booked = out.filter((tx) => !tx.pending);
-  const institutions = (plan.accounts ?? [])
-    .flatMap((a) => [normalizeParty(a.institution), normalizeParty(a.institutionDomain?.replace(/^www\./, '').split('.')[0])])
-    .filter((s) => s.length >= 4);
+  const institutionKeys = (a: { institution?: string; institutionDomain?: string }) =>
+    [normalizeParty(a.institution), normalizeParty(a.institutionDomain?.replace(/^www\./, '').split('.')[0])].filter((s) => s.length >= 4);
+  const institutions = (plan.accounts ?? []).flatMap(institutionKeys);
   const expenses = (plan.expenses ?? []).filter((e) => !e.includedElsewhere);
 
   // Between the user's own accounts: named by the bank, the same sum leaving one and reaching another,
@@ -265,6 +271,20 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     if (group) applyRule(tx, { group });
   }
   splitStatements(statements, expenses);
+  // A transfer into savings is the pot whose monthly amount it is, when that is one pot; the account's place breaks a tie.
+  const pots = savingsPots({ accounts: plan.accounts ?? [], goals: plan.goals ?? [] });
+  const accountById = new Map((plan.accounts ?? []).map((a) => [a.id, a]));
+  for (const tx of booked) {
+    if (tx.amount >= 0 || tx.class !== 'internal_transfer' || tx.potId) continue;
+    let hits = pots.filter((p) => p.monthlyContribution > 0 && p.monthlyContribution === -tx.amount);
+    if (hits.length > 1) {
+      hits = hits.filter((p) => {
+        const a = p.accountId ? accountById.get(p.accountId) : undefined;
+        return a && institutionKeys(a).some((k) => tx.merchantKey!.includes(k));
+      });
+    }
+    if (hits.length === 1) tx.potId = hits[0].id;
+  }
   // Money in that is not income: dismissed, or a friend paying back what was bought for them.
   const lentById = new Map(booked.filter((tx) => tx.class === 'lent' && tx.id).map((tx) => [tx.id!, tx]));
   for (const tx of booked) {

@@ -132,6 +132,7 @@ export default {
     settled: 'Löst på annat sätt',
     thisIs: 'Det här är…',
     bill: (name) => `Räkning: ${name}`,
+    saving: (name) => `Sparande: ${name}`,
     addBill: 'Lägg till som ny räkning',
     recurring: (amount, day) => `Månadsvis, ungefär ${amount} runt den ${day}:e. Finns inte i Finly än.`,
     transfer: 'Överföring till eget konto',

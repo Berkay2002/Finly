@@ -130,6 +130,7 @@ export default {
     settled: 'Settled another way',
     thisIs: 'This is…',
     bill: (name: string) => `Bill: ${name}`,
+    saving: (name: string) => `Saving: ${name}`,
     addBill: 'Add as a new bill',
     recurring: (amount: string, day: number) => `Monthly, about ${amount} around the ${day}${day === 1 ? 'st' : day === 2 ? 'nd' : day === 3 ? 'rd' : 'th'}. Not in Finly yet.`,
     transfer: 'Transfer to my own account',

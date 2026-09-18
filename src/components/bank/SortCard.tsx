@@ -7,6 +7,7 @@ import { lentOut, partyLabel, toSort, type ClassifiedTx, type MerchantToSort } f
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
 import { formatDate, formatMoney } from '@/engine/format';
 import { monthKeyOf } from '@/engine/metrics';
+import { savingsPots } from '@/engine/savings';
 import { expenseName } from '@/engine/taxonomy';
 import type { SpendGroup } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -108,7 +109,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
   );
 }
 
-type Choice = SpendGroup | `bill:${string}` | 'new' | 'lent' | 'transfer' | 'ignore';
+type Choice = SpendGroup | `bill:${string}` | `pot:${string}` | 'new' | 'lent' | 'transfer' | 'ignore';
 
 const titleCase = (s: string) => s.toLowerCase().replace(/(^|\s)\S/g, (c) => c.toUpperCase());
 
@@ -124,6 +125,7 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
     ...(hint ? [{ value: 'new' as const, label: t.addBill }] : []),
     ...SPEND_GROUPS.map((g) => ({ value: g, label: SPEND_GROUP_META[g].label })),
     ...plan.expenses.map((e) => ({ value: `bill:${e.id}` as const, label: t.bill(expenseName(e)) })),
+    ...savingsPots(plan).map((p) => ({ value: `pot:${p.id}` as const, label: t.saving(p.name) })),
     ...(remember ? [{ value: 'transfer' as const, label: t.transfer }] : []),
     { value: 'lent', label: t.lent },
     { value: 'ignore', label: t.ignore },
@@ -135,6 +137,10 @@ function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (dr
       onAddBill({ ...draft, amount: hint.amount, fixed: hint.fixed, bankMatch: { counterparty: merchant.label } });
     } else if (choice.startsWith('bill:')) {
       updateExpense(choice.slice(5), { bankMatch: { counterparty: merchant.label } });
+    } else if (choice.startsWith('pot:')) {
+      // These lines go to that pot; later ones to the same place are transfers, told apart by their monthly amounts.
+      for (const l of merchant.lines) if (l.id) setLineChoice(l.id, { potId: choice.slice(4) });
+      if (remember) setMerchantRule(merchant.key, { action: 'transfer' });
     } else if (choice === 'transfer') {
       setMerchantRule(merchant.key, { action: 'transfer' });
     } else if (choice === 'lent') {

@@ -3,6 +3,7 @@ import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOu
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
+import { savingsPots } from '../savings';
 import { expense, income, NOW, prdExamplePlan } from './fixtures';
 
 const OWN: OwnAccount[] = [
@@ -49,6 +50,23 @@ describe('internal transfers', () => {
       OWN,
     );
     expect(out.every((t) => t.class === 'unsorted')).toBe(true);
+  });
+
+  it('a transfer into savings is the pot with that monthly amount, and a one-off is just a transfer', () => {
+    const plan = prdExamplePlan();
+    plan.accounts.find((a) => a.id === 'a4')!.institution = 'Avanza';
+    const pots = savingsPots(plan);
+    const out = classifyTransactions(
+      [
+        tx({ id: 'a', amount: -3000, date: '2026-09-27', kind: 'transfer', counterparty: 'AVANZA BANK' }),
+        tx({ id: 'b', amount: -2000, date: '2026-09-27', kind: 'transfer', counterparty: 'AVANZA BANK' }),
+        tx({ id: 'c', amount: -700, date: '2026-09-28', kind: 'transfer', counterparty: 'AVANZA BANK' }),
+      ],
+      plan,
+      OWN,
+    );
+    expect(out.map((t) => t.class)).toEqual(['internal_transfer', 'internal_transfer', 'internal_transfer']);
+    expect(out.map((t) => t.potId)).toEqual([pots.find((p) => p.accountId === 'a4')!.id, pots.find((p) => p.accountId === 'a3')!.id, undefined]);
   });
 
   it('a transfer to a place the plan has an account at is between own accounts, even with no IBAN', () => {
@@ -172,6 +190,7 @@ describe('money out', () => {
     expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { group: 'leisure' } } } }), OWN)[0].group).toBe('leisure');
     expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { group: 'leisure' } }, lines: { a: { group: 'transport' } } } }), OWN)[0].group).toBe('transport');
     expect(classifyTransactions([ica], plan({ bank: { ...bank, merchants: { ICANARASTR: { action: 'ignore' } } } }), OWN)[0].class).toBe('ignored');
+    expect(classifyTransactions([ica], plan({ bank: { ...bank, lines: { a: { potId: 'barn' } } } }), OWN)[0]).toMatchObject({ class: 'internal_transfer', potId: 'barn' });
     expect(classifyTransactions([ica], plan({ bank: { ...bank, lines: { a: { expenseId: 'el' } } } }), OWN)[0]).toMatchObject({ class: 'expense', expenseId: 'el', month: '2026-09' });
   });
 

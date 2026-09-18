@@ -335,8 +335,11 @@ export interface BankSession {
 export type MerchantRule = { group: SpendGroup } | { expenseId: string } | { action: 'ignore' | 'transfer' };
 
 /** One line sorted on its own, for payees that carry different things each time (Klarna, PayPal). */
-/** `lent`: bought for someone else, counted as spent until it comes back. `repays`: money in that pays a lent line back. */
-export type LineChoice = { group: SpendGroup } | { expenseId: string } | { action: 'ignore' | 'lent' } | { repays: string };
+/**
+ * `potId`: moved into that savings pot (see `savingsPots`), a transfer, not spending. `lent`: bought for
+ * someone else, counted as spent until it comes back. `repays`: money in that pays a lent line back.
+ */
+export type LineChoice = { group: SpendGroup } | { expenseId: string } | { potId: string } | { action: 'ignore' | 'lent' } | { repays: string };
 
 export interface BankSetup {
   provider: string;
