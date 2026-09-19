@@ -75,28 +75,35 @@ export function Sheet({
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center overscroll-contain p-2 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] sm:items-center sm:p-6"
       role="dialog"
       aria-modal
     >
       <div className="absolute inset-0 bg-scrim backdrop-blur-[2px]" onClick={onClose} />
       <div
         className={clsx(
-          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl',
+          'animate-pop-up relative flex max-h-[calc(100dvh-1rem)] w-full flex-col overflow-hidden rounded-[28px] bg-card shadow-2xl sm:max-h-[92vh]',
           width,
         )}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-line px-5 pb-3 pt-4">
+        <div className="relative z-10 flex items-start justify-between gap-3 px-5 pb-3 pt-4">
           <div className="min-w-0">
             {title && <h2 className="text-[16px] font-semibold text-ink">{title}</h2>}
             {subtitle && <p className="mt-0.5 text-[13px] text-muted">{subtitle}</p>}
           </div>
           <IconButton icon={X} label={t.ui.sheet.close} onClick={onClose} className="-mr-2 -mt-1" />
         </div>
+        {/* Scroll edge effects: content fades under the title and footer instead of stopping at a rule. */}
+        <div aria-hidden className="pointer-events-none relative z-10 -mb-4 h-4 bg-linear-to-b from-card to-transparent" />
         <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
           {children}
         </div>
-        {footer && <div className="safe-bottom border-t border-line px-5 py-3">{footer}</div>}
+        {footer && (
+          <>
+            <div aria-hidden className="pointer-events-none relative z-10 -mt-4 h-4 bg-linear-to-t from-card to-transparent" />
+            <div className="px-5 pb-4 pt-2">{footer}</div>
+          </>
+        )}
       </div>
     </div>,
     document.body,

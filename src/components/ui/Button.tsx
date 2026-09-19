@@ -7,7 +7,7 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'soft' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
 
 const base =
-  'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap';
+  'press inline-flex items-center justify-center gap-2 rounded-full font-medium transition-[background-color,color,transform] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200 disabled:cursor-not-allowed disabled:opacity-50 whitespace-nowrap';
 
 const variants: Record<Variant, string> = {
   primary: 'bg-brand-solid text-white hover:bg-brand-solid-hover shadow-sm',

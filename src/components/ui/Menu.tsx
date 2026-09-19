@@ -35,7 +35,7 @@ export function KebabMenu({ items, className }: { items: MenuItem[]; className?:
         <MoreVertical size={16} />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 min-w-[160px] overflow-hidden rounded-xl border border-line bg-card py-1 shadow-lg">
+        <div className="glass animate-pop-up absolute right-0 z-20 mt-1 min-w-[180px] origin-top-right rounded-2xl p-1">
           {items.map((it) => (
             <button
               key={it.label}
@@ -45,7 +45,7 @@ export function KebabMenu({ items, className }: { items: MenuItem[]; className?:
                 it.onSelect();
               }}
               className={clsx(
-                'flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] hover:bg-page',
+                'press flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] transition-[background-color,transform] hover:bg-page/60 active:scale-[0.97]',
                 it.danger ? 'text-red-500' : 'text-ink',
               )}
             >

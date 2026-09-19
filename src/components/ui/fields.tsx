@@ -434,6 +434,19 @@ export function Switch({
   );
 }
 
+/** The raised capsule behind the chosen option of a segmented control; it slides between equal-width slots. */
+function SlidingThumb({ index, count, pad }: { index: number; count: number; pad: string }) {
+  if (index < 0) return null;
+  const slot = `(100% - 2 * ${pad}) / ${count}`;
+  return (
+    <span
+      aria-hidden
+      className="absolute rounded-full bg-card shadow-sm transition-[left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none"
+      style={{ top: pad, bottom: pad, width: `calc(${slot})`, left: `calc(${pad} + ${slot} * ${index})` }}
+    />
+  );
+}
+
 /** Two-state pill used for fixed/variable, essential/optional, committed/flexible. */
 export function TogglePill<T extends string>({
   value,
@@ -449,16 +462,17 @@ export function TogglePill<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={clsx('inline-grid grid-cols-2 rounded-xl border border-line bg-page p-0.5', className)}>
+    <div className={clsx('relative inline-grid grid-cols-2 rounded-full border border-line bg-page p-0.5', className)}>
+      <SlidingThumb index={options.findIndex((o) => o.value === value)} count={2} pad="0.125rem" />
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={clsx(
-            'rounded-lg font-medium transition',
+            'press relative z-10 rounded-full font-medium transition-colors',
             size === 'sm' ? 'px-2 py-0.5 text-[11.5px]' : 'px-3 py-1 text-[12.5px]',
-            value === o.value ? 'bg-card text-ink shadow-sm' : 'text-muted hover:text-ink',
+            value === o.value ? 'text-ink' : 'text-muted hover:text-ink',
           )}
         >
           {o.label}
@@ -480,15 +494,16 @@ export function SegmentedControl<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={clsx('flex w-full rounded-xl border border-line bg-page p-1', className)}>
+    <div className={clsx('relative flex w-full rounded-full border border-line bg-page p-1', className)}>
+      <SlidingThumb index={options.findIndex((o) => o.value === value)} count={options.length} pad="0.25rem" />
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           onClick={() => onChange(o.value)}
           className={clsx(
-            'flex-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-[12.5px] font-medium transition',
-            value === o.value ? 'bg-card text-ink shadow-sm' : 'text-muted hover:text-ink',
+            'press relative z-10 flex-1 whitespace-nowrap rounded-full px-2 py-1.5 text-[12.5px] font-medium transition-colors',
+            value === o.value ? 'text-ink' : 'text-muted hover:text-ink',
           )}
         >
           {o.label}
