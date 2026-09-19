@@ -25,6 +25,7 @@ export function ItemRow({
   brand,
   brandDomain,
   opens = false,
+  inline = false,
 }: {
   icon: IconSource;
   accent: Accent;
@@ -40,12 +41,14 @@ export function ItemRow({
   brandDomain?: string;
   /** `onClick` goes to a page of its own rather than opening the editor: a chevron instead of the pencil. */
   opens?: boolean;
+  /** A single value or field: keep it beside the title on a phone instead of on a row of its own. */
+  inline?: boolean;
 }) {
   const t = useT();
   return (
     <div
       className={clsx(
-        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-card px-3 py-2.5 transition-colors',
+        'flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border border-line bg-card px-3.5 py-3 transition-colors',
         // Only the clickable title area drives the row hover, so hovering the balance field or menu stays neutral.
         onClick && 'has-[[data-edit]:hover]:border-line-strong has-[[data-edit]:hover]:bg-page/70',
         className,
@@ -64,13 +67,19 @@ export function ItemRow({
         )}
       >
         {(brand || brandDomain) && logoDevEnabled() ? (
-          <BrandLogo name={brand ?? undefined} domain={brandDomain} size="sm" />
+          <>
+            <BrandLogo name={brand ?? undefined} domain={brandDomain} size="lg" className="sm:hidden" />
+            <BrandLogo name={brand ?? undefined} domain={brandDomain} size="md" className="max-sm:hidden" />
+          </>
         ) : (
-          <IconTile icon={icon} accent={accent} size="sm" />
+          <>
+            <IconTile icon={icon} accent={accent} size="lg" className="sm:hidden" />
+            <IconTile icon={icon} accent={accent} size="md" className="max-sm:hidden" />
+          </>
         )}
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="truncate text-[13.5px] font-medium text-ink transition-colors group-hover/edit:text-brand-700">
+            <span className="truncate text-[15px] font-semibold text-ink transition-colors group-hover/edit:text-brand-700">
               {title}
             </span>
             {onClick && opens && <ChevronRight size={14} aria-hidden className="shrink-0 text-muted group-hover/edit:text-brand-600" />}
@@ -82,11 +91,11 @@ export function ItemRow({
               />
             )}
           </div>
-          {meta && <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">{meta}</div>}
+          {meta && <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">{meta}</div>}
         </div>
       </button>
-      {menu && <KebabMenu items={menu} className="order-2 -mr-1 sm:order-3" />}
-      {fields && <div className="order-3 flex w-full items-center gap-2 sm:order-2 sm:w-auto">{fields}</div>}
+      {menu && <KebabMenu items={menu} className={clsx('-mr-1', inline ? 'order-3' : 'order-2 sm:order-3')} />}
+      {fields && <div className={clsx('flex items-center gap-2', inline ? 'order-2 w-auto' : 'order-3 w-full sm:order-2 sm:w-auto')}>{fields}</div>}
     </div>
   );
 }

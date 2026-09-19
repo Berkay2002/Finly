@@ -79,15 +79,18 @@ export function AccountEditor({
             brandDomain={a.institutionDomain ?? bankDomain(a.institution)}
             onClick={() => open(a)}
             opens={linkInvestments && wrapperOf(a.kind) !== 'cash'}
+            inline={!!(a.holdings?.length || a.bank)}
             meta={
               <>
-                {a.institution && <span>{a.institution}</span>}
-                <span>· {accountKindMeta(a.kind).label}</span>
+                {a.institution && <span className="max-sm:hidden">{a.institution}</span>}
+                <span className="max-sm:hidden">· {accountKindMeta(a.kind).label}</span>
                 {!!a.holdings?.length && <HoldingsMeta account={a} />}
                 {wrapperOf(a.kind) === 'unknown' ? (
                   <span className="text-warning">{t.pickWrapper}</span>
                 ) : (
-                  <RateMeta account={a} />
+                  <span className="max-sm:hidden">
+                    <RateMeta account={a} />
+                  </span>
                 )}
                 {previous && <Delta before={previous[a.id]} after={a.balance} className="ml-1" />}
                 {a.bank && <BankMeta account={a} />}
@@ -95,17 +98,20 @@ export function AccountEditor({
             }
             fields={
               a.holdings?.length || a.bank ? (
-                <span className="tabular min-w-0 flex-1 text-right text-[13.5px] font-medium text-ink sm:w-40 sm:flex-none">
+                <span className="tabular text-right text-[14px] font-semibold text-ink sm:w-40 sm:text-[15px]">
                   {formatMoney(a.balance, currency)}
                 </span>
               ) : (
-                <MoneyField
-                  size="sm"
-                  currency={currency}
-                  value={a.balance}
-                  onValueChange={(balance) => updateAccount(a.id, { balance })}
-                  className="min-w-0 flex-1 sm:w-40 sm:flex-none"
-                />
+                <>
+                  <span className="flex-1 text-[13px] text-muted sm:hidden">{t.currentBalance}</span>
+                  <MoneyField
+                    size="sm"
+                    currency={currency}
+                    value={a.balance}
+                    onValueChange={(balance) => updateAccount(a.id, { balance })}
+                    className="w-36 sm:w-40"
+                  />
+                </>
               )
             }
             menu={[
@@ -175,8 +181,9 @@ function HoldingsMeta({ account: a }: { account: Account }) {
   const t = useT().accounts.editor;
   const gain = holdingsGain(a.holdings ?? []);
   return (
-    <span>
-      · {t.holdingCount(a.holdings?.length ?? 0)}
+    <span className="whitespace-nowrap">
+      <span className="max-sm:hidden">· </span>
+      {t.holdingCount(a.holdings?.length ?? 0)}
       {gain && Math.abs(gain.share) >= 0.005 && <DeltaBadge c={gain.share} className="ml-1" />}
     </span>
   );
@@ -189,10 +196,13 @@ function BankMeta({ account: a, plain = false }: { account: Account; plain?: boo
   const when = state?.lastSyncedAt && formatDistanceToNow(new Date(state.lastSyncedAt), { addSuffix: true, locale: dateLocale() });
   const text =
     state?.status === 'reauth' ? t.reauth : state?.status === 'error' ? t.unavailable : when ? t.synced(a.institution?.trim() || 'bank', when) : t.syncedElsewhere;
+  // On a phone, a healthy connection is just "32 minutes ago": the logo already says which bank.
+  const short = state?.status === 'ok' && when;
   return (
     <span className={state && state.status !== 'ok' ? 'text-warning' : undefined}>
-      {plain ? '' : '· '}
-      {text}
+      {!plain && <span className="max-sm:hidden">· </span>}
+      <span className={short ? 'max-sm:hidden' : undefined}>{text}</span>
+      {short && <span className="sm:hidden">{when}</span>}
       {state?.status !== 'ok' && when ? ` (${when})` : ''}
     </span>
   );

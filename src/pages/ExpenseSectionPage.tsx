@@ -14,6 +14,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { CATEGORY_ICON } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) {
   const t = useT();
@@ -50,7 +51,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
     <div>
       <PageHeader title={meta.label} subtitle={meta.description} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard
           icon={Icon}
           accent={meta.accent}
@@ -79,7 +80,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           value={money(committed)}
           sub={total > 0 ? s.flexible(money(total - committed)) : undefined}
         />
-      </div>
+      </StatGrid>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card>

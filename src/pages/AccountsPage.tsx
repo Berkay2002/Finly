@@ -12,6 +12,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { ACCOUNT_ACCENT } from '@/components/ui/icons';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 export function AccountsPage() {
   const plan = useEffectivePlan();
@@ -60,7 +61,7 @@ export function AccountsPage() {
     <div>
       <PageHeader title={t.title} subtitle={t.subtitle} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard
           icon="stat-bank"
           accent="blue"
@@ -97,7 +98,7 @@ export function AccountsPage() {
           trend={{ before: prev?.investments, after: m.position.investments, suffix: onHoldings || undefined }}
           sub={onHoldings || t.ofAssets(formatPercent(investShare))}
         />
-      </div>
+      </StatGrid>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">

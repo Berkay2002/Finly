@@ -12,6 +12,7 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { Switch } from '@/components/ui/fields';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 export function SavingsPage() {
   const m = useMetrics();
@@ -44,7 +45,7 @@ export function SavingsPage() {
     <div>
       <PageHeader title={t.title} subtitle={t.subtitle} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard
           icon="nav-savings"
           accent="blue"
@@ -63,7 +64,7 @@ export function SavingsPage() {
         />
         <StatCard icon="card-per-day" accent="green" label={t.plannedFutureSpending} value={formatPercent(futureShare)} sub={t.perMonth(money(m.savings.futureSpending))} />
         <StatCard icon="account-investment" accent="purple" label={t.longTermWealth} value={formatPercent(longShare)} sub={t.perMonth(money(m.savings.longTerm))} />
-      </div>
+      </StatGrid>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <Card>

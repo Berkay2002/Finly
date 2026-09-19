@@ -16,6 +16,7 @@ import { Button, IconButton, LinkButton } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { IconTile } from '@/components/ui/IconTile';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 /** An ISK, KF or AF account with what it holds. Reached from its row on Accounts; not in the menu. */
 export function AccountDetailPage() {
@@ -71,7 +72,7 @@ export function AccountDetailPage() {
         }
       />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard
           icon="account-investment"
           accent="purple"
@@ -95,7 +96,7 @@ export function AccountDetailPage() {
           sub={td.ofValue(formatPercent(account.balance > 0 ? (account.balance - cash) / account.balance : 0))}
         />
         <StatCard icon="account-cash" accent="yellow" label={td.cash} value={money(cash)} sub={td.notInvested} />
-      </div>
+      </StatGrid>
 
       <Card>
         <CardHeader

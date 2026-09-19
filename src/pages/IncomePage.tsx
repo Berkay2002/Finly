@@ -10,6 +10,7 @@ import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { SplitBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 export function IncomePage() {
   const m = useMetrics();
@@ -23,7 +24,7 @@ export function IncomePage() {
     <div>
       <PageHeader title={t.title} subtitle={t.subtitle} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard icon="stat-income" accent="brand" label={t.averageMonthly} value={money(m.income.total)} sub={t.perYear(money(m.income.total * 12))} />
         <StatCard icon="account-salary" accent="blue" label={t.reliableIncome} value={money(m.income.reliable)} sub={t.ofTotal(formatPercent(reliableShare))} />
         <StatCard icon="card-income-change" accent="purple" label={t.variableIncome} value={money(m.income.variable)} sub={t.estimatedAverage} />
@@ -34,7 +35,7 @@ export function IncomePage() {
           value={m.essentialCost > 0 ? formatPercent(Math.min(1, m.income.reliable / m.essentialCost)) : '–'}
           sub={m.essentialCost > 0 ? t.essentialPerMonth(money(m.essentialCost)) : t.addExpensesToSee}
         />
-      </div>
+      </StatGrid>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card>

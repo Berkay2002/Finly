@@ -163,14 +163,17 @@ export function LoanEditor({
                 </>
               }
               fields={
-                <MoneyField
-                  size="sm"
-                  currency={currency}
-                  value={d.balance}
-                  aria-label={t.editor.balanceOwed}
-                  onValueChange={(balance) => updateDebt(d.id, { balance })}
-                  className="min-w-0 flex-1 sm:w-40 sm:flex-none"
-                />
+                <>
+                  <span className="flex-1 text-[13px] text-muted sm:hidden">{t.editor.balanceOwed}</span>
+                  <MoneyField
+                    size="sm"
+                    currency={currency}
+                    value={d.balance}
+                    aria-label={t.editor.balanceOwed}
+                    onValueChange={(balance) => updateDebt(d.id, { balance })}
+                    className="w-36 sm:w-40"
+                  />
+                </>
               }
               menu={[
                 { label: t.editor.editDetails, icon: Pencil, onSelect: () => loans.openEdit(d.id) },

@@ -1,5 +1,6 @@
 import { Bell, ChevronLeft, ChevronRight, Moon, Sun } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { addDays } from 'date-fns';
 import clsx from 'clsx';
@@ -20,12 +21,12 @@ export function MonthSelector({ className }: { className?: string }) {
   const reset = useUiStore((s) => s.resetMonth);
   const t = useT().layout.month;
   return (
-    <div className={clsx('inline-flex h-10 items-center rounded-xl border border-line bg-card px-1', className)}>
+    <div className={clsx('inline-flex h-10 items-center rounded-full px-1', className ?? 'border border-line bg-card')}>
       <button
         type="button"
         aria-label={t.previous}
         onClick={() => shift(-1)}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-page hover:text-ink"
+        className="press inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-page hover:text-ink active:scale-90"
       >
         <ChevronLeft size={16} />
       </button>
@@ -41,12 +42,19 @@ export function MonthSelector({ className }: { className?: string }) {
         type="button"
         aria-label={t.next}
         onClick={() => shift(1)}
-        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-page hover:text-ink"
+        className="press inline-flex h-8 w-8 items-center justify-center rounded-full text-muted transition hover:bg-page hover:text-ink active:scale-90"
       >
         <ChevronRight size={16} />
       </button>
     </div>
   );
+}
+
+/** On a phone the month lives in the glass top bar, in the logo's place; see AppShell's `topbar-slot`. */
+function TopBarMonth() {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  useEffect(() => setSlot(document.getElementById('topbar-slot')), []);
+  return slot ? createPortal(<MonthSelector className="glass h-11 lg:hidden" />, slot) : null;
 }
 
 export function NotificationsButton({ className = 'bg-card border border-line' }: { className?: string }) {
@@ -138,7 +146,8 @@ export function PageHeader({
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
         {actions}
-        {showMonth && <MonthSelector />}
+        {showMonth && <MonthSelector className="border border-line bg-card max-lg:hidden" />}
+        {showMonth && <TopBarMonth />}
         <div className="hidden items-center gap-2 lg:flex">
           <LanguageSwitch variant="compact" />
           <ThemeToggleButton />

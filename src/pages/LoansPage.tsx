@@ -37,6 +37,7 @@ import { EditableRow, EditableTitle } from '@/components/ui/EditableRow';
 import { IconTile } from '@/components/ui/IconTile';
 import { SplitBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 
 const pct = (n: number) => `${formatNumber(n, 2)} %`;
 
@@ -96,7 +97,7 @@ export function LoansPage() {
     <div>
       <PageHeader title={t.page.title} subtitle={t.page.subtitle} />
 
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <StatGrid>
         <StatCard
           icon="stat-bank"
           accent="red"
@@ -138,7 +139,7 @@ export function LoansPage() {
                 : t.page.notRepayingYet
           }
         />
-      </div>
+      </StatGrid>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="space-y-5">
