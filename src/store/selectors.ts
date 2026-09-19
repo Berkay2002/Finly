@@ -101,10 +101,11 @@ export function useAccountReturns(): Map<string, number> {
 }
 
 export function useUpcoming(horizonMonths = 12) {
-  const plan = useEffectivePlan();
-  const now = useViewDate();
+  // Upcoming is relative to today, even when another month is selected.
+  const plan = usePlan();
+  const today = format(new Date(), 'yyyy-MM-dd');
   const gov = useGovBondRate();
-  return useMemo(() => upcomingExpenses(plan, now, horizonMonths, gov), [plan, now, horizonMonths, gov]);
+  return useMemo(() => upcomingExpenses(plan, new Date(`${today}T00:00:00`), horizonMonths, gov), [plan, today, horizonMonths, gov]);
 }
 
 export function useMonthOutlook(horizonMonths = 12) {

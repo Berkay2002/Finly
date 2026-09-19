@@ -71,7 +71,10 @@ export default {
     perYearShort: (amount: string) => `${amount}/yr`,
     thisMonthShort: (amount: string) => `${amount} this month`,
     comingUp: 'Coming up',
+    monthlyEquivalent: 'Monthly equivalent',
+    annualEquivalent: 'Annual equivalent',
+    oneOff: 'One-off',
     spreadTitle: 'Why spread irregular costs?',
-    spreadBody: 'A 12,000 holiday is 1,000 per month. Provisioning like this keeps expensive months from surprising you.',
+    spreadBody: 'The monthly equivalent spreads costs over a year for comparison. It does not create a gift budget or repeat a one-off payment. Dated one-offs count in the month of their date; Other bank spending is shown separately.',
   },
 };

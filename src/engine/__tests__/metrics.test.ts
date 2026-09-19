@@ -3,6 +3,24 @@ import { computeMetrics } from '../metrics';
 import { emptyPlan } from '../types';
 import { expense, income, NOW, prdExamplePlan } from './fixtures';
 
+describe('one-off gifts and unrelated bank spending', () => {
+  const plan = emptyPlan(NOW);
+  plan.expenses = [expense({ name: 'Gift', category: 'planned', amount: 1000, frequency: 'once', nextDate: '2026-09-02' })];
+  plan.everydaySpend = { other: { '2026-08': { amount: 2657.5, source: 'bank' } } };
+
+  it('does not label Other spending or a September gift as planned spending in August', () => {
+    const m = computeMetrics(plan, new Date(2026, 7, 31));
+    expect(m.actuals.byCategory.planned).toBe(0);
+    expect(m.actuals.byCategory.other).toBe(2657.5);
+    expect(m.actuals.lifestyleCost).toBe(2657.5);
+  });
+
+  it('counts a one-off only in its own month, without leaving a monthly budget afterwards', () => {
+    expect(computeMetrics(plan, NOW).actuals.byCategory.planned).toBe(1000);
+    expect(computeMetrics(plan, new Date(2026, 9, 1)).actuals.byCategory.planned).toBe(0);
+  });
+});
+
 describe('computeMetrics — PRD worked example', () => {
   const m = computeMetrics(prdExamplePlan(), NOW);
 
@@ -185,8 +203,8 @@ describe('computeMetrics — edge cases', () => {
     // lifestyle = 10000 + 6000/12 + 5000/12
     expect(m.lifestyleCost).toBeCloseTo(10000 + 500 + 416.67, 1);
     expect(m.oneOffsThisMonth).toBe(6000);
-    expect(m.safeToSpend).toBeCloseTo(m.breathingRoom - 6000 + 500, 5);
-    expect(m.actuals.lifestyleCost).toBeCloseTo(10000 + 6000 + 5000 / 12, 5);
+    expect(m.safeToSpend).toBe(14000);
+    expect(m.actuals.lifestyleCost).toBe(16000);
     expect(m.range.safeToSpend.low).toBeCloseTo(m.safeToSpend, 5);
     expect(m.range.safeToSpend.high).toBeCloseTo(m.safeToSpend, 5);
   });
@@ -466,7 +484,8 @@ describe('other spending', () => {
     const before = computeMetrics(plan, NOW);
     plan.everydaySpend = { other: { '2026-09': { amount: 300, asOf: '2026-09-16', source: 'bank' } } };
     const m = computeMetrics(plan, NOW);
-    expect(m.actuals.byCategory.planned).toBe(300);
+    expect(m.actuals.byCategory.planned).toBe(0);
+    expect(m.actuals.byCategory.other).toBe(300);
     expect(m.safeToSpend).toBe(before.safeToSpend - 300);
   });
 });

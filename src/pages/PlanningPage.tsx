@@ -479,12 +479,15 @@ function OutlookCard() {
                       title={i.source === 'tax' ? t.seeSavingsTax : i.source === 'debt' ? t.editLoan : t.editExpense}
                       className="rounded-full border border-line bg-card px-2 py-0.5 text-[11.5px] text-ink-soft transition hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
                     >
-                      {i.name}
+                      {i.name}: {money(i.amount)}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="tabular shrink-0 font-semibold text-warning">{t.aboveNormal(money(o.aboveNormal))}</div>
+              <div className="tabular shrink-0 text-right font-semibold text-ink">
+                {money(o.expected)}
+                <div className="text-[11.5px] font-normal text-muted">{t.monthTotal}</div>
+              </div>
             </li>
           ))}
         </ul>

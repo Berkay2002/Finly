@@ -501,6 +501,7 @@ export function ExpenseEditor({
               </span>
             )}
             {(notMonthly || itemCurrency !== currency) &&
+              e.frequency !== 'once' &&
               rate !== undefined &&
               monthly > 0 &&
               !e.includedElsewhere && (
@@ -519,7 +520,7 @@ export function ExpenseEditor({
               </span>
             )}
             {isIrregular(e.frequency, e.occurrences) && e.nextDate && (
-              <span>{t.expenses.row.next(formatDate(e.nextDate))}</span>
+              <span>{e.frequency === 'once' ? formatDate(e.nextDate) : t.expenses.row.next(formatDate(e.nextDate))}</span>
             )}
             {e.includedElsewhere && (
               <Chip tone="neutral">{t.expenses.row.includedElsewhere}</Chip>

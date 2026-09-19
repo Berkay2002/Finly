@@ -55,7 +55,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
         <StatCard
           icon={Icon}
           accent={meta.accent}
-          label={s.monthlyCost}
+          label={category === 'planned' ? s.monthlyEquivalent : s.monthlyCost}
           value={money(total)}
           sub={
             ranged
@@ -65,7 +65,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
                 : s.perYearAmount(money(total * 12))
           }
         />
-        <StatCard icon="card-expensive-months" accent="blue" label={s.perYear} value={money(total * 12)} sub={s.items(lines.length)} />
+        <StatCard icon="card-expensive-months" accent="blue" label={category === 'planned' ? s.annualEquivalent : s.perYear} value={money(total * 12)} sub={s.items(lines.length)} />
         <StatCard
           icon="goal-shield"
           accent="green"
@@ -170,9 +170,9 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
                   <li key={l.id} className="flex items-center gap-3 text-[13px]">
                     <span className="w-4 text-right text-muted">{i + 1}.</span>
                     <span className="min-w-0 flex-1 truncate text-ink">{lineName(l)}</span>
-                    <span className="tabular font-medium text-ink">{money(l.monthly)}</span>
+                    <span className="tabular font-medium text-ink">{money(plan.expenses.find((e) => e.id === l.id)?.frequency === 'once' ? l.annual : l.monthly)}</span>
                     <span className="tabular w-32 shrink-0 whitespace-nowrap text-right text-[12px] text-muted">
-                      {thisMonth.has(l.id) ? s.thisMonthShort(money(thisMonth.get(l.id)!)) : s.perYearShort(money(l.annual))}
+                      {plan.expenses.find((e) => e.id === l.id)?.frequency === 'once' ? s.oneOff : thisMonth.has(l.id) ? s.thisMonthShort(money(thisMonth.get(l.id)!)) : s.perYearShort(money(l.annual))}
                     </span>
                   </li>
                 ))}

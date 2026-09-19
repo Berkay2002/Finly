@@ -380,9 +380,10 @@ export default {
     leftFor: (amount, days) => `${amount} kvar för ${plural(days, 'den sista dagen', `de ${days} återstående dagarna`)}.`,
   },
   outlook: {
-    title: 'Dyra månader framöver',
-    subtitle: (normal) => `Förväntade utgifter per månad jämfört med din normala nivå på ${normal}.`,
-    vsNormal: (amount) => `${amount} jämfört med normalt`,
+    title: 'Utgifter per månad',
+    subtitle: (normal) => `Hela månadens utgifter, inklusive daterade kostnader. Månadsgenomsnittet är ${normal}; det är inte en budget för enskilda köp.`,
+    vsNormal: (amount) => `${amount} jämfört med månadsgenomsnittet (hela månaden)`,
+    monthTotal: 'Totalt för månaden',
     seeSavingsTax: 'Visa skatt på sparande',
     editLoan: 'Redigera lån',
     editExpense: 'Redigera utgift',

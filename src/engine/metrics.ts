@@ -73,7 +73,7 @@ export interface MonthActuals {
   /** Same, but with pending items at their low / high bound. */
   lifestyleRange: Range;
   /** Planned cost per category with confirmed bills and fully logged everyday groups in place of their estimates. */
-  byCategory: Record<ExpenseCategory, number>;
+  byCategory: Record<ExpenseCategory | 'other', number>;
 }
 
 /** One loan, as the month sees it. */
@@ -513,23 +513,27 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   }
   const confirmedIds = new Set([...confirmed.map((l) => l.id), ...loggedIds]);
   const actualVariance = sum(confirmed.map((l) => l.variance)) + everydayVariance - sum(nothingYet.map((l) => l.monthly));
-  const actualByCategory = { ...byCategory };
+  const otherBudget = budgetLines.find((l) => l.id === 'budget:other')?.monthly ?? 0;
+  const actualByCategory = { ...byCategory, other: otherBudget };
+  actualByCategory.planned -= otherBudget;
   for (const l of confirmed) actualByCategory[l.category] += l.variance;
   for (const l of nothingYet) actualByCategory[l.category] -= l.monthly;
   let oneOffAdjustment = 0;
   let oneOffLowAdjustment = 0;
   let oneOffHighAdjustment = 0;
   for (const e of active) {
-    if (e.frequency !== 'once' || !isDatedInMonth(e.nextDate, now)) continue;
+    if (e.frequency !== 'once' || !e.nextDate) continue;
     const line = byId.get(e.id);
-    const adjustment = typicalAmount(e) - (line?.monthly ?? 0);
+    // A dated purchase belongs to its payment month, not to each preceding month.
+    const amount = isDatedInMonth(e.nextDate, now) ? typicalAmount(e) : 0;
+    const adjustment = amount - (line?.monthly ?? 0);
     actualByCategory[e.category] += adjustment;
     oneOffAdjustment += adjustment;
-    oneOffLowAdjustment += typicalAmount(e) - (line?.monthlyLow ?? 0);
-    oneOffHighAdjustment += typicalAmount(e) - (line?.monthlyHigh ?? 0);
+    oneOffLowAdjustment += amount - (line?.monthlyLow ?? 0);
+    oneOffHighAdjustment += amount - (line?.monthlyHigh ?? 0);
   }
   for (const g of SPEND_GROUPS) {
-    actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.complete ? (everyday[g].month.variance ?? 0) : (everydayNow[g] ?? 0);
+    actualByCategory[g === 'other' ? 'other' : SPEND_GROUP_META[g].category] += everyday[g].month.complete ? (everyday[g].month.variance ?? 0) : (everydayNow[g] ?? 0);
   }
   const monthLifestyle = expenseTotal + debtMonthly + actualVariance + oneOffAdjustment;
   const monthLifestyleRange: Range = withDebt({

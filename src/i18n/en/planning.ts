@@ -382,9 +382,10 @@ export default {
     leftFor: (amount: string, days: number) => `${amount} left for the remaining ${days} days.`,
   },
   outlook: {
-    title: 'Expensive months ahead',
-    subtitle: (normal: string) => `Expected spending per month vs your normal ${normal}.`,
-    vsNormal: (amount: string) => `${amount} vs normal`,
+    title: 'Spending by month',
+    subtitle: (normal: string) => `Whole-month spending, including dated costs. The monthly equivalent is ${normal}; this is not a budget for individual purchases.`,
+    vsNormal: (amount: string) => `${amount} vs the monthly equivalent (whole month)`,
+    monthTotal: 'Total for the month',
     seeSavingsTax: 'See savings tax',
     editLoan: 'Edit loan',
     editExpense: 'Edit expense',

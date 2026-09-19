@@ -75,8 +75,11 @@ export default {
     perYearShort: (amount) => `${amount}/år`,
     thisMonthShort: (amount) => `${amount} den här månaden`,
     comingUp: 'Kommande',
+    monthlyEquivalent: 'Månadsgenomsnitt',
+    annualEquivalent: 'Årsekvivalent',
+    oneOff: 'Engångskostnad',
     spreadTitle: 'Varför slå ut oregelbundna kostnader?',
     spreadBody:
-      'En semester för 12 000 kr blir 1 000 kr i månaden. När du avsätter pengar så här kommer de dyra månaderna inte som en överraskning.',
+      'Månadsgenomsnittet fördelar kostnader över ett år för jämförelse. Det skapar ingen presentbudget och upprepar inte en engångsbetalning. Daterade engångskostnader räknas i sin månad; övriga bankutgifter visas separat.',
   },
 } satisfies Messages['bills'];

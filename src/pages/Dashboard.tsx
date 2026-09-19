@@ -86,6 +86,7 @@ export function Dashboard() {
     held: m.expenses.byCategoryHeld[c],
     notes: m.expenses.lines.filter((l) => l.category === c && l.lump).map((l) => lumpNote(l.name, l.lump!)),
   }));
+  slices.push({ key: 'other', label: messages().everyday.groups.other.label, value: m.actuals.byCategory.other, accent: 'neutral' });
   if (m.debt.monthly > 0) {
     slices.push({
       key: 'loans',
