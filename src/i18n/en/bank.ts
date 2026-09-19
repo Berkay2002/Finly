@@ -156,7 +156,7 @@ export default {
   },
   page: {
     title: 'Bank payments',
-    subtitle: 'Every line the bank has given, where it went, and what it counts for. Change a line here, one time or for the payee.',
+    subtitle: 'Every line from the bank and where it went. Change one here, once or for the payee.',
     month: 'Month',
     place: 'Showing',
     search: 'Search payee',

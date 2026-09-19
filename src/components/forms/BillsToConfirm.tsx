@@ -11,7 +11,7 @@ import { useCurrency, useMetrics, usePlan, useViewDate } from '@/store/selectors
 import { Button, IconButton } from '@/components/ui/Button';
 import { Chip } from '@/components/ui/Chip';
 import { MoneyField } from '@/components/ui/fields';
-import { CATEGORY_ICON } from '@/components/ui/icons';
+import { expenseIcon } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { Sheet } from '@/components/ui/Sheet';
 
@@ -206,7 +206,7 @@ function PendingRow({
         className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
         title={onEdit ? t.bills.row.editExpense : undefined}
       >
-        <IconTile icon={CATEGORY_ICON[bill.category]} accent={meta.accent} size="sm" />
+        <IconTile icon={expenseIcon(bill)} accent={meta.accent} size="sm" />
         <div className="min-w-0">
           <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
           <div className="text-[12px] text-muted">
@@ -247,7 +247,7 @@ function ConfirmedRow({ bill, currency, onClear }: { bill: ActualLine; currency:
   const tone = bill.variance > 0 ? 'orange' : bill.variance < 0 ? 'brand' : 'neutral';
   return (
     <li className="flex items-center gap-3 py-2.5">
-      <IconTile icon={CATEGORY_ICON[bill.category]} accent={meta.accent} size="sm" />
+      <IconTile icon={expenseIcon(bill)} accent={meta.accent} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-medium text-ink">{name}</div>
         <div className="text-[12px] text-muted">

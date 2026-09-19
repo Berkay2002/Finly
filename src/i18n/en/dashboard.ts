@@ -22,7 +22,7 @@ export default {
     availableThisMonth: 'Available this month',
     totalIncome: 'Total income',
     averagePerMonth: 'Average per month',
-    normalMonthlyCost: 'Normal monthly cost',
+    normalMonthlyCost: 'Monthly cost',
     vsLastMonthRealBills: 'vs last month',
     usually: (range: string) => `Usually ${range}`,
     essential: (amount: string) => `${amount} essential`,

@@ -28,9 +28,11 @@ export default {
     },
   },
   budget: {
-    set: (items) => `Din siffra för hela gruppen · posterna blir ${items}`,
-    fromItems: (low, high) => `Vad posterna blir, ${low} till ${high} · skriv en egen`,
+    set: (items) => `Din siffra · posterna blir ${items}`,
+    fromItems: (low, high) => `Posterna blir ${low}–${high} · skriv en egen`,
     fromItemsFlat: 'Vad posterna blir · skriv en egen',
+    setShort: 'Din siffra',
+    fromItemsShort: 'Från poster',
   },
   tiles: {
     perMonth: 'Per månad',

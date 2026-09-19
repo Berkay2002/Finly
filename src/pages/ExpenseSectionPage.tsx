@@ -1,4 +1,4 @@
-import { formatDate, formatMoney, formatMoneyRange, formatPercent } from '@/engine/format';
+import { formatAmount, formatDate, formatMoney, formatPercent } from '@/engine/format';
 import { CATEGORY_META, debtName, expenseName } from '@/engine/taxonomy';
 import type { ExpenseCategory } from '@/engine/types';
 import { useT } from '@/i18n';
@@ -59,7 +59,7 @@ export function ExpenseSectionPage({ category }: { category: ExpenseCategory }) 
           value={money(total)}
           sub={
             ranged
-              ? s.usually(formatMoneyRange(range.low, range.high, currency))
+              ? s.usually(`${formatAmount(range.low)}–${formatAmount(range.high)}`)
               : m.income.total > 0
                 ? s.ofIncome(formatPercent(share))
                 : s.perYearAmount(money(total * 12))

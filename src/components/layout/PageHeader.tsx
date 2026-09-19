@@ -1,4 +1,4 @@
-import { Bell, ChevronLeft, ChevronRight, Moon, Sun } from "lucide-react";
+import { Bell, ChevronLeft, ChevronRight, Landmark, Moon, Receipt, Sun } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
@@ -12,7 +12,7 @@ import { useCurrency, usePlan, useUpcoming } from "@/store/selectors";
 import { useUiStore } from "@/store/uiStore";
 import { useResolvedTheme, useThemeStore } from "@/store/themeStore";
 import { IconButton } from "@/components/ui/Button";
-import { IconTile } from "@/components/ui/IconTile";
+import { Icon } from "@/components/ui/Icon";
 import { useBillsStrip } from "@/components/forms/BillsToConfirm";
 import { useToSort } from "@/components/bank/SortCard";
 
@@ -97,16 +97,14 @@ export function NotificationsButton({
   const todo = [
     bills.pending.length > 0 && {
       key: "bills",
-      icon: "stat-cost" as const,
-      accent: "orange" as const,
+      icon: Receipt,
       title: bills.summary,
       detail: bills.detail,
       to: "/?open=bills",
     },
     sort.count > 0 && {
       key: "sort",
-      icon: "stat-bank" as const,
-      accent: "blue" as const,
+      icon: Landmark,
       title: t.bank.sort.strip(sort.count),
       detail: t.bank.sort.stripDetail(
         sort.names.slice(0, 3),
@@ -159,11 +157,7 @@ export function NotificationsButton({
                           onClick={() => go(row.to)}
                           className={INBOX_ROW}
                         >
-                          <IconTile
-                            icon={row.icon}
-                            accent={row.accent}
-                            size="sm"
-                          />
+                          <Icon icon={row.icon} size={26} strokeWidth={1.8} className="shrink-0 text-ink" />
                           <span className="min-w-0 flex-1">
                             <span className="block text-[14px] font-semibold text-ink">
                               {row.title}

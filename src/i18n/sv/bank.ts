@@ -158,7 +158,7 @@ export default {
   },
   page: {
     title: 'Bankbetalningar',
-    subtitle: 'Varje rad banken gett, var den hamnade och vad den räknas som. Ändra en rad här, en gång eller för mottagaren.',
+    subtitle: 'Varje rad från banken och var den hamnade. Ändra en här, en gång eller för mottagaren.',
     month: 'Månad',
     place: 'Visar',
     search: 'Sök mottagare',

@@ -106,11 +106,11 @@ export function BankPaymentsPage() {
     <div>
       <PageHeader title={t.page.title} subtitle={t.page.subtitle} showMonth={false} />
       <Card>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <SelectField label={t.page.month} size="sm" value={month} onValueChange={setMonth} options={months.map((m) => ({ value: m, label: formatMonthKey(m) }))} className="w-40" />
-          <SelectField label={t.page.place} size="sm" value={place} onValueChange={setPlace} options={places} className="w-44" />
-          <TextField label={t.page.search} value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1 sm:max-w-xs" />
-          <Switch checked={byPayee} onChange={setByPayee} description={t.page.byPayee} />
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3">
+          <SelectField label={t.page.month} size="sm" value={month} onValueChange={setMonth} options={months.map((m) => ({ value: m, label: formatMonthKey(m) }))} className="sm:w-40" />
+          <SelectField label={t.page.place} size="sm" value={place} onValueChange={setPlace} options={places} className="sm:w-44" />
+          <TextField label={t.page.search} value={search} onChange={(e) => setSearch(e.target.value)} className="min-w-0 flex-1 max-sm:col-span-2 sm:max-w-xs" />
+          <Switch checked={byPayee} onChange={setByPayee} description={t.page.byPayee} className="max-sm:col-span-2" />
         </div>
         <p className="tabular mb-1 text-[12.5px] text-muted">{t.page.summary(rows.length, formatMoney(counted, currency))}</p>
         {rows.length ? (

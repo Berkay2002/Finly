@@ -8,7 +8,7 @@ export default {
     allAccountsCombined: 'All accounts combined',
     cashInBank: 'Cash in bank',
     everydayPlusSavings: 'Everyday + savings',
-    emergencySavings: 'Emergency savings',
+    emergencySavings: 'Emergency fund',
     monthsOfEssentials: (months: string) => `${months} of essentials`,
     reservedForUnexpected: 'For the unexpected',
     investments: 'Investments',

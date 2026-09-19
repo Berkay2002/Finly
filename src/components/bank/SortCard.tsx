@@ -249,10 +249,15 @@ export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBi
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-medium text-ink">{merchant.label}</div>
           <div className="tabular text-[12px] text-muted">
-            {t.lines(merchant.count, formatDate(merchant.lastDate))} · {formatMoney(merchant.total, currency)}
+            <span className="max-sm:hidden">{t.lines(merchant.count, formatDate(merchant.lastDate))}</span>
+            <span className="sm:hidden">
+              {merchant.count > 1 && `${merchant.count}× · `}
+              {formatDate(merchant.lastDate)}
+            </span>{' '}
+            · {formatMoney(merchant.total, currency)}
           </div>
         </div>
-        <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-44 shrink-0 sm:w-64" />
+        <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-36 shrink-0 sm:w-64" />
       </div>
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
       {guessed && <p className="mt-1 text-[12px] text-muted">{t.guessed}</p>}
@@ -314,7 +319,7 @@ export function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: Classi
             ...[...shared, ...plan.expenses.filter((e) => !shared.includes(e))].map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
             { value: 'ignore', label: t.inIgnore },
           ]}
-          className="w-44 shrink-0 sm:w-64"
+          className="w-36 shrink-0 sm:w-64"
         />
       </div>
       <Switch className="mt-1.5" checked={monthly} onChange={setMonthly} description={t.everyMonth} />

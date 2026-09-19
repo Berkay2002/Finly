@@ -77,7 +77,7 @@ export function BottomNav({ className }: { className?: string }) {
     <nav className={clsx('safe-bottom pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-3', className)}>
       {/* Scroll edge effect: content fades out before it reaches the bar, so the bar stays legible over anything. */}
       <div aria-hidden className="absolute inset-x-0 bottom-0 -z-10 h-32 bg-linear-to-t from-page via-page/70 to-transparent" />
-      <div className="pointer-events-auto mx-auto flex max-w-md items-center gap-2.5">
+      <div id="bottom-nav" className="pointer-events-auto mx-auto flex max-w-md items-center gap-2.5">
         <div className="glass group relative flex flex-1 items-stretch rounded-full p-1">
           <span
             aria-hidden

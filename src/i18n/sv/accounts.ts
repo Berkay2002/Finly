@@ -7,7 +7,7 @@ export default {
     subtitle: 'Alla dina konton. En tydlig översikt.',
     totalAssets: 'Totalt på konton',
     allAccountsCombined: 'Alla konton sammanlagt',
-    cashInBank: 'Pengar på banken',
+    cashInBank: 'På banken',
     everydayPlusSavings: 'Vardag + sparande',
     emergencySavings: 'Buffert',
     monthsOfEssentials: (months) => `Nödvändigt i ${months}`,

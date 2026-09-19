@@ -111,7 +111,11 @@ export function GroupBudget({ group, className }: { group: SpendGroup; className
   return (
     <div className={clsx('flex items-center justify-between gap-3', className)}>
       <div className="min-w-0 text-[12px] text-muted">
-        {g.budget ? t.set(money(g.itemsTotal)) : g.high > g.low ? t.fromItems(money(g.low), money(g.high)) : t.fromItemsFlat}
+        <span className="max-sm:hidden">
+          {g.budget ? t.set(money(g.itemsTotal)) : g.high > g.low ? t.fromItems(money(g.low), money(g.high)) : t.fromItemsFlat}
+        </span>
+        {/* On a phone the field itself is the explanation; the hint only says where the figure came from. */}
+        <span className="whitespace-nowrap sm:hidden">{g.budget ? t.setShort : t.fromItemsShort}</span>
       </div>
       <MoneyField
         size="sm"

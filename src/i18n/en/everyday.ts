@@ -27,9 +27,11 @@ export default {
     },
   },
   budget: {
-    set: (items: string) => `Your figure for the whole group · the items add up to ${items}`,
-    fromItems: (low: string, high: string) => `What the items add up to, ${low} to ${high} · type your own`,
+    set: (items: string) => `Your figure · the items add up to ${items}`,
+    fromItems: (low: string, high: string) => `Items add up to ${low}–${high} · type your own`,
     fromItemsFlat: 'What the items add up to · type your own',
+    setShort: 'Your figure',
+    fromItemsShort: 'From items',
   },
   tiles: {
     perMonth: 'Per month',

@@ -1,7 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
 import clsx from 'clsx';
-import { formatDate, formatMoney, formatMoneyRange, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
+import { formatAmount, formatDate, formatMoney, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
 import { savingsPots } from '@/engine/savings';
 import type { LumpPayment } from '@/engine/periods';
@@ -31,7 +31,7 @@ import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { DonutBreakdown, type DonutSlice } from '@/components/ui/Donut';
 import { EditableRow, EditableTitle } from '@/components/ui/EditableRow';
-import { CATEGORY_ICON, goalAccent, goalIcon } from '@/components/ui/icons';
+import { CATEGORY_ICON, expenseIcon, goalAccent, goalIcon } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { ProgressBar, SplitBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
@@ -182,7 +182,7 @@ export function Dashboard() {
           }}
           sub={
             m.range.hasRanges
-              ? d.stats.usually(formatMoneyRange(m.range.lifestyleCost.low, m.range.lifestyleCost.high, currency))
+              ? d.stats.usually(`${formatAmount(m.range.lifestyleCost.low)}–${formatAmount(m.range.lifestyleCost.high)}`)
               : d.stats.essential(money(m.essentialCost))
           }
         />
@@ -358,7 +358,7 @@ export function Dashboard() {
                     className="py-2.5"
                   >
                   <IconTile
-                    icon={loan ? DEBT_ICON[loan.kind] : CATEGORY_ICON[u.category]}
+                    icon={loan ? DEBT_ICON[loan.kind] : expenseIcon(u)}
                     accent={loan ? DEBT_ACCENT[loan.kind] : CATEGORY_META[u.category].accent}
                     size="sm"
                   />

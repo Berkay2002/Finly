@@ -20,7 +20,7 @@ export function StatGrid({ children, cols = 4, className }: { children: ReactNod
           'grid grid-cols-2 gap-3',
           cols === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
           'max-sm:-mx-4 max-sm:flex max-sm:snap-x max-sm:snap-mandatory max-sm:overflow-x-auto max-sm:scroll-px-4 max-sm:px-4 max-sm:scrollbar-none',
-          'max-sm:[&>*]:w-[55%] max-sm:[&>*]:shrink-0 max-sm:[&>*]:snap-start max-sm:[&>*]:p-3.5',
+          'max-sm:[&>*]:w-[calc((100%-0.75rem)/2)] max-sm:[&>*]:shrink-0 max-sm:[&>*]:snap-start max-sm:[&>*]:p-3',
         )}
       >
         {children}
