@@ -9,6 +9,9 @@
  */
 
 import type * as blobs from "../blobs.js";
+import type * as crons from "../crons.js";
+import type * as push from "../push.js";
+import type * as pushSend from "../pushSend.js";
 
 import type {
   ApiFromModules,
@@ -18,6 +21,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   blobs: typeof blobs;
+  crons: typeof crons;
+  push: typeof push;
+  pushSend: typeof pushSend;
 }>;
 
 /**

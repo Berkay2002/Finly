@@ -79,6 +79,7 @@ export default defineConfig({
       registerType: 'prompt',
       includeAssets: ['icons/*.png'],
       manifest: {
+        id: '/',
         name: 'Finly',
         short_name: 'Finly',
         description: 'Plan your monthly money: income, bills, savings and what is safe to spend.',
@@ -95,28 +96,22 @@ export default defineConfig({
           { src: '/icons/pwa-512.png', sizes: '512x512', type: 'image/png' },
           { src: '/icons/pwa-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // Long-press the app icon: the quick-add sheet and the two most-visited pages.
+        shortcuts: [
+          { name: 'Add', url: '/?open=add', icons: [{ src: '/icons/pwa-192.png', sizes: '192x192' }] },
+          { name: 'Insights', url: '/insights', icons: [{ src: '/icons/pwa-192.png', sizes: '192x192' }] },
+          { name: 'Planning', url: '/planning', icons: [{ src: '/icons/pwa-192.png', sizes: '192x192' }] },
+        ],
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // Inter's non-Latin subsets and the iOS launch screens are served on demand, not precached.
+        globIgnores: ['**/inter-*-{cyrillic,cyrillic-ext,greek,vietnamese}-*.woff2', '**/splash/**'],
         // The app shell answers every route; /api is live data and stays uncached.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'StaleWhileRevalidate',
-            options: { cacheName: 'google-fonts-stylesheets' },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-webfonts',
-              expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-        ],
+        // Push handling lives in a plain script next to the generated worker (public/push-sw.js).
+        importScripts: ['push-sw.js'],
       },
     }),
   ],

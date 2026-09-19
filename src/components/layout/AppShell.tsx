@@ -1,8 +1,13 @@
-import { Outlet } from 'react-router-dom';
+import { useEffect } from 'react';
+import { Outlet, useSearchParams } from 'react-router-dom';
 import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
 import { useBankSync } from '@/bank/useBankSync';
+import { usePushReminders } from '@/push/usePush';
+import { InstallBanner } from '@/pwa/InstallBanner';
+import { usePlanStore } from '@/store/planStore';
 import { useMonthClose } from '@/store/useMonthClose';
 import { usePriceRefresh } from '@/store/usePriceRefresh';
+import { useUiStore } from '@/store/uiStore';
 import { convex } from '@/sync/convexClient';
 import { SyncController } from '@/sync/useSync';
 import { SyncBanner } from '@/components/sync/SyncBanner';
@@ -14,12 +19,33 @@ import { MoreSheet, QuickAddSheet } from './Sheets';
 import { Sidebar } from './Sidebar';
 import { UpdateBanner } from './UpdateBanner';
 
+/** The app icon's "Add" shortcut lands on `/?open=add`: open the quick-add sheet and drop the param. */
+function useAddShortcut() {
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get('open') !== 'add') return;
+    useUiStore.getState().setQuickAddOpen(true);
+    setParams({}, { replace: true });
+  }, [params, setParams]);
+}
+
+/** Ask the browser to keep the plan through storage clean-ups; it may say no, and nothing changes then. */
+function usePersistentStorage() {
+  const hydrated = usePlanStore((s) => s.hydrated);
+  useEffect(() => {
+    if (hydrated) void navigator.storage?.persist?.().catch(() => undefined);
+  }, [hydrated]);
+}
+
 export function AppShell() {
   useMonthClose();
   usePriceRefresh();
   useBankSync();
+  usePushReminders();
+  useAddShortcut();
+  usePersistentStorage();
   return (
-    <div className="min-h-screen lg:flex">
+    <div className="min-h-dvh lg:flex">
       {convex && <SyncController />}
       <Sidebar className="hidden lg:flex" />
       <div className="min-w-0 flex-1 overflow-x-clip">
@@ -38,6 +64,7 @@ export function AppShell() {
         </header>
         <main className="mx-auto w-full max-w-[1440px] px-4 pb-28 pt-4 sm:px-6 lg:px-6 lg:pb-10 lg:pt-6">
           <UpdateBanner className="mb-4" />
+          <InstallBanner className="mb-4" />
           <SyncBanner className="mb-4" />
           <FrozenMonthBanner className="mb-4" />
           <Outlet />

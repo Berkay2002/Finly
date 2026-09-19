@@ -8,7 +8,7 @@ Technical decisions live in `docs/technical-plan.md`. Reference screens are in `
 
 ## Run it
 
-Requires Node 20 or newer.
+Requires Node 24 (see `.node-version`).
 
 ```sh
 npm install

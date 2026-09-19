@@ -114,6 +114,11 @@ export function NotificationsButton({
     },
   ].filter((x) => x !== false);
   const count = bills.pending.length + sort.count;
+  // The same number on the app icon. iOS shows it once notifications are allowed; elsewhere it is a no-op.
+  useEffect(() => {
+    const n = navigator as Navigator & { setAppBadge?: (n: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    void (count > 0 ? n.setAppBadge?.(count) : n.clearAppBadge?.())?.catch(() => undefined);
+  }, [count]);
   const go = (to: string) => {
     setOpen(false);
     navigate(to);

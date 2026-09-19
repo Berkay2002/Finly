@@ -3,7 +3,7 @@ import { plural } from '../plural';
 export default {
   title: 'Settings',
   subtitle: 'Your profile, your data, and how Finly keeps it.',
-  exported: 'Your plan was downloaded as a JSON file.',
+  exported: 'Your plan is ready as a JSON file to save or share.',
   imported: (file: string, closedMonths: number) =>
     `Imported ${file}${closedMonths > 0 ? ` with ${closedMonths} closed ${plural(closedMonths, 'month', 'months')}` : ''}.`,
   importFailed: 'Could not read that file.',
@@ -47,6 +47,25 @@ export default {
     forget: 'Forget contacts',
     imported: (count: number) => `${count} mobile numbers named.`,
     none: 'No Swedish mobile numbers in that file.',
+  },
+  install: {
+    label: 'Finly as an app',
+    installed: 'Installed on this device.',
+    android: 'Install to open Finly from your Home Screen.',
+    ios: 'In Safari, tap Share and then Add to Home Screen.',
+    other: 'Open this page in Safari or Chrome on your phone to add Finly to your Home Screen.',
+    install: 'Install',
+  },
+  reminders: {
+    title: 'Reminders',
+    subtitle: 'A notification the day before each irregular cost, and one when a month has closed.',
+    switch: 'Remind me on this device',
+    privacy: 'The text is encrypted on this device before it is uploaded. The server only knows when to send.',
+    notConfigured: 'Reminders are not configured in this build.',
+    installFirst: 'On iPhone and iPad, reminders work once Finly is on your Home Screen.',
+    denied: 'Notifications are blocked for Finly in your browser or system settings.',
+    refused: 'Notifications were not allowed, so reminders stay off.',
+    failed: 'Could not turn on reminders.',
   },
   data: {
     title: 'Your data',

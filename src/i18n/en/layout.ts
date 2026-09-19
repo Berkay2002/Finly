@@ -32,6 +32,13 @@ export default {
     account: { label: 'Account', description: 'A bank or investment account' },
     loan: { label: 'Loan', description: 'CSN, mortgage, car loan or credit' },
   },
+  install: {
+    title: 'Add Finly to your Home Screen',
+    body: 'Opens like an app, keeps your data safe from browser clean-ups, and can remind you before bills.',
+    ios: 'Tap Share, then Add to Home Screen. It opens like an app, keeps your data safe from browser clean-ups, and can remind you before bills.',
+    install: 'Install',
+    later: 'Not now',
+  },
   update: {
     title: 'A new version of Finly is ready',
     body: 'Reload to get the latest changes.',

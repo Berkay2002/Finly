@@ -34,6 +34,13 @@ export default {
     account: { label: 'Konto', description: 'Ett bank- eller investeringskonto' },
     loan: { label: 'Lån', description: 'CSN, bolån, billån eller kredit' },
   },
+  install: {
+    title: 'Lägg till Finly på hemskärmen',
+    body: 'Öppnas som en app, skyddar dina data från att webbläsaren rensar dem och kan påminna dig innan räkningar.',
+    ios: 'Tryck på Dela och sedan Lägg till på hemskärmen. Öppnas som en app, skyddar dina data från att webbläsaren rensar dem och kan påminna dig innan räkningar.',
+    install: 'Installera',
+    later: 'Inte nu',
+  },
   update: {
     title: 'En ny version av Finly är klar',
     body: 'Ladda om för att få de senaste ändringarna.',

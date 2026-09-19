@@ -4,7 +4,7 @@ import { plural } from '../plural';
 export default {
   title: 'Inställningar',
   subtitle: 'Din profil, dina data och hur Finly sparar dem.',
-  exported: 'Din plan laddades ner som en JSON-fil.',
+  exported: 'Din plan är klar som en JSON-fil att spara eller dela.',
   imported: (file, closedMonths) =>
     `Importerade ${file}${closedMonths > 0 ? ` med ${closedMonths} ${plural(closedMonths, 'stängd månad', 'stängda månader')}` : ''}.`,
   importFailed: 'Filen kunde inte läsas.',
@@ -48,6 +48,25 @@ export default {
     forget: 'Glöm kontakter',
     imported: (count) => `${count} mobilnummer namngivna.`,
     none: 'Inga svenska mobilnummer i den filen.',
+  },
+  install: {
+    label: 'Finly som app',
+    installed: 'Installerad på den här enheten.',
+    android: 'Installera för att öppna Finly från hemskärmen.',
+    ios: 'Tryck på Dela i Safari och sedan Lägg till på hemskärmen.',
+    other: 'Öppna den här sidan i Safari eller Chrome på mobilen för att lägga till Finly på hemskärmen.',
+    install: 'Installera',
+  },
+  reminders: {
+    title: 'Påminnelser',
+    subtitle: 'En notis dagen innan varje oregelbunden kostnad, och en när en månad har stängts.',
+    switch: 'Påminn mig på den här enheten',
+    privacy: 'Texten krypteras på den här enheten innan den laddas upp. Servern vet bara när den ska skickas.',
+    notConfigured: 'Påminnelser är inte inställda i den här versionen.',
+    installFirst: 'På iPhone och iPad fungerar påminnelser när Finly ligger på hemskärmen.',
+    denied: 'Notiser är blockerade för Finly i webbläsaren eller systeminställningarna.',
+    refused: 'Notiser tilläts inte, så påminnelserna är fortsatt av.',
+    failed: 'Det gick inte att slå på påminnelser.',
   },
   data: {
     title: 'Dina data',

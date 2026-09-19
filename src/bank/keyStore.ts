@@ -1,11 +1,14 @@
 /**
- * The bank key, kept as a CryptoKey that can sign but not be exported. IndexedDB is the only browser
- * storage that holds one as it is; localStorage would need the key in readable form.
+ * Keys kept as CryptoKeys that can be used but not exported. IndexedDB is the only browser storage that
+ * holds one as it is; localStorage would need the key in readable form. The bank signing key lives here,
+ * and so does the reminder key the service worker decrypts push payloads with (public/push-sw.js reads
+ * the same store).
  */
 
 const DB = 'finly-bank';
 const STORE = 'keys';
-const ID = 'signing';
+
+export type KeyId = 'signing' | 'push';
 
 function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -20,18 +23,18 @@ function run<T>(mode: IDBTransactionMode, op: (store: IDBObjectStore) => IDBRequ
   });
 }
 
-export async function saveKey(key: CryptoKey): Promise<void> {
-  await run('readwrite', (s) => s.put(key, ID));
+export async function saveKey(key: CryptoKey, id: KeyId = 'signing'): Promise<void> {
+  await run('readwrite', (s) => s.put(key, id));
   // Ask the browser not to clear this under storage pressure; it may say no, and then the key is asked for again.
   void navigator.storage?.persist?.();
 }
 
 /** Undefined when this device never had the key, or the browser cleared it. */
-export async function loadKey(): Promise<CryptoKey | undefined> {
+export async function loadKey(id: KeyId = 'signing'): Promise<CryptoKey | undefined> {
   if (typeof indexedDB === 'undefined') return undefined;
-  return run<CryptoKey | undefined>('readonly', (s) => s.get(ID)).catch(() => undefined);
+  return run<CryptoKey | undefined>('readonly', (s) => s.get(id)).catch(() => undefined);
 }
 
-export async function clearKey(): Promise<void> {
-  await run('readwrite', (s) => s.delete(ID)).catch(() => undefined);
+export async function clearKey(id: KeyId = 'signing'): Promise<void> {
+  await run('readwrite', (s) => s.delete(id)).catch(() => undefined);
 }

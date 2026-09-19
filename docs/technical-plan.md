@@ -181,8 +181,40 @@ is the whole identity.
 - **Without a backend.** When `VITE_CONVEX_URL` is unset the app runs exactly as before and the Settings card
   says sync is not configured.
 
-A real schema is only worth it if server-side features arrive (shared households, reminders). Data can be
+A real schema is only worth it if server-side features arrive (shared households). Data can be
 decrypted and migrated at that point.
+
+## Installed app
+
+One responsive codebase, installed to the Home Screen through the browser: no store, no native shell.
+`vite-plugin-pwa` generates the manifest and a Workbox precache of the whole shell (Inter is self-hosted,
+so a cold start needs no third party); `UpdateBanner` offers a reload when a new build is waiting.
+
+- **Install coaching.** `src/pwa/InstallBanner.tsx` catches Chrome's `beforeinstallprompt` and shows an
+  Install button; on iOS it says "Share, then Add to Home Screen". The banner appears once the plan is real,
+  can be dismissed for good, and Settings keeps the same option. Installing matters beyond looks: an
+  installed app is exempt from Safari's 7-day storage eviction, and on iOS push only works when installed.
+  `navigator.storage.persist()` is asked for once the plan is loaded.
+- **Launch.** `public/splash/` holds the iOS launch images (light and dark), generated once with
+  `npx pwa-asset-generator public/icons/pwa-512.png public/splash --splash-only --index index.html
+  --path-override /splash` (add `--dark-mode --background "#121214"` for the dark set). They are not
+  precached. Manifest shortcuts open quick-add (`/?open=add`), Insights and Planning.
+- **Reminders (Web Push) without accounts.** A device that turns reminders on keeps a random AES-GCM key
+  in IndexedDB (`keyStore.ts`, id `push`), computes its own reminders (`src/push/reminders.ts`: 09:00 the
+  day before each irregular cost, plus a nudge when a month closes), encrypts each one and uploads
+  `{ fireAt, ciphertext, iv }` with its push subscription under a random device id (`convex/push.ts`,
+  table `pushDevices`). A cron every 15 minutes (`convex/pushSend.ts`, `web-push` with VAPID keys from
+  Convex env) sends the due ciphertexts as the payload; `public/push-sw.js`, imported by the generated
+  service worker, reads the key from IndexedDB, decrypts and shows the notification. Every push shows
+  something, even when unreadable: iOS revokes a subscription after a few silent pushes.
+  What the server sees: a push endpoint, the moments to send, and ciphertext. Never a name or an amount.
+  The list is re-uploaded whenever the plan changes or the app comes to the front, so a device that
+  does not open the app for three months stops getting reminders (the horizon). Revoked subscriptions
+  (404/410) and devices with nothing left for 90 days are deleted.
+- **Not possible as a web app on iOS.** Reading Contacts (vCard import instead, see
+  `external-research-ios-contact.md`), registering as a Share Sheet target, and keeping the bank connect
+  flow inside the installed app: BankID returns to Safari, whose storage is separate from the Home Screen
+  app, so the bank is connected from the browser.
 
 ## Server functions
 

@@ -23,6 +23,7 @@ import insights from './insights';
 import planning from './planning';
 import everyday from './everyday';
 import summary from './summary';
+import push from './push';
 
 const sv: Messages = {
   common,
@@ -49,6 +50,7 @@ const sv: Messages = {
   planning,
   everyday,
   summary,
+  push,
 };
 
 export default sv;

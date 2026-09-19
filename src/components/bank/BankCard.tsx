@@ -9,6 +9,7 @@ import { syncBank } from '@/bank/useBankSync';
 import { ACCOUNT_KINDS } from '@/engine/taxonomy';
 import type { AccountKind } from '@/engine/types';
 import { dateLocale, useT } from '@/i18n';
+import { useInstall } from '@/pwa/InstallBanner';
 import { usePlan } from '@/store/selectors';
 import { useSyncStore } from '@/sync/syncStore';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +40,7 @@ export function BankCard({ onMessage }: { onMessage: OnMessage }) {
   const states = linked.map((a) => bank.accounts[a.bank!.externalId]);
   const reauth = states.some((s) => s?.status === 'reauth');
   const failed = states.find((s) => s?.status === 'error');
-  const standalone = typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches;
+  const { standalone } = useInstall();
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);

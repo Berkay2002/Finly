@@ -1,4 +1,4 @@
-import { Camera, Download, RotateCcw, Sparkles, Trash2, Upload, Users } from 'lucide-react';
+import { Camera, Download, RotateCcw, Smartphone, Sparkles, Trash2, Upload, Users } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatDate, formatMoney, formatMonthKey, formatMonthYear } from '@/engine/format';
@@ -17,7 +17,9 @@ import { Button } from '@/components/ui/Button';
 import { Callout } from '@/components/ui/Callout';
 import { Card, CardHeader, Divider } from '@/components/ui/Card';
 import { BankCard } from '@/components/bank/BankCard';
+import { RemindersCard } from '@/components/push/RemindersCard';
 import { SyncCard } from '@/components/sync/SyncCard';
+import { useInstall } from '@/pwa/InstallBanner';
 import { AvatarPicker } from '@/components/forms/AvatarPicker';
 import { BirthYearField } from '@/components/forms/BirthYearField';
 import { HomeFields } from '@/components/forms/HomeFields';
@@ -47,6 +49,7 @@ export function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false);
   const sync = useSyncActions();
   const synced = sync.configured && sync.status !== 'off';
+  const install = useInstall();
   const t = useT();
   const themeOptions: { value: ThemeMode; label: string }[] = [
     { value: 'system', label: t.settings.profile.themeSystem },
@@ -131,6 +134,19 @@ export function SettingsPage() {
               <Label hint={t.settings.profile.thisDeviceOnly}>{t.common.language}</Label>
               <LanguageSwitch />
             </div>
+            <div>
+              <Label>{t.settings.install.label}</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[12.5px] text-muted">
+                  {install.standalone ? t.settings.install.installed : install.canPrompt ? t.settings.install.android : install.isIOS ? t.settings.install.ios : t.settings.install.other}
+                </p>
+                {install.canPrompt && (
+                  <Button variant="secondary" icon={Smartphone} onClick={() => void install.prompt()}>
+                    {t.settings.install.install}
+                  </Button>
+                )}
+              </div>
+            </div>
           </div>
         </Card>
 
@@ -176,6 +192,9 @@ export function SettingsPage() {
 
           <Divider className="my-5" />
           <BankCard onMessage={(tone, text) => setMessage({ tone, text })} />
+
+          <Divider className="my-5" />
+          <RemindersCard onMessage={(tone, text) => setMessage({ tone, text })} />
 
           <Divider className="my-5" />
           <CardHeader title={t.settings.contacts.title} subtitle={contactCount ? t.settings.contacts.count(contactCount, shareContacts) : t.settings.contacts.subtitle} />

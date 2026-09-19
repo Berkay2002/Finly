@@ -22,6 +22,7 @@ import insights from './insights';
 import planning from './planning';
 import everyday from './everyday';
 import summary from './summary';
+import push from './push';
 
 /** The English dictionary is the source of truth: every other language must match its shape. */
 const en = {
@@ -49,6 +50,7 @@ const en = {
   planning,
   everyday,
   summary,
+  push,
 };
 
 export type Messages = typeof en;
