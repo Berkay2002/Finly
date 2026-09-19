@@ -1,5 +1,6 @@
 import { Check, ChevronRight, Undo2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatMoney, formatMoneyRange, formatMonthKey } from '@/engine/format';
 import type { ActualLine, PendingBill } from '@/engine/metrics';
@@ -19,15 +20,13 @@ import { Sheet } from '@/components/ui/Sheet';
  * strip for the viewed month; tapping it opens the list where the real figures are entered.
  * Renders nothing when the plan has no variable monthly items.
  */
-export function BillsToConfirm({ className, onEdit }: { className?: string; onEdit?: (expenseId: string) => void }) {
+/** What the strip says for the viewed month; the bell in the top bar shows the same line. */
+export function useBillsStrip() {
   const t = useT();
   const m = useMetrics();
   const currency = useCurrency();
   const billName = useBillName();
-  const [open, setOpen] = useState(false);
   const { pending, confirmed, variance, month } = m.actuals;
-  if (pending.length === 0 && confirmed.length === 0) return null;
-
   const names = pending.map(billName);
   const summary =
     pending.length === 0
@@ -41,6 +40,27 @@ export function BillsToConfirm({ className, onEdit }: { className?: string; onEd
           ? t.bills.strip.above(formatMoney(Math.abs(variance), currency))
           : t.bills.strip.below(formatMoney(Math.abs(variance), currency))
       : t.bills.strip.pending(names.slice(0, 3), Math.max(0, names.length - 3));
+  return { pending, confirmed, variance, month, summary, detail, show: pending.length > 0 || confirmed.length > 0 };
+}
+
+/** Opens when the URL says `?open=<key>`, then clears it, so the bell can open a sheet from any page. */
+export function useOpenParam(key: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get('open') !== key) return;
+    setOpen(true);
+    setParams({}, { replace: true });
+  }, [params, setParams, key]);
+  return [open, setOpen];
+}
+
+export function BillsToConfirm({ className, onEdit }: { className?: string; onEdit?: (expenseId: string) => void }) {
+  const t = useT();
+  const currency = useCurrency();
+  const [open, setOpen] = useOpenParam('bills');
+  const { pending, confirmed, variance, month, summary, detail, show } = useBillsStrip();
+  if (!show) return null;
 
   return (
     <>

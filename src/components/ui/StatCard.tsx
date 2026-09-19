@@ -47,9 +47,10 @@ export function StatCard({
     <Tag
       onClick={onClick}
       className={clsx(
-        'card flex gap-3 p-4 text-left',
+        // On a phone the foot line runs under the icon for the full card width; nothing here ever wraps.
+        'card p-4 text-left max-sm:grid max-sm:grid-cols-[auto_1fr] max-sm:items-center max-sm:gap-x-2.5 sm:flex sm:gap-3',
         onClick && 'transition hover:border-line-strong',
-        compact ? 'flex-col items-start' : 'flex-col items-start sm:flex-row sm:items-center',
+        compact ? 'sm:flex-col sm:items-start' : 'sm:flex-row sm:items-center',
         className,
       )}
     >
@@ -58,13 +59,13 @@ export function StatCard({
       ) : (
         <IconTile icon={icon} accent={accent} size={compact ? 'sm' : 'md'} />
       )}
-      <div className="min-w-0">
-        <div className="text-[12.5px] text-muted">{label}</div>
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <span className="tabular whitespace-nowrap text-[19px] font-semibold leading-tight text-ink sm:text-[20px]">{value}</span>
+      <div className="min-w-0 max-sm:contents">
+        <div className="truncate text-[12.5px] text-muted">{label}</div>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 max-sm:min-w-0">
+          <span className="tabular whitespace-nowrap text-[17px] font-semibold leading-tight text-ink sm:text-[20px]">{value}</span>
           {c !== null && <DeltaBadge c={c} invert={trend?.invert} />}
         </div>
-        {foot && <div className="mt-1 text-[12px] text-muted">{foot}</div>}
+        {foot && <div className="mt-1 truncate text-[12px] text-muted max-sm:col-span-2">{foot}</div>}
       </div>
     </Tag>
   );

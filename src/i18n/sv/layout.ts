@@ -8,6 +8,7 @@ export default {
   },
   upcoming: {
     button: 'Kommande',
+    needsYou: 'Behöver dig',
     title: 'På gång',
     subtitle: 'Oregelbundna kostnader de närmaste 30 dagarna',
     emptyTitle: 'Inget ovanligt framöver',
@@ -34,8 +35,8 @@ export default {
     loan: { label: 'Lån', description: 'CSN, bolån, billån eller kredit' },
   },
   update: {
-    title: 'En ny version av Finly �r klar',
-    body: 'Ladda om f�r att f� de senaste �ndringarna.',
+    title: 'En ny version av Finly är klar',
+    body: 'Ladda om för att få de senaste ändringarna.',
     reload: 'Ladda om',
     later: 'Senare',
   },

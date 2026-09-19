@@ -6,6 +6,7 @@ export default {
   },
   upcoming: {
     button: 'Upcoming',
+    needsYou: 'Needs you',
     title: 'Coming up',
     subtitle: 'Irregular costs in the next 30 days',
     emptyTitle: 'Nothing unusual ahead',

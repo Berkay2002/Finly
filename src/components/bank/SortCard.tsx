@@ -1,5 +1,6 @@
 import { ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useOpenParam } from '@/components/forms/BillsToConfirm';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
@@ -26,17 +27,12 @@ import { Sheet } from '@/components/ui/Sheet';
  * spent; sorting only moves it to the right group or bill. One line on the dashboard, the list in a
  * sheet. Nothing without a connected bank.
  */
-export function SortCard({ className, onAddBill }: { className?: string; onAddBill: (draft: ExpenseDraft) => void }) {
+/** What still needs sorting; the bell in the top bar shows the same count. */
+export function useToSort() {
   const plan = usePlan();
   const txs = useBankStore((s) => s.txs);
   const contacts = useBankStore((s) => s.contacts);
-  const t = useT().bank.sort;
-  const [open, setOpen] = useState(false);
-
-  // A new rule, or a bill added from here, places lines at once instead of at the next read from the bank.
-  useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
-
-  const { merchants, lent, incoming, classified } = useMemo(
+  const data = useMemo(
     () => {
       // Only this month and the last: what is older changes nothing the bank still writes.
       const now = new Date();
@@ -52,10 +48,22 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
     // eslint-disable-next-line react-hooks/exhaustive-deps -- classifiedTxs reads both stores
     [txs, plan, contacts],
   );
-  if (!Object.values(txs).some((list) => list.length)) return null;
+  const count = data.merchants.length + data.incoming.length;
+  const names = [...data.merchants.map((m) => m.label), ...data.incoming.map((i) => partyLabel(i, contacts))];
+  return { ...data, count, names, hasBank: Object.values(txs).some((list) => list.length) };
+}
 
-  const count = merchants.length + incoming.length;
-  const names = [...merchants.map((m) => m.label), ...incoming.map((i) => partyLabel(i, contacts))];
+export function SortCard({ className, onAddBill }: { className?: string; onAddBill: (draft: ExpenseDraft) => void }) {
+  const plan = usePlan();
+  const contacts = useBankStore((s) => s.contacts);
+  const t = useT().bank.sort;
+  const [open, setOpen] = useOpenParam('sort');
+
+  // A new rule, or a bill added from here, places lines at once instead of at the next read from the bank.
+  useEffect(() => reconcileSpending(), [plan.expenses, plan.bank]);
+
+  const { merchants, lent, incoming, classified, count, names, hasBank } = useToSort();
+  if (!hasBank) return null;
 
   return (
     <>

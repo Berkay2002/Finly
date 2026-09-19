@@ -35,6 +35,7 @@ import { CATEGORY_ICON, goalAccent, goalIcon } from '@/components/ui/icons';
 import { IconTile } from '@/components/ui/IconTile';
 import { ProgressBar, SplitBar } from '@/components/ui/ProgressBar';
 import { StatCard } from '@/components/ui/StatCard';
+import { StatGrid } from '@/components/ui/StatGrid';
 import { LinkButton } from '@/components/ui/Button';
 import { messages, useT } from '@/i18n';
 
@@ -138,7 +139,7 @@ export function Dashboard() {
       )}
 
       {/* Primary overview */}
-      <div className="mb-5 grid grid-cols-2 gap-3 xl:grid-cols-5">
+      <StatGrid cols={5}>
         <StatCard
           icon="stat-safe-to-spend"
           accent="brand"
@@ -201,10 +202,11 @@ export function Dashboard() {
           trend={{ before: prev?.cashInBank, after: m.position.cashInBank }}
           sub={d.stats.allCashAccounts}
         />
-      </div>
+      </StatGrid>
 
-      <BillsToConfirm className="mb-5" onEdit={expenses.openEdit} />
-      <SortCard className="mb-5" onAddBill={expenses.openNew} />
+      {/* On a phone these two live behind the bell in the top bar; the sheets still mount here and open from there. */}
+      <BillsToConfirm className="mb-5 max-lg:hidden" onEdit={expenses.openEdit} />
+      <SortCard className="mb-5 max-lg:hidden" onAddBill={expenses.openNew} />
 
       {/* Spending · Position · Goals */}
       <div className="mb-5 grid gap-4 lg:grid-cols-3">

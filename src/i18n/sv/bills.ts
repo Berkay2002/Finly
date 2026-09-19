@@ -46,7 +46,7 @@ export default {
   },
   section: {
     monthlyCost: 'Månadskostnad',
-    usually: (range) => `Brukar vara ${range}`,
+    usually: (range) => `Oftast ${range}`,
     ofIncome: (percent) => `${percent} av inkomsten`,
     perYearAmount: (amount) => `${amount} per år`,
     perYear: 'Per år',

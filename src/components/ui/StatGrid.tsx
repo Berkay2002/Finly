@@ -5,7 +5,7 @@ import clsx from 'clsx';
  * The row of headline figures at the top of a page. A grid from tablet up; on a phone a swipeable
  * row with page dots, like a native carousel, so the page's real content starts one thumb away.
  */
-export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
+export function StatGrid({ children, cols = 4, className }: { children: ReactNode; cols?: 4 | 5; className?: string }) {
   const count = Children.count(children);
   const [page, setPage] = useState(0);
   return (
@@ -17,9 +17,10 @@ export function StatGrid({ children, className }: { children: ReactNode; classNa
           if (first) setPage(Math.round(el.scrollLeft / (first.offsetWidth + 12)));
         }}
         className={clsx(
-          'grid grid-cols-2 gap-3 xl:grid-cols-4',
+          'grid grid-cols-2 gap-3',
+          cols === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4',
           'max-sm:-mx-4 max-sm:flex max-sm:snap-x max-sm:snap-mandatory max-sm:overflow-x-auto max-sm:scroll-px-4 max-sm:px-4 max-sm:scrollbar-none',
-          'max-sm:[&>*]:w-[78%] max-sm:[&>*]:shrink-0 max-sm:[&>*]:snap-start max-sm:[&>*]:flex-row max-sm:[&>*]:items-center',
+          'max-sm:[&>*]:w-[55%] max-sm:[&>*]:shrink-0 max-sm:[&>*]:snap-start max-sm:[&>*]:p-3.5',
         )}
       >
         {children}
