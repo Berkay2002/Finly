@@ -45,7 +45,7 @@ export function LanguageSwitch({ variant = 'full', className }: { variant?: 'ful
   return (
     <div
       role="group"
-      className={clsx('inline-flex h-9 items-center gap-0.5 rounded-full border border-line bg-card p-1', className)}
+      className={clsx('inline-flex h-9 items-center gap-0.5 rounded-full p-1', className ?? 'border border-line bg-card')}
     >
       {LANGUAGES.map((l) => (
         <button

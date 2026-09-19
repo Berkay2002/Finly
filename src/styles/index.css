@@ -151,6 +151,46 @@
     border-radius: var(--radius-card);
     box-shadow: var(--shadow-card);
   }
+  /* A translucent floating surface: the page blurs through it, with a light edge on top. */
+  .glass {
+    background: color-mix(in srgb, var(--color-card) 72%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-line) 60%, transparent);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.5),
+      var(--shadow-island);
+    backdrop-filter: blur(20px) saturate(1.6);
+    -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  }
+  @media (prefers-reduced-transparency: reduce) {
+    .glass {
+      background: var(--color-card);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
+  [data-theme='dark'] .glass {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      var(--shadow-island);
+  }
+  /* The raised glass lens behind the active tab: a tinted, slightly refracting bump with a specular edge. */
+  .lens {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-50) 90%, white) 0%, var(--color-brand-50) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      inset 0 -1px 0 color-mix(in srgb, var(--color-brand-600) 12%, transparent),
+      0 2px 6px color-mix(in srgb, var(--color-brand-600) 14%, transparent);
+  }
+  [data-theme='dark'] .lens {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--color-brand-50) 80%, white) 0%, var(--color-brand-50) 100%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  .press {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
   .tabular {
     font-variant-numeric: tabular-nums;
   }
@@ -162,6 +202,14 @@
   }
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .animate-pop-up {
+    animation: pop-up 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-pop-up {
+      animation: none;
+    }
   }
   .animate-select-in {
     animation: select-in 120ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -175,6 +223,17 @@
       opacity: 1;
       transform: none;
     }
+  }
+}
+
+@keyframes pop-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }
 

@@ -66,7 +66,7 @@ export function SpendNudges({ nudges, currency }: { nudges: SpendNudge[]; curren
   if (nudges.length === 0) return null;
   return (
     <div className="mt-4">
-      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.title}</div>
+      <div className="mb-1.5 text-[12px] font-semibold text-faint">{t.title}</div>
       <ul className="divide-y divide-line">
         {nudges.slice(0, 3).map((n) => (
           <li key={n.id} className="flex items-center gap-3 py-2 text-[13px]">

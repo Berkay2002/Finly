@@ -58,7 +58,7 @@ export function BillsToConfirm({ className, onEdit }: { className?: string; onEd
           <div className="truncate text-[12px] text-muted">{detail}</div>
         </div>
         {confirmed.length > 0 && variance !== 0 && (
-          <Chip tone={variance > 0 ? 'orange' : 'brand'} className="hidden whitespace-nowrap sm:inline-flex">
+          <Chip tone={variance > 0 ? 'orange' : 'brand'} className="whitespace-nowrap max-sm:hidden">
             {t.bills.strip.vsPlan(formatMoney(variance, currency, { sign: true }))}
           </Chip>
         )}
@@ -135,7 +135,7 @@ export function BillsList({ onEdit }: { onEdit?: (expenseId: string) => void }) 
       {confirmed.length > 0 && (
         <div className={clsx(pending.length > 0 && 'mt-4 border-t border-line pt-3')}>
           <div className="mb-1 flex items-center justify-between">
-            <div className="text-[12px] font-semibold uppercase tracking-wide text-faint">{t.bills.list.confirmed}</div>
+            <div className="text-[12px] font-semibold text-faint">{t.bills.list.confirmed}</div>
             <Chip tone={variance > 0 ? 'orange' : variance < 0 ? 'brand' : 'neutral'}>
               {variance === 0 ? t.bills.list.onPlan : t.bills.list.vsPlan(formatMoney(variance, currency, { sign: true }))}
             </Chip>

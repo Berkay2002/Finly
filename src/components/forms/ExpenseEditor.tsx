@@ -459,7 +459,7 @@ export function ExpenseEditor({
         ? grouped.map(([group, list]) => (
             <div key={group}>
               <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-[12px] font-semibold uppercase tracking-wide text-faint">{groupLabel(group)}</h3>
+                <h3 className="text-[12px] font-semibold text-faint">{groupLabel(group)}</h3>
                 {group === 'Food & drink' && <GroupBudget group="food" className="min-w-0 flex-1 justify-end" />}
               </div>
               <div className="space-y-2">{list.map(row)}</div>
@@ -1279,7 +1279,7 @@ function AddExpenseSheet({
 
       {groups.map((g) => (
         <div key={g} className="mb-3">
-          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wide text-faint">{groupLabel(g)}</div>
+          <div className="mb-1.5 text-[11.5px] font-semibold text-faint">{groupLabel(g)}</div>
           <div className="flex flex-wrap gap-1.5">
             {filtered
               .filter((s) => s.group === g)

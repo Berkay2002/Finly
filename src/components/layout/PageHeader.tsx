@@ -49,7 +49,7 @@ export function MonthSelector({ className }: { className?: string }) {
   );
 }
 
-export function NotificationsButton() {
+export function NotificationsButton({ className = 'bg-card border border-line' }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const t = useT().layout.upcoming;
   const upcoming = useUpcoming(2);
@@ -58,7 +58,7 @@ export function NotificationsButton() {
   return (
     <>
       <div className="relative">
-        <IconButton icon={Bell} label={t.button} onClick={() => setOpen(true)} className="bg-card border border-line" />
+        <IconButton icon={Bell} label={t.button} onClick={() => setOpen(true)} className={className} />
         {soon.length > 0 && (
           <span className="pointer-events-none absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-brand-500 ring-2 ring-card" />
         )}
@@ -85,7 +85,7 @@ export function NotificationsButton() {
 }
 
 /** Flips to the opposite of the theme on screen and pins it; Settings offers System too. */
-export function ThemeToggleButton() {
+export function ThemeToggleButton({ className = 'bg-card border border-line' }: { className?: string }) {
   const theme = useResolvedTheme();
   const setMode = useThemeStore((s) => s.setMode);
   const t = useT().layout.theme;
@@ -95,7 +95,7 @@ export function ThemeToggleButton() {
       icon={theme === 'dark' ? Sun : Moon}
       label={next === 'dark' ? t.toDark : t.toLight}
       onClick={() => setMode(next)}
-      className="bg-card border border-line"
+      className={className}
     />
   );
 }

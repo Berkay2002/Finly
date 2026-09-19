@@ -95,7 +95,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
       >
         {lent.length > 0 && (
           <div className="mb-4">
-            <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.lentTitle}</div>
+            <div className="mb-1 text-[12px] font-semibold text-faint">{t.lentTitle}</div>
             <ul className="divide-y divide-line">
               {lent.map((tx) => (
                 <LentRow key={tx.id} tx={tx} />
@@ -106,7 +106,7 @@ export function SortCard({ className, onAddBill }: { className?: string; onAddBi
         )}
         {incoming.length > 0 && (
           <div className="mb-4">
-            <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide text-faint">{t.inTitle}</div>
+            <div className="mb-1 text-[12px] font-semibold text-faint">{t.inTitle}</div>
             <ul className="divide-y divide-line">
               {incoming.map((tx) => (
                 <InRow key={tx.id} tx={tx} lent={lent} classified={classified} />
