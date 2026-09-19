@@ -158,7 +158,7 @@ export function placed(tx: ClassifiedTx | undefined): Choice | undefined {
   }
 }
 
-export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void }) {
+export function Row({ merchant, onAddBill, contribution }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void; contribution?: string }) {
   const plan = usePlan();
   const currency = useCurrency();
   const t = useT().bank.sort;
@@ -259,6 +259,7 @@ export function Row({ merchant, onAddBill }: { merchant: MerchantToSort; onAddBi
         </div>
         <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-36 shrink-0 sm:w-64" />
       </div>
+      {contribution && <p className="mt-1 text-[12px] text-muted">{contribution}</p>}
       {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
       {guessed && <p className="mt-1 text-[12px] text-muted">{t.guessed}</p>}
       {!person && (

@@ -172,6 +172,8 @@ export default {
     moneyIn: 'Pengar in',
     summary: (count, total) => (count === 1 ? `1 betalning · räknas som ${total}` : `${count} betalningar · räknas som ${total}`),
     statement: 'Faktura, sorterad rad för rad',
+    otherExplained: 'Inkluderar osorterade utgifter, din del av delade betalningar och ej fördelade belopp på fakturor. När du sorterar en betalning flyttas utgiften till vald kategori.',
+    contribution: (amount) => `${amount} räknas med i den här utgiftssumman.`,
     incomeLabel: (name) => `Inkomst: ${name}`,
     none: 'Inget matchar.',
   },

@@ -1,4 +1,4 @@
-import { spendGroupOf } from './everyday';
+import { SPEND_GROUPS, spendGroupOf } from './everyday';
 import { bundledGroup, bundledItem, passThroughBrand } from './merchants';
 import { monthKeyOf } from './metrics';
 import { mobileKey } from './vcard';
@@ -408,6 +408,29 @@ export function lentOut(classified: ClassifiedTx[]): ClassifiedTx[] {
 /** The everyday group a line counts under, if any: its own, or other while nobody has placed it. */
 export function spendGroupOfTx(tx: ClassifiedTx): SpendGroup | undefined {
   return tx.class === 'spend' || tx.class === 'expense' ? tx.group : tx.class === 'lent' ? (tx.group ?? 'other') : tx.class === 'unsorted' || tx.class === 'statement' ? 'other' : undefined;
+}
+
+export type BankPlace = 'all' | 'unsorted' | SpendGroup | 'bills' | 'transfers' | 'people' | 'ignored' | 'in';
+
+/** Membership in the bank-payment page's filters. */
+export function matchesBankPlace(tx: ClassifiedTx, place: BankPlace): boolean {
+  if (tx.pending) return false;
+  // Group drill-downs must show the same contributions as spendByMonth, including
+  // unsorted outgoings, statement remainders, own shares and classified refunds.
+  if (SPEND_GROUPS.includes(place as SpendGroup)) return spendGroupOfTx(tx) === place && spentOf(tx) !== 0;
+  if (place === 'all') return true;
+  if (place === 'in') return tx.amount > 0;
+  if (tx.amount > 0 && tx.class !== 'expense' && tx.class !== 'spend') return false;
+  switch (tx.class) {
+    case 'spend': return place === (tx.group ?? 'other');
+    case 'unsorted': return place === 'unsorted';
+    case 'expense': return place === (tx.group ?? 'bills');
+    case 'statement': return place === 'bills';
+    case 'internal_transfer': return place === 'transfers';
+    case 'lent': return place === 'people';
+    case 'ignored': return place === 'ignored';
+    default: return false;
+  }
 }
 
 /**

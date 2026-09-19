@@ -170,6 +170,8 @@ export default {
     moneyIn: 'Money in',
     summary: (count: number, total: string) => (count === 1 ? `1 payment · counts as ${total}` : `${count} payments · count as ${total}`),
     statement: 'Statement, sorted line by line',
+    otherExplained: 'Includes unsorted spending, your share of shared payments, and any unassigned part of a statement. Sorting a payment moves its spending to the chosen category.',
+    contribution: (amount: string) => `${amount} counts toward this spending total.`,
     incomeLabel: (name: string) => `Income: ${name}`,
     none: 'Nothing matches.',
   },

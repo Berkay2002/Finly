@@ -1,10 +1,31 @@
 import { describe, expect, it } from 'vitest';
-import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, lentTotal, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, spentOf, toSort, type BankTx, type OwnAccount } from '../bankActuals';
+import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, lentTotal, matchesBankPlace, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, spentOf, toSort, type BankTx, type ClassifiedTx, type OwnAccount } from '../bankActuals';
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
 import { savingsPots } from '../savings';
 import { expense, income, NOW, prdExamplePlan } from './fixtures';
+
+describe('bank spending drill-down', () => {
+  it('shows all the lines that contribute to Other, not only explicitly sorted ones', () => {
+    const base = { account: 'a', date: '2026-08-12', currency: 'SEK' };
+    const lines: ClassifiedTx[] = [
+      { ...base, id: 'sorted', amount: -500, class: 'spend', group: 'other' },
+      { ...base, id: 'unsorted', amount: -1000, class: 'unsorted' },
+      { ...base, id: 'statement', amount: -1200, class: 'statement', remainder: 900 },
+      { ...base, id: 'shared', amount: -515, class: 'lent', mine: 257.5 },
+      { ...base, id: 'transfer', amount: -5000, class: 'internal_transfer' },
+      { ...base, id: 'receipt', amount: 1000, class: 'unsorted' },
+    ];
+    const chartAmount = spendByMonth(lines, NOW).other['2026-08'].amount;
+    expect(chartAmount).toBe(2657.5);
+    const rows = lines.filter((tx) => matchesBankPlace(tx, 'other'));
+    expect(rows.reduce((sum, tx) => sum + spentOf(tx), 0)).toBe(chartAmount);
+    expect(rows.map((tx) => tx.id)).toEqual(['sorted', 'unsorted', 'statement', 'shared']);
+    expect(matchesBankPlace(lines[1], 'unsorted')).toBe(true);
+    expect(matchesBankPlace(lines[3], 'people')).toBe(true);
+  });
+});
 
 const OWN: OwnAccount[] = [
   { externalId: 'h-everyday', accountId: 'a1', iban: 'SE11 0000 0000 0000 0000 0001' },

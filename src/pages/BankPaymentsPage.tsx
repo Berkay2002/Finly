@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { classifiedTxs, reconcileSpending } from '@/bank/useBankSync';
 import { useBankStore } from '@/bank/bankStore';
-import { lentOut, partyLabel, spentOf, toSort, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
+import { lentOut, matchesBankPlace, partyLabel, spentOf, toSort, type BankPlace, type ClassifiedTx, type MerchantToSort } from '@/engine/bankActuals';
 import { SPEND_GROUP_META, SPEND_GROUPS } from '@/engine/everyday';
+import type { SpendGroup } from '@/engine/types';
 import { formatDate, formatMoney, formatMonthKey } from '@/engine/format';
 import { expenseName } from '@/engine/taxonomy';
-import type { SpendGroup } from '@/engine/types';
 import { useT } from '@/i18n';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { InRow, Row } from '@/components/bank/SortCard';
@@ -15,30 +15,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { SelectField, Switch, TextField } from '@/components/ui/fields';
 
-type Place = 'all' | 'unsorted' | SpendGroup | 'bills' | 'transfers' | 'people' | 'ignored' | 'in';
-
-/** Where a line sits, for the filter. */
-function placeOf(tx: ClassifiedTx): Place {
-  if (tx.amount > 0 && tx.class !== 'expense' && tx.class !== 'spend') return 'in';
-  switch (tx.class) {
-    case 'spend':
-      return tx.group ?? 'other';
-    case 'unsorted':
-      return 'unsorted';
-    case 'expense':
-      return tx.group ?? 'bills';
-    case 'statement':
-      return 'bills';
-    case 'internal_transfer':
-      return 'transfers';
-    case 'lent':
-      return 'people';
-    case 'ignored':
-      return 'ignored';
-    default:
-      return 'all';
-  }
-}
+type Place = BankPlace;
 
 /**
  * Every line the bank has given, one to a row, to look over and put right: filtered by month and place,
@@ -74,10 +51,11 @@ export function BankPaymentsPage() {
   const rows = classified.filter(
     (tx) =>
       tx.date.startsWith(month) &&
-      (place === 'all' || (place === 'in' ? tx.amount > 0 : placeOf(tx) === place)) &&
+      matchesBankPlace(tx, place) &&
       (!needle || partyLabel(tx, contacts).toLowerCase().includes(needle) || (tx.description ?? '').toLowerCase().includes(needle)),
   );
-  const counted = Math.round(rows.reduce((sum, tx) => sum + spentOf(tx), 0) * 100) / 100;
+  const netSpent = Math.round(rows.reduce((sum, tx) => sum + spentOf(tx), 0) * 100) / 100;
+  const counted = SPEND_GROUPS.includes(place as SpendGroup) ? Math.max(0, netSpent) : netSpent;
   // One row a payee, its lines together, to set where it goes once; money in and statements stay one to a line.
   const payees = byPayee ? toSort(rows, '', contacts, true) : undefined;
 
@@ -93,6 +71,12 @@ export function BankPaymentsPage() {
   ];
 
   const single = (tx: ClassifiedTx): MerchantToSort => ({ key: tx.merchantKey ?? '', label: partyLabel(tx, contacts), count: 1, total: -tx.amount, lastDate: tx.date, lines: [tx] });
+  const contribution = (lines: ClassifiedTx[]) => {
+    if (!SPEND_GROUPS.includes(place as SpendGroup)) return undefined;
+    const amount = lines.reduce((sum, tx) => sum + spentOf(tx), 0);
+    const raw = lines.reduce((sum, tx) => sum - tx.amount, 0);
+    return Math.abs(amount - raw) >= 0.005 ? t.page.contribution(formatMoney(amount, currency)) : undefined;
+  };
   const statusIn = (tx: ClassifiedTx) =>
     tx.class === 'income'
       ? t.page.incomeLabel(plan.income.find((s) => s.id === tx.incomeSourceId)?.name ?? '')
@@ -113,9 +97,10 @@ export function BankPaymentsPage() {
           <Switch checked={byPayee} onChange={setByPayee} description={t.page.byPayee} className="max-sm:col-span-2" />
         </div>
         <p className="tabular mb-1 text-[12.5px] text-muted">{t.page.summary(rows.length, formatMoney(counted, currency))}</p>
+        {place === 'other' && <p className="mb-2 text-[12px] text-muted">{t.page.otherExplained}</p>}
         {rows.length ? (
           <ul className="divide-y divide-line">
-            {payees?.map((m) => <Row key={m.key} merchant={m} onAddBill={expenses.openNew} />)}
+            {payees?.map((m) => <Row key={m.key} merchant={m} onAddBill={expenses.openNew} contribution={contribution(m.lines)} />)}
             {rows.map((tx) =>
               tx.amount > 0 ? (
                 tx.class === 'unsorted' && tx.id ? (
@@ -124,9 +109,9 @@ export function BankPaymentsPage() {
                   <Plain key={tx.id ?? `${tx.date}${tx.amount}`} tx={tx} label={statusIn(tx)} />
                 )
               ) : tx.class === 'statement' ? (
-                <Plain key={tx.id ?? `${tx.date}${tx.amount}`} tx={tx} label={t.page.statement} />
+                <Plain key={tx.id ?? `${tx.date}${tx.amount}`} tx={tx} label={t.page.statement} contribution={contribution([tx])} />
               ) : payees ? null : (
-                <Row key={tx.id ?? `${tx.date}${tx.amount}`} merchant={single(tx)} onAddBill={expenses.openNew} />
+                <Row key={tx.id ?? `${tx.date}${tx.amount}`} merchant={single(tx)} onAddBill={expenses.openNew} contribution={contribution([tx])} />
               ),
             )}
           </ul>
@@ -140,7 +125,7 @@ export function BankPaymentsPage() {
 }
 
 /** A line that is what it is: money in already explained, or a statement sorted line by line elsewhere. */
-function Plain({ tx, label }: { tx: ClassifiedTx; label: string }) {
+function Plain({ tx, label, contribution }: { tx: ClassifiedTx; label: string; contribution?: string }) {
   const currency = useCurrency();
   const contacts = useBankStore((s) => s.contacts);
   return (
@@ -150,6 +135,7 @@ function Plain({ tx, label }: { tx: ClassifiedTx; label: string }) {
         <div className="tabular text-[12px] text-muted">
           {formatDate(tx.date)} · {formatMoney(tx.amount, currency)}
         </div>
+        {contribution && <div className="text-[12px] text-muted">{contribution}</div>}
       </div>
       <span className="shrink-0 text-[12.5px] text-muted">{label}</span>
     </li>
