@@ -1,5 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import clsx from 'clsx';
+import { Link } from 'react-router-dom';
 import { formatMoney, formatPercent } from '@/engine/format';
 import { useT } from '@/i18n';
 import { ACCENT, type Accent } from './accent';
@@ -9,6 +10,8 @@ export interface DonutSlice {
   label: string;
   value: number;
   accent: Accent;
+  /** Optional destination for both the slice and its legend label. */
+  to?: string;
   /** Part of `value` that is set aside for a bill due in a later month; drawn striped at the end of the slice. */
   held?: number;
   /** One line per held item, shown in the tooltip. */
@@ -150,6 +153,18 @@ export function Donut({
   const showTip = interactive && hovered !== undefined && pointer !== null;
   const tipLeft = pointer ? Math.min(Math.max(pointer.x - tipWidth / 2, 0), Math.max(size - tipWidth, 0)) : 0;
   const tipAbove = pointer ? pointer.y < c : false;
+  const linkedSlice = (slice: DonutSlice, shape: ReactNode) => slice.to ? (
+    <Link
+      to={slice.to}
+      aria-label={`${slice.label}${currency ? `: ${formatMoney(slice.value, currency)}` : ''}`}
+      tabIndex={0}
+      onFocus={() => enter(slice.key)}
+      onBlur={clear}
+      className="cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+    >
+      {shape}
+    </Link>
+  ) : shape;
 
   return (
     <div
@@ -158,12 +173,12 @@ export function Donut({
       onMouseMove={interactive ? track : undefined}
       onMouseLeave={interactive ? leaveChart : undefined}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role={data.some((s) => s.to) ? 'group' : 'img'}>
         <StripePatterns id={patternId} accents={stripedAccents} />
         {empty ? (
           <circle cx={c} cy={c} r={(outer + inner) / 2} fill="none" stroke="var(--color-line)" strokeWidth={thickness} />
         ) : sectors.length === 1 && sectors[0].held === 0 ? (
-          <circle
+          linkedSlice(sectors[0], <circle
             cx={c}
             cy={c}
             r={(outer + inner) / 2}
@@ -173,7 +188,7 @@ export function Donut({
             onMouseEnter={interactive ? () => enter(sectors[0].key) : undefined}
             onMouseLeave={interactive ? leaveSlice : undefined}
             style={interactive ? { cursor: 'pointer' } : undefined}
-          />
+          />)
         ) : (
           sectors.map((s) => {
             const dimmed = !!activeKey && activeKey !== s.key;
@@ -199,9 +214,9 @@ export function Donut({
                   transition: 'transform 150ms ease, fill-opacity 150ms ease',
                 }}
               >
-                {parts.map((p, i) => (
+                {linkedSlice(s, parts.map((p, i) => (
                   <path key={i} d={p.d} fill={p.fill} />
-                ))}
+                )))}
               </g>
             );
           })
@@ -334,6 +349,7 @@ export function DonutBreakdown({
         <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1.5">
           {legend.map((s) => {
             const dimmed = activeKey !== null && activeKey !== s.key;
+            const label = <><span className={clsx('h-2.5 w-2.5 shrink-0 rounded-full', ACCENT[s.accent].dot)} />{s.label}</>;
             return (
               <li
                 key={s.key}
@@ -345,8 +361,16 @@ export function DonutBreakdown({
                   dimmed && 'opacity-40',
                 )}
               >
-                <span className={clsx('h-2.5 w-2.5 shrink-0 rounded-full', ACCENT[s.accent].dot)} />
-                {s.label}
+                {s.to ? (
+                  <Link
+                    to={s.to}
+                    onFocus={() => setActiveKey(s.key)}
+                    onBlur={() => setActiveKey(null)}
+                    className="flex items-center gap-1.5 rounded-sm hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-500"
+                  >
+                    {label}
+                  </Link>
+                ) : label}
               </li>
             );
           })}

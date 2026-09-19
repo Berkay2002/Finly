@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import clsx from 'clsx';
 import { formatAmount, formatDate, formatMoney, formatMonthYear, formatMonths, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
+import { monthKeyOf } from '@/engine/metrics';
 import { savingsPots } from '@/engine/savings';
 import type { LumpPayment } from '@/engine/periods';
 import { CATEGORY_META } from '@/engine/taxonomy';
@@ -83,13 +84,15 @@ export function Dashboard() {
     label: CATEGORY_META[c].shortLabel,
     value: m.actuals.byCategory[c],
     accent: CATEGORY_META[c].accent,
+    to: CATEGORY_ROUTE[c],
     held: m.expenses.byCategoryHeld[c],
     notes: m.expenses.lines.filter((l) => l.category === c && l.lump).map((l) => lumpNote(l.name, l.lump!)),
   }));
-  slices.push({ key: 'other', label: messages().everyday.groups.other.label, value: m.actuals.byCategory.other, accent: 'neutral' });
+  slices.push({ key: 'other', label: messages().everyday.groups.other.label, value: m.actuals.byCategory.other, accent: 'neutral', to: `/bank?group=other&month=${monthKeyOf(now)}` });
   if (m.debt.monthly > 0) {
     slices.push({
       key: 'loans',
+      to: '/loans',
       label: d.loans,
       value: m.debt.monthly,
       accent: 'red',
