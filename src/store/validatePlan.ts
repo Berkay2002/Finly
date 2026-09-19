@@ -39,7 +39,7 @@ const income = shape({ ...identity, amount: number, kind: oneOf(INCOME_KINDS.map
 const expense = shape({ ...identity, amount: number, category: oneOf(EXPENSE_CATEGORIES), subcategory: text,
   frequency, fixed: flag, essential: flag, committed: flag, tags: array(text) }, {
   ...common, currency, nextDate: date, includedElsewhere: flag, range, billingLag: number,
-  brandDomain: text, sharedWith: number, sharedBy: array(text),
+  brandDomain: text, icon: text, sharedWith: number, sharedBy: array(text),
   bankMatch: shape({ counterparty: text }, { amount: number }),
   occurrences: shape({ times: number, per: oneOf(['week', 'month', 'year']) }),
   tariff: shape({ part: oneOf(['supply', 'grid']), kwh: number, energyPrice: number, surcharge: number, monthlyFee: number },

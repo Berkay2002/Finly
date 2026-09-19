@@ -10,6 +10,7 @@ export default {
   savings: 'Savings & Goals',
   accounts: 'Accounts',
   loans: 'Loans',
+  bank: 'Bank payments',
   planning: 'Planning Tools',
   insights: 'Insights',
   settings: 'Settings',

@@ -12,6 +12,7 @@ export default {
   savings: 'Sparande & mål',
   accounts: 'Konton',
   loans: 'Lån',
+  bank: 'Bankbetalningar',
   planning: 'Planeringsverktyg',
   insights: 'Insikter',
   settings: 'Inställningar',

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { useT } from "@/i18n";
-import { NAV_ITEMS, SETTINGS_ITEM } from "@/nav";
+import { SETTINGS_ITEM, useNavItems } from "@/nav";
 import { useUiStore } from "@/store/uiStore";
 import { Icon } from "@/components/ui/Icon";
 
@@ -60,8 +60,9 @@ const ROW =
 export function MoreSheet() {
   const open = useUiStore((s) => s.moreOpen);
   const setOpen = useUiStore((s) => s.setMoreOpen);
+  const nav = useNavItems();
   const items = [
-    ...NAV_ITEMS.filter((i) => !["/", "/insights", "/planning"].includes(i.to)),
+    ...nav.filter((i) => !["/", "/insights", "/planning"].includes(i.to)),
     SETTINGS_ITEM,
   ];
   return (

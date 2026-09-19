@@ -1,5 +1,6 @@
 import type { ExpenseCategory } from '@/engine/types';
 import type { IconSource } from '@/components/ui/Icon';
+import { useBankStore } from '@/bank/bankStore';
 import { messages, type Messages } from '@/i18n';
 
 export interface NavItem {
@@ -31,9 +32,16 @@ export const NAV_ITEMS: NavItem[] = [
   item('/savings', 'savings', 'nav-savings'),
   item('/accounts', 'accounts', 'nav-accounts'),
   item('/loans', 'loans', 'stat-bank'),
+  item('/bank', 'bank', 'card-upcoming'),
   item('/planning', 'planning', 'nav-planning'),
   item('/insights', 'insights', 'nav-insights'),
 ];
+
+/** The nav for this device: bank payments only once a bank has given lines. */
+export function useNavItems(): NavItem[] {
+  const hasBank = useBankStore((s) => Object.values(s.txs).some((list) => list.length));
+  return hasBank ? NAV_ITEMS : NAV_ITEMS.filter((i) => i.to !== '/bank');
+}
 
 export const SETTINGS_ITEM: NavItem = item('/settings', 'settings', 'nav-settings');
 

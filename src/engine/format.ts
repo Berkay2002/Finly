@@ -93,6 +93,10 @@ export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   return dateFormat({ day: 'numeric', month: 'short', year: 'numeric' }).format(d);
 }
+/** "Tue 16 Sep", a day heading in a list. */
+export function formatDayHeading(date: string): string {
+  return dateFormat({ weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${date}T12:00:00`));
+}
 /** "14:32". */
 export function formatTime(date: Date | number): string {
   return dateFormat({ hour: '2-digit', minute: '2-digit' }).format(date);

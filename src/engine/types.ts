@@ -222,6 +222,8 @@ export interface ExpenseItem {
   includedElsewhere?: boolean;
   /** Company logo for subscriptions: the brand domain picked from search, rendered by Logo.dev. */
   brandDomain?: string;
+  /** A key of EXPENSE_ICONS chosen by the user; otherwise the icon is guessed from the name. */
+  icon?: string;
   /** How the payment shows up at the bank. Set from the sort sheet; the bank then fills `actuals`. */
   bankMatch?: ExpenseBankMatch;
   /**

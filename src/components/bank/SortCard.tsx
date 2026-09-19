@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useOpenParam } from '@/components/forms/BillsToConfirm';
 import { Link } from 'react-router-dom';
@@ -17,8 +17,10 @@ import { useT } from '@/i18n';
 import { usePlanStore } from '@/store/planStore';
 import { useCurrency, usePlan } from '@/store/selectors';
 import { customDraft, type ExpenseDraft } from '@/components/forms/ExpenseEditor';
+import { ACCENT, type Accent } from '@/components/ui/accent';
 import { Button } from '@/components/ui/Button';
-import { SelectField, Switch } from '@/components/ui/fields';
+import { Chip } from '@/components/ui/Chip';
+import { SelectField } from '@/components/ui/fields';
 import { IconTile } from '@/components/ui/IconTile';
 import { Sheet } from '@/components/ui/Sheet';
 
@@ -158,8 +160,51 @@ export function placed(tx: ClassifiedTx | undefined): Choice | undefined {
   }
 }
 
-export function Row({ merchant, onAddBill, contribution }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void; contribution?: string }) {
+/** The colour a line's avatar takes: its spend group, or what kind of line it is. */
+export function accentOf(tx: ClassifiedTx | undefined): Accent {
+  if (!tx) return 'neutral';
+  if (tx.amount > 0 && tx.class !== 'expense' && tx.class !== 'spend') return 'green';
+  switch (tx.class) {
+    case 'spend':
+      return ({ food: 'green', transport: 'blue', leisure: 'purple', other: 'orange' } as const)[tx.group ?? 'other'];
+    case 'expense':
+    case 'statement':
+      return 'brand';
+    case 'internal_transfer':
+      return 'indigo';
+    case 'lent':
+      return 'lavender';
+    default:
+      return 'neutral';
+  }
+}
+
+/** A payee's initial in a tinted circle, in place of the logo the bank never sends. */
+export function Avatar({ label, accent }: { label: string; accent: Accent }) {
+  const letter = label.replace(/^Swish · /, '').trim().charAt(0).toUpperCase() || '·';
+  return <span className={clsx('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold', ACCENT[accent].tile)}>{letter}</span>;
+}
+
+/** Amount on the right of a row: money in green with its sign, money out plain. */
+export function Amount({ value, currency }: { value: number; currency: string }) {
+  return <span className={clsx('tabular shrink-0 text-[13.5px] font-medium', value > 0 ? 'text-green-500' : 'text-ink')}>{formatMoney(value, currency, { sign: true })}</span>;
+}
+
+/** A small on/off drawn as a chip, one tap to flip. */
+function ToggleChip({ on, onLabel, offLabel, onChange }: { on: boolean; onLabel: string; offLabel: string; onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="press min-w-0 truncate">
+      <Chip tone={on ? 'brand' : 'neutral'} className={clsx('max-w-full truncate ring-1 ring-inset transition-colors', on ? 'ring-brand-200 hover:bg-brand-100' : 'ring-line hover:bg-line hover:text-ink')}>
+        {on ? onLabel : offLabel}
+      </Chip>
+    </button>
+  );
+}
+
+/** One payee (or one line) with where it sits as a chip; the chip is the select, one tap opens the choices. */
+export function Row({ merchant, onAddBill, contribution, showDate = true, cluster = false }: { merchant: MerchantToSort; onAddBill: (draft: ExpenseDraft) => void; contribution?: string; showDate?: boolean; /** A payee for the month: the lines drop down, no date on the row. */ cluster?: boolean }) {
   const plan = usePlan();
+  const [lines, setLines] = useState(false);
   const currency = useCurrency();
   const t = useT().bank.sort;
   const { setMerchantRule, setLineChoice, updateExpense, addExpense } = usePlanStore();
@@ -246,24 +291,40 @@ export function Row({ merchant, onAddBill, contribution }: { merchant: MerchantT
   return (
     <li className="py-2.5">
       <div className="flex items-center gap-3">
+        <Avatar label={merchant.label} accent={accentOf(first)} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-medium text-ink">{merchant.label}</div>
-          <div className="tabular text-[12px] text-muted">
-            <span className="max-sm:hidden">{t.lines(merchant.count, formatDate(merchant.lastDate))}</span>
-            <span className="sm:hidden">
-              {merchant.count > 1 && `${merchant.count}× · `}
-              {formatDate(merchant.lastDate)}
-            </span>{' '}
-            · {formatMoney(merchant.total, currency)}
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+            {cluster || merchant.count > 1 ? (
+              <button type="button" onClick={() => setLines(!lines)} aria-expanded={lines} className="press tabular inline-flex shrink-0 items-center gap-0.5 hover:text-ink">
+                {t.count(merchant.count)}
+                <ChevronDown size={12} className={clsx('transition-transform', lines && 'rotate-180')} />
+              </button>
+            ) : (
+              showDate && <span className="tabular shrink-0">{formatDate(merchant.lastDate)}</span>
+            )}
+            <SelectField chip={current ? 'neutral' : 'brand'} value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="min-w-0" />
+            {!person && <ToggleChip on={ruled ? !remember : remember} onLabel={ruled ? t.thisTimeOnly : t.remember} offLabel={ruled ? t.remember : t.thisTimeOnly} onChange={(v) => setRemember(ruled ? !v : v)} />}
           </div>
         </div>
-        <SelectField size="sm" value={current ?? ('' as Choice)} placeholder={t.thisIs} onValueChange={choose} options={options} className="w-36 shrink-0 sm:w-64" />
+        <Amount value={-merchant.total} currency={currency} />
       </div>
-      {contribution && <p className="mt-1 text-[12px] text-muted">{contribution}</p>}
-      {hint && <p className="mt-1 text-[12px] text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
-      {guessed && <p className="mt-1 text-[12px] text-muted">{t.guessed}</p>}
-      {!person && (
-        <Switch className="mt-1.5" checked={ruled ? !remember : remember} onChange={(v) => setRemember(ruled ? !v : v)} description={ruled ? t.thisTimeOnly : t.remember} />
+      {lines && (
+        <ul className="mt-1 divide-y divide-line pl-12">
+          {[...merchant.lines].sort((a, b) => b.date.localeCompare(a.date)).map((l) => (
+            <li key={l.id ?? `${l.date}${l.amount}`} className="tabular flex items-center justify-between py-1.5 text-[12.5px] text-muted">
+              <span>{formatDate(l.date)}</span>
+              <span>{formatMoney(l.amount, currency)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {(contribution || hint || guessed) && (
+        <div className="mt-1 pl-12 text-[12px]">
+          {contribution && <p className="text-muted">{contribution}</p>}
+          {hint && <p className="text-brand-700">{t.recurring(formatMoney(hint.amount, currency), hint.day)}</p>}
+          {guessed && <p className="text-muted">{t.guessed}</p>}
+        </div>
       )}
     </li>
   );
@@ -276,7 +337,7 @@ const PAYBACK_DAYS = 21;
  * Money in from a person: paying back a purchase (one waiting, or any recent one, which then counts as
  * theirs for this much and yours for the rest), their share of a bill, or nothing to count.
  */
-export function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: ClassifiedTx[]; classified: ClassifiedTx[] }) {
+export function InRow({ tx, lent, classified, showDate = true }: { tx: ClassifiedTx; lent: ClassifiedTx[]; classified: ClassifiedTx[]; showDate?: boolean }) {
   const plan = usePlan();
   const currency = useCurrency();
   const contacts = useBankStore((s) => s.contacts);
@@ -303,27 +364,22 @@ export function InRow({ tx, lent, classified }: { tx: ClassifiedTx; lent: Classi
   return (
     <li className="py-2.5">
       <div className="flex items-center gap-3">
+        <Avatar label={partyLabel(tx, contacts)} accent="green" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-medium text-ink">{partyLabel(tx, contacts)}</div>
-          <div className="tabular text-[12px] text-muted">
-            {formatDate(tx.date)} · {formatMoney(tx.amount, currency)}
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+            {showDate && <span className="tabular shrink-0">{formatDate(tx.date)}</span>}
+            <SelectField chip="brand" value="" placeholder={t.thisIs} onValueChange={choose} options={[
+              ...lent.map((l) => ({ value: `repays:${l.id}`, label: t.paysBack(`${partyLabel(l, contacts)} · ${formatMoney(owedOn(l), currency)}`) })),
+              ...recent.map((p) => ({ value: `paysfor:${p.id}`, label: t.paysBack(`${partyLabel(p, contacts)} · ${formatDate(p.date)} · ${formatMoney(-p.amount, currency)}`) })),
+              ...[...shared, ...plan.expenses.filter((e) => !shared.includes(e))].map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
+              { value: 'ignore', label: t.inIgnore },
+          ]} className="min-w-0" />
+            <ToggleChip on={monthly} onLabel={t.everyMonth} offLabel={t.everyMonth} onChange={setMonthly} />
           </div>
         </div>
-        <SelectField
-          size="sm"
-          value=""
-          placeholder={t.thisIs}
-          onValueChange={choose}
-          options={[
-            ...lent.map((l) => ({ value: `repays:${l.id}`, label: t.paysBack(`${partyLabel(l, contacts)} · ${formatMoney(owedOn(l), currency)}`) })),
-            ...recent.map((p) => ({ value: `paysfor:${p.id}`, label: t.paysBack(`${partyLabel(p, contacts)} · ${formatDate(p.date)} · ${formatMoney(-p.amount, currency)}`) })),
-            ...[...shared, ...plan.expenses.filter((e) => !shared.includes(e))].map((e) => ({ value: `share:${e.id}`, label: t.share(expenseName(e)) })),
-            { value: 'ignore', label: t.inIgnore },
-          ]}
-          className="w-36 shrink-0 sm:w-64"
-        />
+        <Amount value={tx.amount} currency={currency} />
       </div>
-      <Switch className="mt-1.5" checked={monthly} onChange={setMonthly} description={t.everyMonth} />
     </li>
   );
 }

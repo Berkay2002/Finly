@@ -7,6 +7,7 @@ import {
   Cake,
   Car,
   CircleParking,
+  Coins,
   Dumbbell,
   Flame,
   Fuel,
@@ -19,11 +20,13 @@ import {
   Music,
   PawPrint,
   Plane,
+  Receipt,
   Repeat,
   Shirt,
   ShoppingBasket,
   Smartphone,
   Sofa,
+  Sparkles,
   Stethoscope,
   Train,
   Tv,
@@ -102,16 +105,68 @@ const NAME_ICON: [RegExp, LucideIcon][] = [
   [/\btax\b|skatt/i, Landmark],
 ];
 
-/** The most specific icon for an expense: what its name says, then its tag, then its category. */
+/** Line icons for expense rows, one per category; the illustrated set stays out of list rows. */
+const CATEGORY_GLYPH: Record<ExpenseCategory, LucideIcon> = {
+  home: House,
+  living: ShoppingBasket,
+  transport: Car,
+  finance: Coins,
+  leisure: Sparkles,
+  planned: Receipt,
+};
+
+/** Icons a user can pick for an expense. Keys are stored on the item, so keep them stable. */
+export const EXPENSE_ICONS: Record<string, LucideIcon> = {
+  house: House,
+  zap: Zap,
+  flame: Flame,
+  wifi: Wifi,
+  phone: Smartphone,
+  tv: Tv,
+  music: Music,
+  games: Gamepad2,
+  basket: ShoppingBasket,
+  utensils: Utensils,
+  shirt: Shirt,
+  sofa: Sofa,
+  dumbbell: Dumbbell,
+  stethoscope: Stethoscope,
+  sparkles: Sparkles,
+  car: Car,
+  fuel: Fuel,
+  parking: CircleParking,
+  bus: Bus,
+  train: Train,
+  bike: Bike,
+  plane: Plane,
+  hotel: BedDouble,
+  umbrella: Umbrella,
+  landmark: Landmark,
+  coins: Coins,
+  receipt: Receipt,
+  repeat: Repeat,
+  graduation: GraduationCap,
+  book: BookOpen,
+  baby: Baby,
+  paw: PawPrint,
+  gift: Gift,
+  cake: Cake,
+  heart: Heart,
+};
+
+/** The user's pick; otherwise the most specific guess: what the name says, then the tag, then the category. */
 export function expenseIcon(e: {
   name: string;
   category: ExpenseCategory;
   tags?: ExpenseTag[];
-}): IconSource {
+  icon?: string;
+}): LucideIcon {
+  const picked = e.icon ? EXPENSE_ICONS[e.icon] : undefined;
+  if (picked) return picked;
   const byName = NAME_ICON.find(([re]) => re.test(e.name))?.[1];
   if (byName) return byName;
   const byTag = e.tags?.map((t) => TAG_ICON[t]).find(Boolean);
-  return byTag ?? CATEGORY_ICON[e.category];
+  return byTag ?? CATEGORY_GLYPH[e.category];
 }
 
 export const STEP_ICON: Record<OnboardingStep, IconSource> = {

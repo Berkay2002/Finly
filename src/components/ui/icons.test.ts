@@ -1,4 +1,4 @@
-import { Car, Gift, GraduationCap, Umbrella, Utensils, Zap } from 'lucide-react';
+import { Car, Gift, GraduationCap, ShoppingBasket, Sparkles, Umbrella, Utensils, Zap } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 import { expenseIcon } from './icons';
 
@@ -13,10 +13,14 @@ describe('expenseIcon', () => {
   it('falls back to the tag, then the category', () => {
     expect(expenseIcon({ name: 'Volvo', category: 'transport', tags: ['car'] })).toBe(Car);
     expect(expenseIcon({ name: 'Vattenfall', category: 'home', tags: ['utility'] })).toBe(Zap);
-    expect(expenseIcon({ name: 'Something', category: 'leisure', tags: [] })).toBe('nav-leisure');
+    expect(expenseIcon({ name: 'Something', category: 'leisure', tags: [] })).toBe(Sparkles);
+  });
+  it('honours the user pick over the name', () => {
+    expect(expenseIcon({ name: 'Work lunches', category: 'living', icon: 'car' })).toBe(Car);
+    expect(expenseIcon({ name: 'Work lunches', category: 'living', icon: 'gone' })).toBe(Utensils);
   });
   it('does not match inside unrelated words', () => {
-    expect(expenseIcon({ name: 'Medical', category: 'living' })).toBe('nav-living');
+    expect(expenseIcon({ name: 'Medical', category: 'living' })).toBe(ShoppingBasket);
     expect(expenseIcon({ name: 'Elsa daycare', category: 'planned' })).not.toBe(Zap);
   });
 });

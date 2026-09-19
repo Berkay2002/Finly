@@ -152,6 +152,7 @@ export function SelectField<T extends string>({
   size = 'md',
   disabled,
   placeholder,
+  chip,
 }: {
   label?: ReactNode;
   hint?: ReactNode;
@@ -163,6 +164,8 @@ export function SelectField<T extends string>({
   size?: 'sm' | 'md';
   disabled?: boolean;
   placeholder?: string;
+  /** Drawn as a small chip in running text instead of a form field; the list opens the same way. */
+  chip?: 'neutral' | 'brand';
 }) {
   const id = useId();
   const listId = `${id}-listbox`;
@@ -308,17 +311,24 @@ export function SelectField<T extends string>({
         onClick={() => (open ? close() : openList())}
         onKeyDown={onKeyDown}
         className={clsx(
-          fieldBase,
-          'flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:bg-field disabled:text-muted',
-          size === 'sm' ? 'h-9' : 'h-10',
-          open && 'border-brand-500 ring-2 ring-brand-100',
+          chip
+            ? [
+                'press inline-flex max-w-full items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-none ring-1 ring-inset transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-200',
+                chip === 'brand' ? 'bg-brand-50 text-brand-700 ring-brand-200 hover:bg-brand-100' : 'bg-page text-muted ring-line hover:bg-line hover:text-ink',
+              ]
+            : [
+                fieldBase,
+                'flex items-center justify-between gap-2 text-left disabled:cursor-not-allowed disabled:bg-field disabled:text-muted',
+                size === 'sm' ? 'h-9' : 'h-10',
+                open && 'border-brand-500 ring-2 ring-brand-100',
+              ],
           selectClassName,
         )}
       >
-        <span className={clsx('truncate', !selected && 'text-faint')}>{selected?.label ?? placeholder ?? ''}</span>
+        <span className={clsx('truncate', !selected && !chip && 'text-faint')}>{selected?.label ?? placeholder ?? ''}</span>
         <ChevronDown
-          size={15}
-          className={clsx('shrink-0 text-muted transition-transform duration-150', open && 'rotate-180')}
+          size={chip ? 11 : 15}
+          className={clsx('shrink-0 transition-transform duration-150', !chip && 'text-muted', open && 'rotate-180')}
         />
       </button>
       {open &&

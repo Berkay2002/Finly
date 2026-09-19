@@ -1,6 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import clsx from 'clsx';
-import { NAV_ITEMS, SETTINGS_ITEM, type NavItem } from '@/nav';
+import { SETTINGS_ITEM, useNavItems, type NavItem } from '@/nav';
 import { Icon } from '@/components/ui/Icon';
 import { Logo } from './Logo';
 
@@ -32,6 +32,7 @@ function Item({ item }: { item: NavItem }) {
 }
 
 export function Sidebar({ className }: { className?: string }) {
+  const items = useNavItems();
   return (
     <aside
       className={clsx(
@@ -41,7 +42,7 @@ export function Sidebar({ className }: { className?: string }) {
     >
       <Logo className="mb-6 px-2" />
       <nav className="flex-1 space-y-0.5 overflow-y-auto scrollbar-none">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <Item key={item.to} item={item} />
         ))}
       </nav>

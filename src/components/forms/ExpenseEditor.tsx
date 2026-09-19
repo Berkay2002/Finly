@@ -85,7 +85,8 @@ import { PASS_THROUGH_LABEL, passThroughBrand } from "@/engine/merchants";
 import { Button } from "@/components/ui/Button";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { Chip } from "@/components/ui/Chip";
-import { expenseIcon } from "@/components/ui/icons";
+import { EXPENSE_ICONS, expenseIcon } from "@/components/ui/icons";
+import { Icon } from "@/components/ui/Icon";
 import {
   CountField,
   DateField,
@@ -863,6 +864,27 @@ function ExpenseDetailForm({
           onPick={(brandDomain) => set({ brandDomain })}
         />
       )}
+      <div>
+        <div className="mb-1.5 text-[12.5px] font-medium text-ink-soft">{tf.icon}</div>
+        <div className="flex flex-wrap gap-1">
+          {Object.entries(EXPENSE_ICONS).map(([key, glyph]) => {
+            const active = key === draft.icon || (!draft.icon && glyph === expenseIcon(draft));
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => set({ icon: key === draft.icon ? undefined : key })}
+                className={clsx(
+                  "inline-flex h-9 w-9 items-center justify-center rounded-lg border transition",
+                  active ? "border-brand-500 text-brand-600" : "border-transparent text-ink-soft hover:border-line-strong",
+                )}
+              >
+                <Icon icon={glyph} size={20} strokeWidth={1.6} />
+              </button>
+            );
+          })}
+        </div>
+      </div>
       <SelectField
         label={tf.paidVia}
         hint={tf.paidViaHint}

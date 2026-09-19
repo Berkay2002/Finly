@@ -5,6 +5,7 @@ interface UiState {
   /** First day of the month being viewed. */
   viewMonth: Date;
   shiftMonth: (delta: number) => void;
+  setViewMonth: (month: Date) => void;
   resetMonth: () => void;
   moreOpen: boolean;
   setMoreOpen: (open: boolean) => void;
@@ -15,6 +16,7 @@ interface UiState {
 export const useUiStore = create<UiState>()((set) => ({
   viewMonth: startOfMonth(new Date()),
   shiftMonth: (delta) => set((s) => ({ viewMonth: addMonths(s.viewMonth, delta) })),
+  setViewMonth: (viewMonth) => set({ viewMonth: startOfMonth(viewMonth) }),
   resetMonth: () => set({ viewMonth: startOfMonth(new Date()) }),
   moreOpen: false,
   setMoreOpen: (moreOpen) => set({ moreOpen }),

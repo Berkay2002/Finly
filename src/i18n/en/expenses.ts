@@ -65,6 +65,7 @@ export default {
     category: 'Category',
     categoryHint: '(which page it lives on)',
     name: 'Name',
+    icon: 'Icon',
     brandLogo: 'Company logo',
     brandLogoHint: '(shown next to subscriptions)',
     brandGuess: 'Best guess from the name',

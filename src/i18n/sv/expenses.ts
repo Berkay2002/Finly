@@ -88,6 +88,7 @@ export default {
     category: 'Kategori',
     categoryHint: '(vilken sida den hamnar på)',
     name: 'Namn',
+    icon: 'Ikon',
     brandLogo: 'Företagslogotyp',
     brandLogoHint: '(visas bredvid prenumerationer)',
     brandGuess: 'Bästa gissning från namnet',
