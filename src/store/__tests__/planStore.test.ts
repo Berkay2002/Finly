@@ -80,7 +80,7 @@ describe('snapshots', () => {
     usePlanStore.getState().saveSnapshot('2026-08', NOW);
     usePlanStore.getState().saveSnapshot('2026-09', NOW);
     const { snapshots } = usePlanStore.getState();
-    expect(snapshots['2026-08'].safeToSpend).toBeCloseTo(snapshots['2026-09'].safeToSpend - 1500 - 1500 / 12, 5);
+    expect(snapshots['2026-08'].safeToSpend).toBeCloseTo(snapshots['2026-09'].safeToSpend - 1500, 5);
   });
 
   it('closes due months once', () => {
@@ -178,6 +178,32 @@ describe('snapshots', () => {
 });
 
 describe('plan files', () => {
+  it.each([
+    { expenses: [{ id: 'broken', name: 'Broken', amount: 100, frequency: 'monthly', category: 'living' }] },
+    { expenses: [null] },
+    { accounts: [{ id: 'a', name: 'Account', kind: 'invalid', balance: 100 }] },
+    { income: [{ id: 'i', name: 'Income', amount: '1000' }] },
+    { onboarding: { completed: true, completedSteps: null } },
+    { bank: { provider: 'p', appId: 'x', sessions: null } },
+  ])('rejects malformed data before replacing a working plan: %j', (patch) => {
+    const initial = prdExamplePlan();
+    usePlanStore.setState({ plan: initial });
+    expect(() => {
+      const data = parsePlanFile(JSON.stringify({ ...initial, ...patch }));
+      usePlanStore.getState().importPlan(data);
+    }).toThrow('Not a Finly plan file');
+    expect(usePlanStore.getState().plan).toBe(initial);
+  });
+
+  it('rejects invalid dates and non-finite amounts', () => {
+    const plan = prdExamplePlan();
+    plan.expenses[0].nextDate = '2026-02-30';
+    expect(() => parsePlan(plan)).toThrow();
+    delete plan.expenses[0].nextDate;
+    plan.income[0].amount = Infinity;
+    expect(() => parsePlan(plan)).toThrow();
+  });
+
   it('round-trips a v2 file with its snapshots', () => {
     const plan = prdExamplePlan();
     usePlanStore.setState({ plan });
@@ -195,6 +221,13 @@ describe('plan files', () => {
     const parsed = parsePlanFile(JSON.stringify(prdExamplePlan()));
     expect(parsed.plan.userName).toBe('Test');
     expect(parsed.snapshots).toEqual({});
+  });
+
+  it('round-trips a plan with saved scenarios and investment holdings', () => {
+    const plan = prdExamplePlan();
+    plan.scenarios = [{ id: 's', name: 'Car', tool: 'car', values: { price: 100000 }, savedAt: NOW.toISOString() }];
+    plan.accounts[3].holdings = [{ id: 'h', orderbookId: '123', name: 'Fund', type: 'fund', currency: 'SEK', quantity: 5, avgPrice: 100, price: 110, priceAt: NOW.toISOString() }];
+    expect(parsePlanFile(serializePlanFile({ plan, snapshots: {} })).plan).toEqual(plan);
   });
 
   it('drops malformed snapshot entries and rejects other JSON', () => {

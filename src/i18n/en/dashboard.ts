@@ -15,8 +15,8 @@ export default {
   loans: 'Loans',
   stats: {
     safeToSpend: 'Safe to spend',
-    billsAbovePlan: (amount: string) => `Bills ${amount} above plan`,
-    billsBelowPlan: (amount: string) => `Bills ${amount} below plan`,
+    billsAbovePlan: (amount: string) => `Spending ${amount} above plan`,
+    billsBelowPlan: (amount: string) => `Spending ${amount} below plan`,
     downTo: (amount: string) => `As low as ${amount}`,
     afterOneOffs: (amount: string) => `After ${amount} one-offs`,
     availableThisMonth: 'Available this month',

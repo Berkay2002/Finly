@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { formatCompact, formatMoney, formatPercent, formatShortMonth, formatShortMonthYear } from '@/engine/format';
 import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useMetrics, usePreviousMonth, usePreviousSnapshot, useSavingsProjection } from '@/store/selectors';
+import { useCurrency, useEffectivePlan, useMetrics, usePreviousMonth, usePreviousSnapshot, useSavingsProjection } from '@/store/selectors';
 import { GoalEditor } from '@/components/forms/GoalEditor';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Callout } from '@/components/ui/Callout';
@@ -16,6 +16,7 @@ import { StatGrid } from '@/components/ui/StatGrid';
 
 export function SavingsPage() {
   const m = useMetrics();
+  const shown = useEffectivePlan();
   const currency = useCurrency();
   const prev = usePreviousMonth();
   const closed = usePreviousSnapshot();
@@ -69,7 +70,7 @@ export function SavingsPage() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         <Card>
           <CardHeader icon={<IconTile icon="card-goals" accent="brand" size="sm" />} title={t.yourGoals} subtitle={t.yourGoalsSubtitle} />
-          <GoalEditor autoOpenAdd={autoAdd} previous={closed && { ...closed.byAccount, ...closed.byGoal }} />
+          <GoalEditor displayPlan={shown} autoOpenAdd={autoAdd} previous={closed && { ...closed.byAccount, ...closed.byGoal }} />
         </Card>
 
         <div className="space-y-4 self-start">

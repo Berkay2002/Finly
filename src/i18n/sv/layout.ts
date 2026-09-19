@@ -48,6 +48,8 @@ export default {
     later: 'Senare',
   },
   frozenMonth: {
+    projectedTitle: (month) => `Prognos för ${month}`,
+    projectedBody: 'Saldon inkluderar planerat sparande och pengar som blir över. Det här är uppskattningar, inte banksaldon. Ändringar gäller din nuvarande plan.',
     title: (month, closedOn) => `Så såg ${month} ut när den stängdes ${closedOn}`,
     back: 'Tillbaka till den här månaden',
     body: 'Ändringar av inkomster, kostnader och saldon gäller din nuvarande plan. Räkningsbelopp du fyller i här hör till den här månaden.',

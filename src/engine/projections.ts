@@ -1,4 +1,4 @@
-import { addMonths, differenceInCalendarMonths, startOfMonth } from 'date-fns';
+import { addMonths, differenceInCalendarMonths, startOfDay, startOfMonth } from 'date-fns';
 import { messages } from '@/i18n';
 import { amountSpread } from './amounts';
 import { debtFlow, debtSchedule } from './debts';
@@ -68,8 +68,8 @@ export function upcomingExpenses(
 ): UpcomingExpense[] {
   // Rates ahead are unknown: a payment in another currency is priced at the latest rate.
   const plan = inPlanCurrency(source, monthKeyOf(now));
-  const start = startOfMonth(now);
-  const end = addMonths(start, horizonMonths);
+  const start = startOfDay(now);
+  const end = addMonths(startOfMonth(now), horizonMonths);
   const out: UpcomingExpense[] = [];
 
   for (const e of activeExpenses(plan)) {
@@ -80,7 +80,7 @@ export function upcomingExpenses(
     if (!date) {
       // Undated recurring items: treat as due one period from now.
       if (e.frequency === 'once') continue;
-      date = addMonths(start, step ?? 12);
+      date = addMonths(startOfMonth(now), step ?? 12);
     }
 
     // Roll forward past occurrences.
@@ -116,7 +116,7 @@ export function upcomingExpenses(
     const monthly = debtFlow(d).monthly;
     if (monthly <= 0) continue;
     const step = d.frequency === 'quarterly' ? 3 : 12;
-    const first = d.nextDate ? parseIso(d.nextDate) : addMonths(start, step);
+    const first = d.nextDate ? parseIso(d.nextDate) : addMonths(startOfMonth(now), step);
     // Step from the first date each time so a month-end due date does not drift (30 Nov → 28 Feb → 28 May).
     let k = 0;
     while (addMonths(first, k * step) < start) k += 1;
@@ -139,7 +139,7 @@ export function upcomingExpenses(
   }
 
   for (const t of savingsTaxDue(plan, now, gov)) {
-    if (t.date >= end) continue;
+    if (t.date < start || t.date >= end) continue;
     out.push({
       id: `${SAVINGS_TAX_ID}-${t.year}`,
       source: 'tax',
@@ -179,7 +179,8 @@ export function monthOutlook(
   gov?: GovBondRate,
 ): MonthOutlook[] {
   const start = startOfMonth(now);
-  const upcoming = upcomingExpenses(plan, now, horizonMonths, gov);
+  // A month total includes dates already passed; the upcoming list starts today.
+  const upcoming = upcomingExpenses(plan, start, horizonMonths, gov);
   const irregularIds = new Set(
     activeExpenses(plan)
       .filter((e) => isIrregular(e.frequency, e.occurrences))

@@ -3,7 +3,7 @@ import { formatMoney, formatMonths, formatPercent } from '@/engine/format';
 import { holdingsGain } from '@/engine/holdings';
 import { useT } from '@/i18n';
 import { useAutoAdd } from '@/lib/useAutoAdd';
-import { useCurrency, useEffectivePlan, useExpectedReturns, useMetrics, usePreviousMonth, usePreviousSnapshot } from '@/store/selectors';
+import { monthKey, useCurrency, useEffectivePlan, useExpectedReturns, useMetrics, usePreviousMonth, usePreviousSnapshot, useViewMonthKey } from '@/store/selectors';
 import { AccountEditor } from '@/components/forms/AccountEditor';
 import { SavingsTaxStrip } from '@/components/forms/SavingsTax';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -16,6 +16,7 @@ import { StatGrid } from '@/components/ui/StatGrid';
 
 export function AccountsPage() {
   const plan = useEffectivePlan();
+  const readOnlyBalances = useViewMonthKey() !== monthKey(new Date());
   const m = useMetrics();
   const currency = useCurrency();
   const prev = usePreviousMonth();
@@ -104,7 +105,7 @@ export function AccountsPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader title={t.yourAccounts} subtitle={t.yourAccountsSubtitle} />
-            <AccountEditor autoOpenAdd={autoAdd} previous={closed?.byAccount} linkInvestments />
+            <AccountEditor displayAccounts={plan.accounts} readOnlyBalances={readOnlyBalances} autoOpenAdd={autoAdd} previous={closed?.byAccount} linkInvestments />
           </Card>
 
           <SavingsTaxStrip />

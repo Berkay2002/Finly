@@ -184,8 +184,8 @@ export interface PlanMetrics {
   /** PRD §18.24 / §18.12 — income minus lifestyle minus savings. */
   breathingRoom: number;
   /**
-   * PRD §18.1 — breathing room minus one-off costs dated in the current month, adjusted by
-   * how far confirmed bills landed from their estimates.
+   * PRD §18.1 — income less savings and the month's costs. One-offs replace their
+   * monthly provision, and recorded overspending reduces the money still available.
    */
   safeToSpend: number;
   oneOffsThisMonth: number;
@@ -485,10 +485,13 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
     if (g_.month.complete) {
       for (const id of g_.itemIds) loggedIds.add(id);
       everydayVariance += g_.month.variance ?? 0;
-    } else if (g_.month.spent !== undefined && spendEntryFor(plan.everydaySpend?.[g], month)?.source === 'bank') {
+    } else if (g_.month.spent !== undefined) {
+      const fromBank = spendEntryFor(plan.everydaySpend?.[g], month)?.source === 'bank';
       const maybe = sum(g_.itemIds.map((id) => byId.get(id)).map((l) => (l?.varies && l.monthlyLow === 0 ? l.monthly : 0)));
-      // A group planned at nothing (other) is over plan from its first line.
-      if (maybe > 0 || g_.month.planned === 0) everydayVariance += everydayNow[g] = Math.max(0, g_.month.spent - (g_.month.planned - maybe)) - maybe;
+      // Keep the unspent budget reserved, but never hide spending already above it.
+      // Only a bank-fed group can release the estimate for an optional zero-minimum item.
+      const reserve = fromBank ? maybe : 0;
+      everydayVariance += everydayNow[g] = Math.max(0, g_.month.spent - (g_.month.planned - reserve)) - reserve;
     }
   }
   const confirmed: ActualLine[] = [];
@@ -513,16 +516,25 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const actualByCategory = { ...byCategory };
   for (const l of confirmed) actualByCategory[l.category] += l.variance;
   for (const l of nothingYet) actualByCategory[l.category] -= l.monthly;
+  let oneOffAdjustment = 0;
+  let oneOffLowAdjustment = 0;
+  let oneOffHighAdjustment = 0;
   for (const e of active) {
-    if (e.frequency === 'once' && isDatedInMonth(e.nextDate, now)) actualByCategory[e.category] += typicalAmount(e) - (byId.get(e.id)?.monthly ?? 0);
+    if (e.frequency !== 'once' || !isDatedInMonth(e.nextDate, now)) continue;
+    const line = byId.get(e.id);
+    const adjustment = typicalAmount(e) - (line?.monthly ?? 0);
+    actualByCategory[e.category] += adjustment;
+    oneOffAdjustment += adjustment;
+    oneOffLowAdjustment += typicalAmount(e) - (line?.monthlyLow ?? 0);
+    oneOffHighAdjustment += typicalAmount(e) - (line?.monthlyHigh ?? 0);
   }
   for (const g of SPEND_GROUPS) {
     actualByCategory[SPEND_GROUP_META[g].category] += everyday[g].month.complete ? (everyday[g].month.variance ?? 0) : (everydayNow[g] ?? 0);
   }
-  const monthLifestyle = expenseTotal + debtMonthly + actualVariance;
+  const monthLifestyle = expenseTotal + debtMonthly + actualVariance + oneOffAdjustment;
   const monthLifestyleRange: Range = withDebt({
-    low: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance,
-    high: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance,
+    low: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyLow))) + actualVariance + oneOffLowAdjustment,
+    high: sum(costed.map((l) => (confirmedIds.has(l.id) ? l.monthly : l.monthlyHigh))) + actualVariance + oneOffHighAdjustment,
   });
 
   /* Savings */
@@ -540,14 +552,14 @@ export function computeMetrics(source: FinancialPlan, now: Date = new Date(), go
   const oneOffsThisMonth = sum(
     active.filter((e) => e.frequency === 'once' && isDatedInMonth(e.nextDate, now)).map(typicalAmount),
   );
-  const safeToSpend = breathingRoom - oneOffsThisMonth - actualVariance;
+  const safeToSpend = totalIncome - savingsTotal - monthLifestyle;
   const breathingRoomRange: Range = {
     low: totalIncome - savingsTotal - lifestyleRange.high,
     high: totalIncome - savingsTotal - lifestyleRange.low,
   };
   const safeToSpendRange: Range = {
-    low: totalIncome - savingsTotal - monthLifestyleRange.high - oneOffsThisMonth,
-    high: totalIncome - savingsTotal - monthLifestyleRange.low - oneOffsThisMonth,
+    low: totalIncome - savingsTotal - monthLifestyleRange.high,
+    high: totalIncome - savingsTotal - monthLifestyleRange.low,
   };
 
   /* Position */

@@ -319,12 +319,6 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     if (item) applyRule(tx, { expenseId: item.id });
     else if (group) applyRule(tx, { group });
   }
-  // A line placed on an everyday item (groceries, restaurants) is that group's spending too: the group total is what the month runs on.
-  const groupOfItem = new Map(expenses.map((e) => [e.id, spendGroupOf(e)]));
-  for (const tx of booked) {
-    const g = tx.class === 'expense' && tx.expenseId ? groupOfItem.get(tx.expenseId) : undefined;
-    if (g) tx.group = g;
-  }
   splitStatements(statements, expenses);
   // A transfer into savings is the pot whose monthly amount it is, when that is one pot; the account's place breaks a tie.
   const pots = savingsPots({ accounts: plan.accounts ?? [], goals: plan.goals ?? [] });
@@ -346,7 +340,7 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
     if (tx.amount <= 0 || tx.class !== 'unsorted') continue;
     const line = tx.id ? plan.bank?.lines?.[tx.id] : undefined;
     const rule = plan.bank?.merchants?.[tx.merchantKey!];
-    if (line && 'expenseId' in line) applyRule(tx, line);
+    if (line && ('expenseId' in line || 'group' in line)) applyRule(tx, line);
     else if (line && 'action' in line) tx.class = 'ignored';
     else if (line && 'repays' in line) {
       const lent = lentById.get(line.repays);
@@ -384,6 +378,13 @@ export function classifyTransactions(txs: BankTx[], plan: ClassifyPlan, own: Own
       count(tx, e.id);
     }
   }
+  // Apply after both money-out and money-in rules: refunds and shared grocery payments
+  // belong to the same group as the purchase they reduce.
+  const groupOfItem = new Map(expenses.map((e) => [e.id, spendGroupOf(e)]));
+  for (const tx of booked) {
+    const g = tx.class === 'expense' && tx.expenseId ? groupOfItem.get(tx.expenseId) : undefined;
+    if (g) tx.group = g;
+  }
   return out;
 }
 
@@ -414,7 +415,8 @@ export function spendGroupOfTx(tx: ClassifiedTx): SpendGroup | undefined {
  * they give up on it; a statement for what no subscription explains; anything else in full.
  */
 export function spentOf(tx: ClassifiedTx): number {
-  if (tx.amount >= 0) return 0;
+  if (tx.pending || tx.class === 'income' || tx.class === 'internal_transfer' || tx.class === 'ignored') return 0;
+  if (tx.amount >= 0) return tx.class === 'expense' || tx.class === 'spend' ? -tx.amount : 0;
   return tx.class === 'lent' ? (tx.settled ? Math.max(0, -tx.amount - (tx.repaid ?? 0)) : (tx.mine ?? 0)) : tx.class === 'statement' ? (tx.remainder ?? 0) : -tx.amount;
 }
 
@@ -427,14 +429,19 @@ export function spendByMonth(classified: ClassifiedTx[], today: Date): Record<Sp
   const thisMonth = monthKeyOf(today);
   const asOf = `${thisMonth}-${String(today.getDate()).padStart(2, '0')}`;
   for (const tx of classified) {
-    if (tx.pending || tx.amount >= 0) continue;
+    if (tx.pending) continue;
     const group = spendGroupOfTx(tx);
     if (!group) continue;
     const spent = spentOf(tx);
-    if (spent <= 0) continue;
+    if (spent === 0) continue;
     const month = tx.date.slice(0, 7);
     const entry = (out[group][month] ??= { amount: 0, source: 'bank', ...(month === thisMonth ? { asOf } : {}) });
     entry.amount = round2(entry.amount + spent);
+  }
+  // A refund from an older month can exceed this month's purchases. Keep a zero
+  // entry so reconciliation clears earlier spending without inventing negative consumption.
+  for (const months of Object.values(out)) {
+    for (const entry of Object.values(months)) entry.amount = Math.max(0, entry.amount);
   }
   return out;
 }

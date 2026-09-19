@@ -46,6 +46,8 @@ export default {
     later: 'Later',
   },
   frozenMonth: {
+    projectedTitle: (month: string) => `Projection for ${month}`,
+    projectedBody: 'Balances include planned saving and leftover income. These are estimates, not bank balances. Editing an item changes your current plan.',
     title: (month: string, closedOn: string) => `${month} as it was closed on ${closedOn}`,
     back: 'Back to this month',
     body: 'Edits to income, costs and balances apply to your current plan. Bill amounts you enter here stay with this month.',

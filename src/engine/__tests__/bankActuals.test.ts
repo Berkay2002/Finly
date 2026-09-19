@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, lentTotal, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, toSort, type BankTx, type OwnAccount } from '../bankActuals';
+import { billsByMonth, classifyTransactions, incomeMonthOf, incomeStatus, lentOut, lentTotal, mergeWindow, partyLabel, receivedByMonth, recurringHint, spendByMonth, spentOf, toSort, type BankTx, type OwnAccount } from '../bankActuals';
 import { freezePlan } from '../history';
 import { computeMetrics } from '../metrics';
 import type { IncomeSource } from '../types';
@@ -82,6 +82,28 @@ describe('internal transfers', () => {
 });
 
 describe('money out', () => {
+  it('nets a refund assigned to groceries against purchases, regardless of transaction order', () => {
+    const plan = prdExamplePlan();
+    plan.expenses = [expense({ id: 'food', name: 'Groceries', subcategory: 'groceries', amount: 4000 })];
+    plan.bank = { provider: 'p', appId: 'x', sessions: [], lines: { refund: { expenseId: 'food' }, buy: { expenseId: 'food' } } };
+    const lines = [tx({ id: 'refund', amount: 1000, date: '2026-09-13' }), tx({ id: 'buy', amount: -1000, date: '2026-09-12' })];
+    for (const input of [lines, [...lines].reverse()]) {
+      const classified = classifyTransactions(input, plan, OWN);
+      expect(classified.every((t) => t.group === 'food')).toBe(true);
+      expect(spendByMonth(classified, NOW).food['2026-09'].amount).toBe(0);
+      expect(classified.reduce((sum, t) => sum + spentOf(t), 0)).toBe(0);
+    }
+  });
+
+  it('counts only consumption in the bank page total', () => {
+    const base = tx({ amount: -500, date: '2026-09-12' });
+    expect(spentOf({ ...base, class: 'internal_transfer' })).toBe(0);
+    expect(spentOf({ ...base, class: 'ignored' })).toBe(0);
+    expect(spentOf({ ...base, class: 'unsorted' })).toBe(500);
+    expect(spentOf({ ...base, class: 'spend', pending: true })).toBe(0);
+    expect(spentOf({ ...base, amount: 500, class: 'unsorted' })).toBe(0);
+  });
+
   const fortum = expense({ id: 'el', name: 'Fortum el', amount: 900, fixed: false });
   const spotify = expense({ id: 'spotify', name: 'Spotify', amount: 129, fixed: true, bankMatch: { counterparty: 'K*KLARNA', amount: 129 } });
   const plan = (extra: Partial<ReturnType<typeof prdExamplePlan>> = {}) => ({ income: [], expenses: [fortum, spotify], ...extra });

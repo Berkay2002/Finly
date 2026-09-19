@@ -19,7 +19,7 @@ type Place = 'all' | 'unsorted' | SpendGroup | 'bills' | 'transfers' | 'people' 
 
 /** Where a line sits, for the filter. */
 function placeOf(tx: ClassifiedTx): Place {
-  if (tx.amount > 0) return 'in';
+  if (tx.amount > 0 && tx.class !== 'expense' && tx.class !== 'spend') return 'in';
   switch (tx.class) {
     case 'spend':
       return tx.group ?? 'other';
@@ -74,7 +74,7 @@ export function BankPaymentsPage() {
   const rows = classified.filter(
     (tx) =>
       tx.date.startsWith(month) &&
-      (place === 'all' || placeOf(tx) === place) &&
+      (place === 'all' || (place === 'in' ? tx.amount > 0 : placeOf(tx) === place)) &&
       (!needle || partyLabel(tx, contacts).toLowerCase().includes(needle) || (tx.description ?? '').toLowerCase().includes(needle)),
   );
   const counted = Math.round(rows.reduce((sum, tx) => sum + spentOf(tx), 0) * 100) / 100;

@@ -33,6 +33,7 @@ import type {
 } from '@/engine/types';
 import { emptyPlan } from '@/engine/types';
 import { samplePlan } from './sampleData';
+import { validPlan } from './validatePlan';
 
 export type { MetricsSnapshot, SnapshotMap } from '@/engine/history';
 
@@ -542,7 +543,7 @@ export function applyPotDraft(plan: FinancialPlan, draft: PotDraft, newGoalId: (
 /** Normalises a parsed v1 plan object; throws when it is not one. */
 export function parsePlan(input: unknown): FinancialPlan {
   const raw = input as Partial<FinancialPlan> | null;
-  if (!raw || typeof raw !== 'object' || raw.version !== 1 || !Array.isArray(raw.income)) {
+  if (!raw || !validPlan(raw)) {
     throw new Error(messages().settings.notPlanFile);
   }
   const base = emptyPlan();

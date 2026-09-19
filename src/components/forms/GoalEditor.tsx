@@ -2,12 +2,12 @@ import { ChevronRight, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { formatDuration, formatMoney, formatNumber, formatPercent } from '@/engine/format';
+import { formatDate, formatDuration, formatMoney, formatNumber, formatPercent } from '@/engine/format';
 import { goalProgress, goalReturn } from '@/engine/projections';
 import { goalForAccount, isSavingsAccount, savingsPots } from '@/engine/savings';
 import { wrapperOf } from '@/engine/tax/capital';
 import { GOAL_KINDS, goalKindMeta } from '@/engine/taxonomy';
-import type { GoalKind, SavingsPurpose } from '@/engine/types';
+import type { FinancialPlan, GoalKind, SavingsPurpose } from '@/engine/types';
 import { useT } from '@/i18n';
 import { usePlanStore, type PotDraft } from '@/store/planStore';
 import { useAccountReturns, useCurrency, usePlan, useViewDate } from '@/store/selectors';
@@ -40,11 +40,13 @@ export function GoalEditor({
   autoOpenAdd = false,
   compact = false,
   previous,
+  displayPlan,
 }: {
   autoOpenAdd?: boolean;
   compact?: boolean;
   /** Amounts saved at the previous month's close, by goal id, for a "vs last month" hint per row. */
   previous?: Record<string, number>;
+  displayPlan?: FinancialPlan;
 }) {
   const plan = usePlan();
   const currency = useCurrency();
@@ -53,8 +55,9 @@ export function GoalEditor({
   const { saveSavingsPot, removeGoal } = usePlanStore();
   const [editing, setEditing] = useState<Draft | null>(null);
   const t = useT().goals.editor;
-  const pots = savingsPots(plan);
-  const accountName = new Map(plan.accounts.map((a) => [a.id, a.name]));
+  const pots = savingsPots(displayPlan ?? plan);
+  const livePots = savingsPots(plan);
+  const accountName = new Map((displayPlan ?? plan).accounts.map((a) => [a.id, a.name]));
 
   useEffect(() => {
     if (autoOpenAdd) setEditing(blankGoal());
@@ -87,7 +90,8 @@ export function GoalEditor({
             <button
               key={g.id}
               type="button"
-              onClick={() => setEditing({ ...g })}
+              disabled={!livePots.some((live) => live.id === g.id)}
+              onClick={() => setEditing({ ...livePots.find((live) => live.id === g.id)! })}
               className="card flex w-full items-center gap-3 p-3.5 text-left transition hover:border-line-strong sm:gap-4"
             >
               <IconTile icon={Icon} accent={goalAccent(g.icon, g.kind)} />
@@ -114,6 +118,13 @@ export function GoalEditor({
                   </span>
                   {previous && <Delta before={previous[g.id]} after={g.currentAmount} />}
                 </div>
+                {g.targetDate && p.requiredMonthly !== null && (
+                  <div className={clsx('mt-1 text-[12px]', p.onTrack ? 'text-muted' : 'text-warning')}>
+                    {p.onTrack
+                      ? t.onTrackFor(formatDate(`${g.targetDate}T00:00:00`))
+                      : t.requiredFor(formatMoney(p.requiredMonthly, currency), formatDate(`${g.targetDate}T00:00:00`))}
+                  </div>
+                )}
               </div>
               <div className="hidden shrink-0 border-l border-line pl-4 text-right sm:block">
                 <div className="text-[11.5px] text-muted">{t.monthly}</div>

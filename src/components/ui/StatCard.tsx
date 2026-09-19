@@ -47,7 +47,7 @@ export function StatCard({
     <Tag
       onClick={onClick}
       className={clsx(
-        // On a phone the foot line runs under the icon for the full card width; nothing here ever wraps.
+        // On a phone the label and foot use the full width, with icon and value between them.
         "card p-4 text-left max-sm:grid max-sm:grid-cols-[auto_1fr] max-sm:items-center max-sm:gap-x-2 sm:flex sm:gap-3",
         onClick && "transition hover:border-line-strong",
         compact ? "sm:flex-col sm:items-start" : "sm:flex-row sm:items-center",
@@ -58,19 +58,19 @@ export function StatCard({
         <Icon
           icon={icon}
           size={compact ? 40 : 44}
-          className="-ml-1 max-sm:row-span-2 max-sm:ml-0 max-sm:h-9! max-sm:w-9!"
+          className="-ml-1 max-sm:row-start-2 max-sm:ml-0 max-sm:h-9! max-sm:w-9!"
         />
       ) : (
         <IconTile
           icon={icon}
           accent={accent}
           size={compact ? "sm" : "md"}
-          className="max-sm:row-span-2 max-sm:h-9 max-sm:w-9"
+          className="max-sm:row-start-2 max-sm:h-9 max-sm:w-9"
         />
       )}
       <div className="min-w-0 max-sm:contents">
-        <div className="truncate text-[12.5px] text-muted">{label}</div>
-        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 max-sm:min-w-0">
+        <div className="truncate text-[12.5px] text-muted max-sm:col-span-2 max-sm:row-start-1 max-sm:whitespace-normal">{label}</div>
+        <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 max-sm:row-start-2 max-sm:min-w-0">
           <span className="tabular whitespace-nowrap text-[16px] font-semibold leading-tight text-ink sm:text-[20px]">
             {value}
           </span>

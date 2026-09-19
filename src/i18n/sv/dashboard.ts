@@ -17,8 +17,8 @@ export default {
   loans: 'Lån',
   stats: {
     safeToSpend: 'Kvar att spendera',
-    billsAbovePlan: (amount) => `Räkningar ${amount} över plan`,
-    billsBelowPlan: (amount) => `Räkningar ${amount} under plan`,
+    billsAbovePlan: (amount) => `Utgifter ${amount} över plan`,
+    billsBelowPlan: (amount) => `Utgifter ${amount} under plan`,
     downTo: (amount) => `Lägst ${amount}`,
     afterOneOffs: (amount) => `Efter ${amount} engångskostnader`,
     availableThisMonth: 'Tillgängligt denna månad',

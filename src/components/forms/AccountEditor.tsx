@@ -36,14 +36,20 @@ export function AccountEditor({
   autoOpenAdd = false,
   previous,
   linkInvestments = false,
+  displayAccounts,
+  readOnlyBalances = false,
 }: {
   autoOpenAdd?: boolean;
   /** Balances at the previous month's close, by account id, for a "vs last month" hint per row. */
   previous?: Record<string, number>;
   /** Open ISK, KF and AF accounts on their own page (with holdings) instead of the edit sheet. */
   linkInvestments?: boolean;
+  /** Frozen or projected balances for the selected month; edits always start from the live account. */
+  displayAccounts?: Account[];
+  readOnlyBalances?: boolean;
 }) {
   const plan = usePlan();
+  const accounts = displayAccounts ?? plan.accounts;
   const currency = useCurrency();
   const navigate = useNavigate();
   const { updateAccount, removeAccount } = usePlanStore();
@@ -61,7 +67,7 @@ export function AccountEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12.5px] text-muted">
-          {plan.accounts.length === 0 ? t.noAccounts : t.accountCount(plan.accounts.length)}
+          {accounts.length === 0 ? t.noAccounts : t.accountCount(accounts.length)}
         </p>
         <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing(blank())}>
           {t.addAccount}
@@ -69,7 +75,7 @@ export function AccountEditor({
       </div>
 
       <div className="space-y-2">
-        {plan.accounts.map((a) => (
+        {accounts.map((a) => (
           <ItemRow
             key={a.id}
             icon={ACCOUNT_ICON[a.kind]}
@@ -77,7 +83,7 @@ export function AccountEditor({
             title={a.name}
             brand={a.institution?.trim() || null}
             brandDomain={a.institutionDomain ?? bankDomain(a.institution)}
-            onClick={() => open(a)}
+            onClick={plan.accounts.some((live) => live.id === a.id) ? () => open(plan.accounts.find((live) => live.id === a.id)!) : undefined}
             opens={linkInvestments && wrapperOf(a.kind) !== 'cash'}
             inline={!!(a.holdings?.length || a.bank)}
             meta={
@@ -93,11 +99,11 @@ export function AccountEditor({
                   </span>
                 )}
                 {previous && <Delta before={previous[a.id]} after={a.balance} className="ml-1" />}
-                {a.bank && <BankMeta account={a} />}
+                {a.bank && !readOnlyBalances && <BankMeta account={a} />}
               </>
             }
             fields={
-              a.holdings?.length || a.bank ? (
+              readOnlyBalances || a.holdings?.length || a.bank ? (
                 <span className="tabular text-right text-[14px] font-semibold text-ink sm:w-40 sm:text-[15px]">
                   {formatMoney(a.balance, currency)}
                 </span>
@@ -114,13 +120,13 @@ export function AccountEditor({
                 </>
               )
             }
-            menu={[
-              { label: t.editDetails, icon: Pencil, onSelect: () => setEditing({ ...a }) },
+            menu={plan.accounts.some((live) => live.id === a.id) ? [
+              { label: t.editDetails, icon: Pencil, onSelect: () => setEditing({ ...plan.accounts.find((live) => live.id === a.id)! }) },
               { label: t.remove, icon: Trash2, danger: true, onSelect: () => removeAccount(a.id) },
-            ]}
+            ] : undefined}
           />
         ))}
-        {plan.accounts.length === 0 && (
+        {accounts.length === 0 && (
           <button
             type="button"
             onClick={() => setEditing(blank())}

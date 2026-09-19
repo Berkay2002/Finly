@@ -5,6 +5,17 @@ import type { Debt, SavingsGoal } from '../types';
 import { expense, NOW, prdExamplePlan } from './fixtures';
 
 describe('upcomingExpenses (§18.10)', () => {
+  it('omits elapsed dates from upcoming, but retains them in the full month outlook', () => {
+    const p = prdExamplePlan();
+    p.expenses.push(expense({ id: 'past', name: 'Gift', amount: 1000, frequency: 'once', nextDate: '2026-09-02' }));
+    p.expenses.push(expense({ id: 'today', name: 'Today', amount: 200, frequency: 'once', nextDate: '2026-09-16' }));
+    const afternoon = new Date(2026, 8, 16, 15);
+    const upcoming = upcomingExpenses(p, afternoon);
+    expect(upcoming.some((e) => e.expenseId === 'past')).toBe(false);
+    expect(upcoming.some((e) => e.expenseId === 'today')).toBe(true);
+    expect(monthOutlook(p, computeMetrics(p, afternoon), afternoon)[0].items.some((e) => e.expenseId === 'past')).toBe(true);
+  });
+
   const plan = prdExamplePlan();
   const up = upcomingExpenses(plan, NOW);
 

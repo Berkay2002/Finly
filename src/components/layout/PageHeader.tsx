@@ -2,7 +2,7 @@ import { Bell, ChevronLeft, ChevronRight, Landmark, Moon, Receipt, Sun } from "l
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router-dom";
-import { addDays } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
 import clsx from "clsx";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { formatDate, formatMoney, formatMonthYear } from "@/engine/format";
@@ -79,7 +79,7 @@ export function NotificationsButton({
   const currency = useCurrency();
   const bills = useBillsStrip();
   const sort = useToSort();
-  const soon = useUpcoming(2).filter((u) => u.date <= addDays(new Date(), 30));
+  const soon = useUpcoming(2).filter((u) => u.date >= startOfDay(new Date()) && u.date <= addDays(new Date(), 30));
 
   useEffect(() => {
     if (!open) return;

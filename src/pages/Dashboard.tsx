@@ -146,7 +146,7 @@ export function Dashboard() {
           label={d.stats.safeToSpend}
           value={money(m.safeToSpend)}
           sub={
-            m.actuals.confirmed.length > 0 && m.actuals.variance !== 0
+            m.actuals.variance !== 0
               ? m.actuals.variance > 0
                 ? d.stats.billsAbovePlan(money(Math.abs(m.actuals.variance)))
                 : d.stats.billsBelowPlan(money(Math.abs(m.actuals.variance)))
@@ -170,7 +170,7 @@ export function Dashboard() {
           icon="stat-cost"
           accent="red"
           label={d.stats.normalMonthlyCost}
-          value={money(m.lifestyleCost)}
+          value={money(m.actuals.lifestyleCost)}
           trend={{
             before: prev?.lifestyleCostActual ?? prev?.lifestyleCost,
             after: m.actuals.lifestyleCost,
@@ -216,7 +216,7 @@ export function Dashboard() {
             title={d.spending.title}
             subtitle={
               <>
-                <span className="tabular font-semibold text-ink">{money(m.lifestyleCost)}</span> {d.spending.perMonth}
+                <span className="tabular font-semibold text-ink">{money(m.actuals.lifestyleCost)}</span> {d.spending.perMonth}
               </>
             }
             action={d.spending.viewAll}

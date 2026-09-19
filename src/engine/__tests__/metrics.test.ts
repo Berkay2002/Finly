@@ -185,7 +185,10 @@ describe('computeMetrics — edge cases', () => {
     // lifestyle = 10000 + 6000/12 + 5000/12
     expect(m.lifestyleCost).toBeCloseTo(10000 + 500 + 416.67, 1);
     expect(m.oneOffsThisMonth).toBe(6000);
-    expect(m.safeToSpend).toBeCloseTo(m.breathingRoom - 6000, 5);
+    expect(m.safeToSpend).toBeCloseTo(m.breathingRoom - 6000 + 500, 5);
+    expect(m.actuals.lifestyleCost).toBeCloseTo(10000 + 6000 + 5000 / 12, 5);
+    expect(m.range.safeToSpend.low).toBeCloseTo(m.safeToSpend, 5);
+    expect(m.range.safeToSpend.high).toBeCloseTo(m.safeToSpend, 5);
   });
 });
 
@@ -373,8 +376,10 @@ describe("a one-off, such as a gift", () => {
     plan.expenses.push(gift);
     const m = computeMetrics(plan, NOW);
     expect(m.oneOffsThisMonth).toBe(base.oneOffsThisMonth + 1000);
-    expect(m.safeToSpend).toBeCloseTo(base.safeToSpend - 1000 - 1000 / 12, 5);
+    expect(m.safeToSpend).toBeCloseTo(base.safeToSpend - 1000, 5);
     expect(m.actuals.byCategory.planned).toBeCloseTo(base.actuals.byCategory.planned + 1000, 5);
+    expect(m.actuals.lifestyleCost).toBeCloseTo(base.actuals.lifestyleCost + 1000, 5);
+    expect(Object.values(m.actuals.byCategory).reduce((a, b) => a + b, 0) + m.debt.monthly).toBeCloseTo(m.actuals.lifestyleCost, 5);
     const later = computeMetrics(plan, new Date(2026, 9, 16));
     const baseLater = computeMetrics(prdExamplePlan(), new Date(2026, 9, 16));
     expect(later.lifestyleCost).toBe(baseLater.lifestyleCost);
@@ -419,6 +424,20 @@ describe('computeMetrics — a bill that may be nothing at all, once the bank ha
 });
 
 describe('group budget', () => {
+  it.each(['bank', 'manual'] as const)('accounts for running overspending from %s without releasing the unspent budget', (source) => {
+    const plan = emptyPlan(NOW);
+    plan.income = [income({ amount: 30000 })];
+    plan.expenses = [expense({ name: 'Groceries', amount: 4000, subcategory: 'groceries', fixed: false, committed: false })];
+    const baseline = computeMetrics(plan, NOW);
+    plan.everydaySpend = { food: { '2026-09': { amount: 2000, asOf: '2026-09-16', ...(source === 'bank' ? { source } : {}) } } };
+    expect(computeMetrics(plan, NOW).safeToSpend).toBe(baseline.safeToSpend);
+    plan.everydaySpend.food!['2026-09'].amount = 8000;
+    const m = computeMetrics(plan, NOW);
+    expect(m.safeToSpend).toBe(baseline.safeToSpend - 4000);
+    expect(m.actuals.byCategory.living).toBe(8000);
+    expect(m.actuals.lifestyleCost).toBe(8000);
+  });
+
   it('a figure typed for a group replaces what its items add up to, in the category, the range and the group', () => {
     const plan = emptyPlan();
     plan.income = [income({ amount: 30000 })];
