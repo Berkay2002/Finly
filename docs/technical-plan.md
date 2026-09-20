@@ -1,6 +1,6 @@
 # Finly — Technical Plan
 
-Companion to `Personal Finance Planner — Product Requirements & Handoff.md` and the screens in `design/`.
+Companion to [product-requirements.md](product-requirements.md) and the reference screens in `design/`.
 The PRD defines *what*; this document defines *how* for the first build.
 
 ## Decisions
@@ -11,7 +11,7 @@ The PRD defines *what*; this document defines *how* for the first build.
 | Routing | react-router v7 | Each onboarding step and each sidebar section is a URL, so the browser back button and deep links work. |
 | State | Zustand with `persist` to `localStorage` | Planning Mode needs no backend. The store is the only place a sync layer would later plug in. |
 | Charts | Recharts | Donut and bar charts in the design; small API surface. |
-| Icons | lucide-react | Matches the thin-line icon style in the design. |
+| Icons | Custom PNG set, lucide-react for functional glyphs | Illustrative icons are a generated family ([icon-prompts.md](icon-prompts.md)); chevrons, plus, trash and the like stay thin line icons. |
 | Dates | date-fns | Goal completion dates, upcoming-expense calendars. |
 | Tests | Vitest | The calculation engine is pure TypeScript and is tested exhaustively. |
 | Scope | Full Planning Mode | Onboarding, summary, dashboard, section pages, accounts, savings and goals, planning tools. Tracking Mode (history that survives across months) follows in two phases; see below. |
@@ -212,7 +212,7 @@ so a cold start needs no third party); `UpdateBanner` offers a reload when a new
   does not open the app for three months stops getting reminders (the horizon). Revoked subscriptions
   (404/410) and devices with nothing left for 90 days are deleted.
 - **Not possible as a web app on iOS.** Reading Contacts (vCard import instead, see
-  `external-research-ios-contact.md`), registering as a Share Sheet target, and keeping the bank connect
+  [ios-contacts-research.md](ios-contacts-research.md)), registering as a Share Sheet target, and keeping the bank connect
   flow inside the installed app: BankID returns to Safari, whose storage is separate from the Home Screen
   app, so the bank is connected from the browser.
 
@@ -249,6 +249,8 @@ The app is static apart from two Vercel Functions (Node runtime; Edge Functions 
   `/api`; the app then uses the bundled outlook.
 
 ## Build order
+
+The order the first version was built in. Every step has shipped.
 
 1. Engine + tests
 2. Design tokens and UI primitives

@@ -1,5 +1,6 @@
-# Personal Finance Planner  
-## Product Requirements Document / Product Handoff
+# Finly: Product Requirements
+
+The original product requirements and handoff document. The technical decisions that came out of it are in [technical-plan.md](technical-plan.md).
 
 ## 1. Product Summary
 

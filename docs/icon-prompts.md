@@ -1,7 +1,7 @@
 # Finly custom icon set — image generation prompts
 
-Finly currently uses generic line icons (lucide). This document is the brief for replacing the
-*illustrative* icons with a custom, consistent set generated with an image model. It contains:
+This document is the brief behind Finly's illustrative icons: a custom, consistent set generated
+with an image model. Keep it in sync with `src/components/ui/pictures.ts`. It contains:
 
 1. The rules every image must follow (so the set looks like one family).
 2. A master style paragraph to paste at the start of every prompt.

@@ -1,3 +1,7 @@
+# iOS contacts research: what a Home Screen web app can do
+
+Research notes behind the decision to import contacts from a `.vcf` file instead of the Contact Picker or the Share Sheet. Sources reviewed as of **18 September 2026**.
+
 I reviewed the current compatibility data and primary Apple/WebKit sources as of **18 September 2026**. The practical conclusion is fairly clear:
 
 > **A pure iOS Home Screen PWA cannot read or query the user's Contacts database, and it cannot register itself as an iOS Share Sheet target. The reliable web-only solution is to have the user export/share a `.vcf` to Files and then import that file with `<input type="file">`.**
